@@ -1247,7 +1247,7 @@ onUnmounted(() => {
 }
 
 .zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }
-.zone-bed     { bottom: 20%; left: 5%; width: 26%; height: 20%; transform: rotate(-38deg); }
+.zone-bed     { bottom: 20%; left: 8%; width: 26%; height: 20%; transform: rotate(-38deg); }
 .zone-window  { top: 14%; left: 12%; width: 30%; height: 33%; transform: rotate(-15deg); }
 
 .hover-tip {
