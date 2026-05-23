@@ -60,6 +60,10 @@
         <span class="mood-time">{{ m.time || m.date }}</span>
       </div>
     </div>
+
+    <footer class="icp-footer">
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
+    </footer>
   </div>
 </template>
 
@@ -232,6 +236,24 @@ onMounted(async () => {
 .btn-confirm { background: var(--primary); color: #fff; transition: background 0.2s; }
 .btn-confirm:hover { background: var(--primary-dark); }
 .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 备案号 */
+.icp-footer {
+  text-align: center;
+  padding: 20px 0 12px;
+  margin-top: 8px;
+}
+.icp-footer a {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.icp-footer a:hover {
+  opacity: 1;
+  color: var(--primary);
+}
 
 /* 响应式 */
 @media (min-width: 768px) {
