@@ -540,6 +540,11 @@
 
     <!-- 隐藏音频元素 -->
     <audio ref="audioEl" src="/audio/bgm.mp3" loop preload="auto" />
+
+    <!-- ICP备案号 -->
+    <footer class="icp-footer">
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
+    </footer>
   </div>
 </template>
 
@@ -1963,4 +1968,20 @@ onUnmounted(() => {
 @keyframes blink-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .hint-fade-enter-active, .hint-fade-leave-active { transition: opacity 0.3s; }
 .hint-fade-enter-from, .hint-fade-leave-to { opacity: 0; }
+
+/* ═══════════ ICP备案号 ═══════════ */
+.icp-footer {
+  position: absolute; bottom: 8px; left: 0; right: 0; z-index: 30;
+  text-align: center; padding: 6px 0;
+}
+.icp-footer a {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  text-decoration: none;
+  transition: color 0.2s;
+  letter-spacing: 0.5px;
+}
+.icp-footer a:hover {
+  color: rgba(255,255,255,0.7);
+}
 </style>
