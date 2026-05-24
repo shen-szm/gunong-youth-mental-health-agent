@@ -897,11 +897,21 @@ function toggleSongPlay(song) {
       musicAudioEl.value.src = ''
     }
   } else {
-    // 播放新歌：通过后端代理获取音频
+    // 播放新歌：先尝试用后端 /api/music/play 代理播放
     activeSongId.value = song.songId
     if (musicAudioEl.value) {
-      musicAudioEl.value.src = proxyAudioUrl(song.songId)
-      musicAudioEl.value.play().catch(() => { /* 静默忽略浏览器拦截 */ })
+      // 监听播放失败，失败后跳转网易云网页
+      const onError = () => {
+        musicAudioEl.value.removeEventListener('error', onError)
+        // 播放失败，跳转网易云网页
+        window.open(`https://music.163.com/song?id=${song.songId}`, '_blank')
+        activeSongId.value = null
+      }
+      musicAudioEl.value.addEventListener('error', onError)
+      musicAudioEl.value.src = playAudioUrl(song.songId)
+      musicAudioEl.value.play().catch(() => {
+        // autoplay 被拦，用户手动点播放按钮时不会再进这里
+      })
     }
   }
 }
@@ -917,8 +927,8 @@ function openMusicPanel() {
 }
 
 // 后端代理音频 URL（绕过网易云 Referer 限制）
-function proxyAudioUrl(songId) {
-  return `${import.meta.env.VITE_API_BASE || ''}/api/music/proxy?song_id=${songId}`
+function playAudioUrl(songId) {
+  return `${import.meta.env.VITE_API_BASE || ''}/api/music/play?song_id=${songId}`
 }
 
 // 构建网易云歌曲详情页 URL

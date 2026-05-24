@@ -1,46 +1,133 @@
 """
-音乐代理 API - 代理网易云音频直链，绕过前端 Referer 限制
+音乐代理 API - 提供网易云歌曲播放能力
+方案：
+1. /api/music/url - 返回歌曲可播放的真实 URL（通过本地 NeteaseCloudMusicApi 服务）
+2. /api/music/play - 直接代理播放（流式转发音频数据）
 """
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 import httpx
+import os
 
 router = APIRouter(prefix="/api/music", tags=["music"])
 
-# 网易云直链 API（302 重定向到 CDN）
-NETEASE_AUDIO_URL = "https://music.163.com/song/media/outer/url?id={song_id}.mp3"
+# 本地 NeteaseCloudMusicApi Node 服务地址（部署在服务器上，端口 3000）
+# 如果未部署，则回退到直接返回网易云网页链接
+LOCAL_API = os.environ.get("NETEASE_API_URL", "http://127.0.0.1:3000")
 
-@router.get("/proxy")
-async def proxy_audio(song_id: int = Query(..., description="网易云歌曲 ID")):
+# 网易云官方 API（weapi，需要加密参数，无 cookie 时可能无法获取）
+# 这里用一个公共的免费 API 代理（如果可用）
+PUBLIC_NETEASE_API = "https://neteasecloudmusicapi.vercel.app"
+
+
+@router.get("/url")
+async def get_song_url(song_id: int = Query(..., description="网易云歌曲 ID")):
     """
-    代理网易云音频：请求直链并返回 302 重定向，或返回音频流。
-    前端 <audio> 请求此接口即可播放，不受 Referer 限制。
+    获取歌曲播放 URL。
+    优先尝试本地 NeteaseCloudMusicApi 服务，失败则返回网易云网页链接。
     """
-    url = NETEASE_AUDIO_URL.format(song_id=song_id)
-    headers = {
-        "Referer": "https://music.163.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    # 尝试本地 NeteaseCloudMusicApi 服务
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{LOCAL_API}/song/url/v1",
+                params={"id": song_id, "level": "standard"},
+            )
+            data = r.json()
+            if data.get("data") and data["data"][0].get("url"):
+                return {"url": data["data"][0]["url"], "song_id": song_id}
+    except Exception:
+        pass
+
+    # 尝试公开 API（Vercel 免费服务，可能限速或不可用）
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{PUBLIC_NETEASE_API}/song/url/v1",
+                params={"id": song_id, "level": "standard"},
+            )
+            data = r.json()
+            if data.get("data") and data["data][0].get("url"]:
+                return {"url": data["data"][0]["url"], "song_id": song_id}
+    except Exception:
+        pass
+
+    # 全部失败：返回网易云网页链接，前端引导用户跳转
+    return {
+        "url": f"https://music.163.com/song?id={song_id}",
+        "song_id": song_id,
+        "need_external": True,
+        "message": "需要跳转到网易云音乐网页播放"
     }
-    async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
+
+
+@router.get("/play")
+async def play_song(song_id: int = Query(..., description="网易云歌曲 ID"), req: Request = None):
+    """
+    直接代理播放：流式转发音频数据到前端。
+    先获取真实音频 URL，然后流式返回给前端 <audio> 元素。
+    """
+    # 获取真实音频 URL
+    real_url = None
+
+    # 方法1：本地 NeteaseCloudMusicApi
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{LOCAL_API}/song/url/v1",
+                params={"id": song_id, "level": "standard"},
+            )
+            data = r.json()
+            if data.get("data") and data["data"][0].get("url"):
+                real_url = data["data"][0]["url"]
+    except Exception:
+        pass
+
+    # 方法2：公开 API
+    if not real_url:
         try:
-            resp = await client.head(url, headers=headers)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    f"{PUBLIC_NETEASE_API}/song/url/v1",
+                    params={"id": song_id, "level": "standard"},
+                )
+                data = r.json()
+                if data.get("data") and data["data"][0].get("url"):
+                    real_url = data["data"][0]["url"]
         except Exception:
-            raise HTTPException(status_code=502, detail="无法连接到网易云")
+            pass
 
-    if resp.status_code == 302 and "Location" in resp.headers:
-        real_url = resp.headers["Location"]
-        # 如果网易云返回 404，说明这首歌没版权或 ID 无效
-        if "/404" in real_url or real_url.endswith("/404"):
-            raise HTTPException(status_code=404, detail="歌曲暂不可用（无版权或ID无效）")
-        return RedirectResponse(url=real_url, status_code=302)
+    if not real_url:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "无法获取播放链接，请前往网易云音乐网页播放", "web_url": f"https://music.163.com/song?id={song_id}"}
+        )
 
-    # 兜底：直接流式返回
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        stream_resp = await client.get(url, headers=headers)
-    if stream_resp.status_code != 200:
-        raise HTTPException(status_code=404, detail="歌曲暂不可用")
-    return Response(
-        content=stream_resp.content,
-        media_type="audio/mpeg",
-        headers={"Accept-Ranges": "bytes"},
+    # 流式代理音频
+    async def _stream():
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://music.163.com/",
+        }
+        range_header = req.headers.get("range") if req else None
+        if range_header:
+            headers["Range"] = range_header
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            async with client.stream("GET", real_url, headers=headers) as resp:
+                async for chunk in resp.aiter_bytes(chunk_size=65536):
+                    if chunk:
+                        yield chunk
+
+    mime = "audio/mpeg"
+    if real_url.endswith(".flac"):
+        mime = "audio/flac"
+
+    return StreamingResponse(
+        _stream(),
+        media_type=mime,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
+        },
     )
