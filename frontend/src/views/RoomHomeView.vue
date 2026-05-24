@@ -396,6 +396,16 @@
             </div>
           </div>
 
+          <!-- 隐藏音频 iframe：用户点击播放时动态加载，用于播放音频 -->
+          <iframe
+            ref="audioIframe"
+            class="am-hidden-iframe"
+            src="about:blank"
+            frameborder="0"
+            allow="autoplay"
+            referrerpolicy="no-referrer"
+          ></iframe>
+
           <!-- 推荐歌单卡片列表 -->
           <div class="music-list" v-if="musicRecs.length">
             <div
@@ -474,19 +484,11 @@
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
                       </a>
                     </div>
-                    <!-- 播放器 iframe（仅当前播放时显示） -->
-                    <div class="am-player-wrap" v-if="activeSongId === song.songId">
-                      <iframe
-                        class="am-player-iframe"
-                        :src="neteasePlayerUrl(song.songId)"
-                        frameborder="0"
-                        allow="autoplay"
-                        referrerpolicy="no-referrer"
-                      ></iframe>
-                    </div>
                   </div>
                 </div>
               </Transition>
+              <!-- 来源标注 -->
+              <div class="mc-source" v-if="musicRecs.length">来源：网易云音乐</div>
             </div>
           </div>
 
@@ -887,6 +889,7 @@ function hideTooltip() { hoveredMood.value = null }
 const showMusicPanel = ref(false)
 const expandedCard = ref(-1) // -1 = 全部折叠，0-4 = 展开第N张卡片
 const activeSongId = ref(null) // 当前播放中的歌曲 songId
+const audioIframe = ref(null) // 隐藏的音频 iframe 引用
 
 function toggleCard(idx) {
   expandedCard.value = expandedCard.value === idx ? -1 : idx
@@ -894,9 +897,17 @@ function toggleCard(idx) {
 
 function toggleSongPlay(song) {
   if (activeSongId.value === song.songId) {
-    activeSongId.value = null  // 暂停：隐藏 iframe
+    // 暂停：清空 iframe src
+    activeSongId.value = null
+    if (audioIframe.value) {
+      audioIframe.value.src = 'about:blank'
+    }
   } else {
-    activeSongId.value = song.songId  // 播放：显示 iframe
+    // 播放：直接改 iframe src（用户点击触发，浏览器允许 autoplay）
+    activeSongId.value = song.songId
+    if (audioIframe.value) {
+      audioIframe.value.src = neteasePlayerUrl(song.songId)
+    }
   }
 }
 
@@ -2184,6 +2195,7 @@ onUnmounted(() => {
 /* ═══════════ 音乐推荐面板 ═══════════ */
 .music-panel {
   padding-top: 14px; max-height: 82vh; overflow-y: auto;
+  position: relative;
 }
 .music-panel .trend-header .emotion-badge {
   display: inline-block; padding: 1px 8px; border-radius: 10px;
@@ -2429,17 +2441,18 @@ onUnmounted(() => {
 }
 .am-link-btn:hover { color: #B8B0A6; background: rgba(255,255,255,0.08); }
 
-/* 播放器 iframe */
-.am-player-wrap {
-  width: 100%; flex-basis: 100%;
-  height: 66px; border-radius: 12px; overflow: hidden;
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,255,255,0.04);
-  margin-top: 4px;
+/* 隐藏音频 iframe（不可见，仅用于播放音频） */
+.am-hidden-iframe {
+  position: absolute; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none;
+  border: none;
 }
-.am-player-iframe {
-  width: 100%; height: 100%; border: none;
-  display: block;
+
+/* 来源标注 */
+.mc-source {
+  text-align: center; padding: 10px 0 4px;
+  font-size: 10px; color: #4A4540;
+  letter-spacing: 0.5px;
 }
 
 /* ═══════════ 情绪回顾面板 ═══════════ */
