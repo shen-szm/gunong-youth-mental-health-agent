@@ -425,29 +425,46 @@
                 </div>
               </div>
 
-              <!-- 展开区域：歌曲列表 + 播放器 -->
+              <!-- 展开区域：歌曲列表 -->
               <Transition name="mc-expand">
                 <div v-if="expandedCard === i" class="mc-body">
+                  <!-- Apple Music 风格迷你播放卡片 -->
                   <div
                     v-for="(song, si) in rec.songs" :key="si"
-                    class="mc-song"
+                    class="am-song-card"
+                    :class="{ 'is-active': activeSongId === song.songId }"
+                    @click="toggleSongPlay(song)"
                   >
-                    <!-- 上行：封面 + 歌名歌手 + 详情按钮 -->
-                    <div class="mc-song-row">
+                    <!-- 封面 -->
+                    <div class="am-cover-wrap">
                       <img
-                        class="mc-cover"
+                        class="am-cover"
                         :src="song.cover"
                         :alt="song.name"
                         loading="lazy"
                         @error="onCoverError"
                         referrerpolicy="no-referrer"
                       />
-                      <div class="mc-song-info">
-                        <div class="mc-song-name">{{ song.name }}</div>
-                        <div class="mc-song-artist">{{ song.artist }}</div>
+                      <!-- 播放状态遮罩 -->
+                      <div class="am-cover-overlay" v-if="activeSongId === song.songId">
+                        <div class="am-eq-bars">
+                          <span v-for="n in 4" :key="n" class="am-eq-bar"></span>
+                        </div>
                       </div>
+                    </div>
+                    <!-- 歌曲信息 -->
+                    <div class="am-song-info">
+                      <div class="am-song-name">{{ song.name }}</div>
+                      <div class="am-song-artist">{{ song.artist }}</div>
+                    </div>
+                    <!-- 操作按钮 -->
+                    <div class="am-actions">
+                      <button class="am-play-btn" @click.stop="toggleSongPlay(song)" :title="activeSongId === song.songId ? '暂停' : '播放'">
+                        <svg v-if="activeSongId === song.songId" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                        <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                      </button>
                       <a
-                        class="mc-detail-btn"
+                        class="am-link-btn"
                         :href="neteaseSongUrl(song.songId)"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -455,13 +472,12 @@
                         title="在网易云查看详情"
                       >
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
-                        详情
                       </a>
                     </div>
-                    <!-- 下行：播放器（占满整行） -->
-                    <div class="mc-player-wrap">
+                    <!-- 播放器 iframe（仅当前播放时显示） -->
+                    <div class="am-player-wrap" v-if="activeSongId === song.songId">
                       <iframe
-                        class="mc-player"
+                        class="am-player-iframe"
                         :src="neteasePlayerUrl(song.songId)"
                         frameborder="0"
                         allow="autoplay"
@@ -870,20 +886,30 @@ function hideTooltip() { hoveredMood.value = null }
 // ═══ 音乐推荐 ═══
 const showMusicPanel = ref(false)
 const expandedCard = ref(-1) // -1 = 全部折叠，0-4 = 展开第N张卡片
+const activeSongId = ref(null) // 当前播放中的歌曲 songId
 
 function toggleCard(idx) {
   expandedCard.value = expandedCard.value === idx ? -1 : idx
 }
 
+function toggleSongPlay(song) {
+  if (activeSongId.value === song.songId) {
+    activeSongId.value = null  // 暂停：隐藏 iframe
+  } else {
+    activeSongId.value = song.songId  // 播放：显示 iframe
+  }
+}
+
 function openMusicPanel() {
   showMusicPanel.value = true
   expandedCard.value = -1
+  activeSongId.value = null
 }
 
 // 构建网易云 outchain 播放器 URL（用于 iframe 嵌入）
 function neteasePlayerUrl(songId) {
-  // auto=0 不自动播放（需用户点击），height=66 显示迷你播放器（66px高）
-  return `https://music.163.com/outchain/player?type=2&id=${songId}&auto=0&height=66`
+  // auto=1 自动播放（用户点击播放按钮后即展示 iframe），height=66 迷你播放器
+  return `https://music.163.com/outchain/player?type=2&id=${songId}&auto=1&height=66`
 }
 
 // 构建网易云歌曲详情页 URL
@@ -2283,64 +2309,137 @@ onUnmounted(() => {
   max-height: 500px; opacity: 1;
 }
 .mc-body {
-  padding: 0 14px 14px;
-  display: flex; flex-direction: column; gap: 8px;
+  padding: 4px 14px 14px;
+  display: flex; flex-direction: column; gap: 10px;
 }
 
-/* 歌曲行 */
-.mc-song {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 12px;
+/* ═══════════ Apple Music 风格歌曲卡片 ═══════════ */
+.am-song-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+  overflow: hidden;
 }
-.mc-song-row {
-  display: flex; align-items: center; gap: 10px;
+.am-song-card:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.1);
+  transform: translateY(-1px);
 }
-.mc-cover {
-  width: 44px; height: 44px; border-radius: 8px;
-  object-fit: cover; flex-shrink: 0;
+.am-song-card.is-active {
+  background: rgba(142,168,154,0.08);
+  border-color: rgba(142,168,154,0.25);
+  box-shadow: 0 0 20px rgba(142,168,154,0.08);
+}
+
+/* 封面 */
+.am-cover-wrap {
+  width: 52px; height: 52px; flex-shrink: 0;
+  border-radius: 12px; overflow: hidden;
+  position: relative;
   background: rgba(255,255,255,0.06);
 }
+.am-cover {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.am-cover-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+/* EQ 动画条 */
+.am-eq-bars {
+  display: flex; align-items: flex-end; gap: 3px; height: 20px;
+}
+.am-eq-bar {
+  width: 3px; border-radius: 2px;
+  background: #8EA89A;
+  animation: eq-dance 0.9s ease-in-out infinite;
+}
+.am-eq-bar:nth-child(1) { height: 10px; animation-delay: 0s; }
+.am-eq-bar:nth-child(2) { height: 18px; animation-delay: 0.2s; }
+.am-eq-bar:nth-child(3) { height: 13px; animation-delay: 0.4s; }
+.am-eq-bar:nth-child(4) { height: 16px; animation-delay: 0.15s; }
+@keyframes eq-dance {
+  0%,100% { transform: scaleY(0.6); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* 封面占位符 */
 .mc-cover-placeholder {
-  width: 44px; height: 44px; border-radius: 8px;
+  width: 52px; height: 52px; border-radius: 12px;
   background: rgba(255,255,255,0.06);
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; flex-shrink: 0; color: rgba(255,255,255,0.2);
+  font-size: 22px; flex-shrink: 0; color: rgba(255,255,255,0.15);
 }
-.mc-song-info { flex: 1; min-width: 0; }
-.mc-song-name {
-  font-size: 13px; font-weight: 600; color: #E8E2D8;
+
+/* 歌曲信息 */
+.am-song-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.am-song-name {
+  font-size: 14px; font-weight: 600; color: #EAE4DC;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: 0.3px;
 }
-.mc-song-artist {
-  font-size: 11px; color: #7A756E;
+.am-song-artist {
+  font-size: 12px; color: #8A847E;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* 内嵌播放器 */
-.mc-player-wrap {
-  width: 100%; height: 66px; flex-shrink: 0;
-  border-radius: 8px; overflow: hidden;
-  background: rgba(0,0,0,0.2);
+/* 操作按钮组 */
+.am-actions {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
-.mc-player {
+
+/* 播放按钮 */
+.am-play-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(142,168,154,0.2); color: #8EA89A;
+  border: 1.5px solid rgba(142,168,154,0.3);
+  cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  flex-shrink: 0;
+}
+.am-play-btn:hover {
+  background: rgba(142,168,154,0.35); color: #A3C4B0;
+  border-color: rgba(142,168,154,0.5);
+  transform: scale(1.06);
+  box-shadow: 0 0 14px rgba(142,168,154,0.2);
+}
+.am-play-btn:active { transform: scale(0.96); }
+.am-song-card.is-active .am-play-btn {
+  background: rgba(142,168,154,0.35); color: #B8DCC2;
+  border-color: rgba(142,168,154,0.5);
+}
+
+/* 外链按钮 */
+.am-link-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #6A645E; transition: all 0.2s; flex-shrink: 0;
+  text-decoration: none;
+}
+.am-link-btn:hover { color: #B8B0A6; background: rgba(255,255,255,0.08); }
+
+/* 播放器 iframe */
+.am-player-wrap {
+  width: 100%; flex-basis: 100%;
+  height: 66px; border-radius: 12px; overflow: hidden;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.04);
+  margin-top: 4px;
+}
+.am-player-iframe {
   width: 100%; height: 100%; border: none;
-}
-
-/* 查看详情按钮 */
-.mc-detail-btn {
-  display: flex; align-items: center; gap: 3px;
-  padding: 5px 10px; border-radius: 8px;
-  background: rgba(212,119,106,0.12); color: #D4776A;
-  font-size: 11px; font-weight: 500; text-decoration: none;
-  transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
-  border: 1px solid rgba(212,119,106,0.15);
-}
-.mc-detail-btn:hover {
-  background: rgba(212,119,106,0.25); color: #FF8A80;
-  border-color: rgba(212,119,106,0.3);
+  display: block;
 }
 
 /* ═══════════ 情绪回顾面板 ═══════════ */
@@ -2500,7 +2599,6 @@ onUnmounted(() => {
   .music-btn { bottom: 70px; right: 30px; width: 38px; height: 38px; }
   .music-recommend-btn { top: 14%; right: 6%; width: 44px; height: 44px; }
   .music-panel { max-height: 78vh; }
-  .mc-player-wrap { height: 66px; }
 
   /* 底部导航居中 */
   .bottom-nav { max-width: 100%; left: 0; transform: none; }
@@ -2731,7 +2829,9 @@ onUnmounted(() => {
 
 /* ══ 移动端适配 ══ */
 @media (max-width: 480px) {
-  .mc-player-wrap { height: 66px; }
-  .mc-detail-btn { padding: 4px 8px; font-size: 10px; }
+  .am-cover-wrap { width: 44px; height: 44px; border-radius: 10px; }
+  .am-song-name { font-size: 13px; }
+  .am-song-artist { font-size: 11px; }
+  .am-play-btn { width: 32px; height: 32px; }
 }
 </style>
