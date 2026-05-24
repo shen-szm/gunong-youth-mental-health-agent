@@ -115,12 +115,12 @@ const inputEl = ref(null)
 const ttsPlaying = ref(-1)
 
 const emotions = [
-  { emoji: '😰', text: '今天有点焦虑' },
-  { emoji: '😊', text: '我感到很开心' },
-  { emoji: '😩', text: '最近压力很大' },
-  { emoji: '😢', text: '有点难过' },
-  { emoji: '😤', text: '我想吐槽一下' },
-  { emoji: '😴', text: '感觉很疲惫' },
+  { emoji: '😊', text: '今天有好事发生' },
+  { emoji: '🌟', text: '我想分享快乐' },
+  { emoji: '💪', text: '给自己打个气' },
+  { emoji: '🌈', text: '来点正能量' },
+  { emoji: '✨', text: '感恩小确幸' },
+  { emoji: '🎯', text: '聊聊小目标' },
 ]
 
 function getEmotionEmoji(emotion) {
