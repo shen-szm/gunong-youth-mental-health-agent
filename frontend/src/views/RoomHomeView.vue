@@ -953,9 +953,9 @@ const musicStyles = [
     weatherAffinity: { sun: 9, cloud: 7, rain: 3, snow: 3, fog: 4 },
     // 代表性歌曲：歌名、歌手、网易云songId（用于iframe播放器）
     songs: [
-      { name: '晴天', artist: '周杰伦', songId: 186016, cover: 'https://p4.music.126.net/r-CWlZZ3ZU7716vHnPtZaA==/109951168014981496.jpg' },
-      { name: '告白气球', artist: '周杰伦', songId: 569213183, cover: 'https://p4.music.126.net/lBZ-3zTk3rlI--Zs5bO_VQ==/109951167649325638.jpg' },
-      { name: '小幸运', artist: '田馥甄', songId: 2917134, cover: 'https://p4.music.126.net/A5DOyN6udBo6prR9txnoZg==/3300172974333834.jpg' },
+      { name: '晴天', artist: '周杰伦', songId: 186016, cover: 'https://p1.music.126.net/ZGffiDQZrGj5s_hnR1CNbg==/109951165566379710.jpg' },
+      { name: '告白气球', artist: '周杰伦', songId: 569213183, cover: 'https://p1.music.126.net/e4hVwChbCGUZ37Wrd9B6yQ==/109951163919066717.jpg' },
+      { name: '小幸运', artist: '田馥甄', songId: 2917134, cover: 'https://p1.music.126.net/TQxwpNMQWiih1b19b4KKGw==/1681153278877522.jpg' },
     ]
   },
   {
@@ -966,9 +966,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 9, night: 10 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 10, snow: 9, fog: 9 },
     songs: [
-      { name: '城南花已开', artist: '三亩地', songId: 1359357042, cover: 'https://p4.music.126.net/2BZNWsdfxUxs6M_ZGyGmTg==/109951163499504746.jpg' },
-      { name: '夜的钢琴曲五', artist: '石进', songId: 67295, cover: 'https://p4.music.126.net/vW0JU-yxP4oWukbPhBZZmw==/109951167605441267.jpg' },
-      { name: '所念皆星河', artist: 'CMJ', songId: 1444918783, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
+      { name: '城南花已开', artist: '三亩地', songId: 1359357042, cover: 'https://p1.music.126.net/i-7ktILRPImJ0NwiH8DABg==/109951162885959979.jpg' },
+      { name: '夜的钢琴曲五', artist: '石进', songId: 67295, cover: 'https://p1.music.126.net/zdjtruSEpZNwmlwWcohpsg==/109951163167564492.jpg' },
+      { name: '所念皆星河', artist: 'CMJ', songId: 1444918783, cover: 'https://p1.music.126.net/3VeuCpgZlZDD1Gxb-KBJqg==/109951164953114721.jpg' },
     ]
   },
   {
@@ -979,9 +979,9 @@ const musicStyles = [
     timeAffinity: { day: 7, evening: 9, night: 7 },
     weatherAffinity: { sun: 7, cloud: 9, rain: 8, snow: 7, fog: 8 },
     songs: [
-      { name: '成都', artist: '赵雷', songId: 436514312, cover: 'https://p4.music.126.net/ta-5Zaw8FukCr4S0-CZ2NA==/109951162964647935.jpg' },
-      { name: '理想三旬', artist: '赵雷', songId: 483671599, cover: 'https://p4.music.126.net/VD194VKS930_5Hd_IrQQQ==/109951163234348210.jpg' },
-      { name: '给他', artist: '赵雷', songId: 436514315, cover: 'https://p4.music.126.net/RV8VaucIiH6S5c_xiqe_rQ==/109951162964647837.jpg' },
+      { name: '成都', artist: '赵雷', songId: 436514312, cover: 'https://p1.music.126.net/34YW1QtKxJ_3YnX9ZzKhzw==/2946691234868155.jpg' },
+      { name: '理想三旬', artist: '赵雷', songId: 483671599, cover: 'https://p1.music.126.net/ZZAQGWl9mR7g5xCyWWH3Pw==/19149094509535913.jpg' },
+      { name: '给他', artist: '赵雷', songId: 436514315, cover: 'https://p1.music.126.net/7EYBYjQeiq98Qf4guhhmVA==/109951168738695464.jpg' },
     ]
   },
   {
@@ -992,9 +992,9 @@ const musicStyles = [
     timeAffinity: { day: 9, evening: 7, night: 2 },
     weatherAffinity: { sun: 10, cloud: 7, rain: 3, snow: 2, fog: 3 },
     songs: [
-      { name: '你要跳舞吗', artist: '新裤子', songId: 1356068210, cover: 'https://p4.music.126.net/NG6I1PbgTb8DdKgOD-e1gQ==/109951163403002902.jpg' },
-      { name: '生活因你而火热', artist: '新裤子', songId: 1356068220, cover: 'https://p4.music.126.net/NG6I1PbgTb8DdKgOD-e1gQ==/109951163403002902.jpg' },
-      { name: '没有理想的人不伤心', artist: '新裤子', songId: 29787149, cover: 'https://p4.music.126.net/V_FjcTnOsvhdHeMmis2eNQ==/109951163093426385.jpg' },
+      { name: '你要跳舞吗', artist: '新裤子', songId: 1356068210, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '生活因你而火热', artist: '新裤子', songId: 1356068220, cover: 'https://p1.music.126.net/0lflIySgfNfAq5zBaasoDg==/109951165787458877.jpg' },
+      { name: '没有理想的人不伤心', artist: '新裤子', songId: 29787149, cover: 'https://p1.music.126.net/UsI2lB7qV2fhvBIjY0DCjQ==/109951172945816490.jpg' },
     ]
   },
   {
@@ -1005,9 +1005,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 10, night: 8 },
     weatherAffinity: { sun: 7, cloud: 8, rain: 9, snow: 6, fog: 7 },
     songs: [
-      { name: '关键词', artist: '林俊杰', songId: 37115780, cover: 'https://p4.music.126.net/IpCLRDAYGIYNCYcKKAWMNg==/109951165464070043.jpg' },
-      { name: '修炼爱情', artist: '林俊杰', songId: 25706282, cover: 'https://p4.music.126.net/R-JyO7XZdL9GoPcANGzXvA==/109951163204871949.jpg' },
-      { name: '不为谁而作的歌', artist: '林俊杰', songId: 436514197, cover: 'https://p4.music.126.net/ta-5Zaw8FukCr4S0-CZ2NA==/109951162964647935.jpg' },
+      { name: '关键词', artist: '林俊杰', songId: 37115780, cover: 'https://p1.music.126.net/xZAbLHvJbuotr2E-Z8w5DA==/109951165971294045.jpg' },
+      { name: '修炼爱情', artist: '林俊杰', songId: 25706282, cover: 'https://p1.music.126.net/625-tE8OzdM-rWO37PgqlQ==/109951168111472442.jpg' },
+      { name: '不为谁而作的歌', artist: '林俊杰', songId: 436514197, cover: 'https://p1.music.126.net/D7-9kByFrvbgiuEnC0dDfA==/109951165970794886.jpg' },
     ]
   },
   {
@@ -1018,9 +1018,9 @@ const musicStyles = [
     timeAffinity: { day: 8, evening: 5, night: 1 },
     weatherAffinity: { sun: 8, cloud: 6, rain: 5, snow: 3, fog: 4 },
     songs: [
-      { name: '山海', artist: '草东没有派对', songId: 1358695895, cover: 'https://p4.music.126.net/ROQS6nZtZP6xPYZ7TJSxgQ==/109951163905929032.jpg' },
-      { name: '丑', artist: '草东没有派对', songId: 5276217, cover: 'https://p4.music.126.net/ROQS6nZtZP6xPYZ7TJSxgQ==/109951163905929032.jpg' },
-      { name: '大风吹', artist: '刘柏辛', songId: 1496091321, cover: 'https://p4.music.126.net/MLfaOmYafqKN_m5y_hKA==/109951165110000590.jpg' },
+      { name: '山海', artist: '草东没有派对', songId: 1358695895, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '丑', artist: '草东没有派对', songId: 5276217, cover: 'https://p1.music.126.net/I-nsxE9zdpuin9g_mckpXg==/86861418611919.jpg' },
+      { name: '大风吹', artist: '刘柏辛', songId: 1496091321, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
     ]
   },
   {
@@ -1031,9 +1031,9 @@ const musicStyles = [
     timeAffinity: { day: 7, evening: 8, night: 10 },
     weatherAffinity: { sun: 5, cloud: 8, rain: 10, snow: 8, fog: 9 },
     songs: [
-      { name: '雨声白噪音', artist: '自然之声', songId: 1465849737, cover: 'https://p4.music.126.net/0QxRJ-yVthKqKqeKNmS6HA==/109951164323339256.jpg' },
-      { name: '森林鸟鸣', artist: '自然之声', songId: 1465849758, cover: 'https://p4.music.126.net/0QxRJ-yVthKqKqeKNmS6HA==/109951164323339256.jpg' },
-      { name: '海浪声', artist: '自然之声', songId: 1444918786, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
+      { name: '雨声白噪音', artist: '自然之声', songId: 1465849737, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '森林鸟鸣', artist: '自然之声', songId: 1465849758, cover: 'https://p2.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '海浪声', artist: '自然之声', songId: 1444918786, cover: 'https://p1.music.126.net/jsBhqms-CD7T_DYCxnIQjA==/109951166460341641.jpg' },
     ]
   },
   {
@@ -1044,9 +1044,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 9, night: 8 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
     songs: [
-      { name: 'Fly Me to the Moon', artist: 'Frank Sinatra', songId: 4168622, cover: 'https://p4.music.126.net/RMJAQWdANYQ1tmXXR3s5xg==/109951163353110145.jpg' },
-      { name: 'What a Wonderful World', artist: 'Louis Armstrong', songId: 26383868, cover: 'https://p4.music.126.net/XcZXPrCqjMYr0i0pPBE9LA==/109951163003703625.jpg' },
-      { name: 'L-O-V-E', artist: 'Nat King Cole', songId: 18402858, cover: 'https://p4.music.126.net/axFCkHJLCpD3g_1qefwqg==/109951167204947786.jpg' },
+      { name: 'Fly Me to the Moon', artist: 'Frank Sinatra', songId: 4168622, cover: 'https://p2.music.126.net/bJRtgoTCe0YspTrkdYo0Tw==/676199651127457.jpg' },
+      { name: 'What a Wonderful World', artist: 'Louis Armstrong', songId: 26383868, cover: 'https://p1.music.126.net/N3qjM1qskbd7Dx_Dynvt1w==/109951169912228684.jpg' },
+      { name: 'L-O-V-E', artist: 'Nat King Cole', songId: 18402858, cover: 'https://p1.music.126.net/bTFrV7URxgZ0o-isyGD7xQ==/109951170244545780.jpg' },
     ]
   },
   {
@@ -1057,9 +1057,9 @@ const musicStyles = [
     timeAffinity: { day: 9, evening: 5, night: 1 },
     weatherAffinity: { sun: 9, cloud: 6, rain: 3, snow: 2, fog: 3 },
     songs: [
-      { name: '野狼Disco', artist: '宝石Gem', songId: 1359094256, cover: 'https://p4.music.126.net/b8NnZ5KyG3asdRiCwQyRg==/109951163905928781.jpg' },
-      { name: '我tm年轻人', artist: 'Bridge', songId: 1444918784, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
-      { name: '经济舱', artist: '满舒克', songId: 1298137594, cover: 'https://p4.music.126.net/7YKV4zOBxKwFfbwSDYyhQ==/109951163093426396.jpg' },
+      { name: '野狼Disco', artist: '宝石Gem', songId: 1359094256, cover: 'https://p2.music.126.net/RsYEUlA8agDF8zaer4CGPg==/697090372021875.jpg' },
+      { name: '我tm年轻人', artist: 'Bridge', songId: 1444918784, cover: 'https://p1.music.126.net/zpHpJYRJLlAUJaXO9kWQgA==/109951169037909968.jpg' },
+      { name: '经济舱', artist: '满舒克', songId: 1298137594, cover: 'https://p2.music.126.net/Asu2_uqMi8hu_Ro8cbKOTA==/109951169642450108.jpg' },
     ]
   },
   {
@@ -1070,9 +1070,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 8, night: 7 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
     songs: [
-      { name: '后来', artist: '刘若英', songId: 254128, cover: 'https://p4.music.126.net/h-xoy0pFupbiMIAi1F7c4g==/109951167793884671.jpg' },
-      { name: '红豆', artist: '王菲', songId: 254033, cover: 'https://p4.music.126.net/RWp07p2aSbaZ7fKBSGoGsA==/109951162964647862.jpg' },
-      { name: '情非得已', artist: '庾澄庆', songId: 254492, cover: 'https://p4.music.126.net/0Ypj0BWEa8P6N7I0b0i0w==/109951163456789012.jpg' },
+      { name: '后来', artist: '刘若英', songId: 254128, cover: 'https://p2.music.126.net/N_dKBZBGibWNhrjDTEgxXg==/109951168163382132.jpg' },
+      { name: '红豆', artist: '王菲', songId: 254033, cover: 'https://p2.music.126.net/YDfgFWb0Hom_z1rmyhB5ng==/115448720932051.jpg' },
+      { name: '情非得已', artist: '庾澄庆', songId: 254492, cover: 'https://p2.music.126.net/nSCOYgdN2yo1e-NdQWa4CQ==/18511377767232313.jpg' },
     ]
   },
 ]
