@@ -28,6 +28,15 @@
       <span>{{ temperature }}°C</span>
     </div>
 
+    <!-- 音乐推荐按钮 -->
+    <button class="music-recommend-btn" @click="openMusicPanel" title="今日音乐推荐">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"/>
+        <circle cx="6" cy="18" r="3"/>
+        <circle cx="18" cy="16" r="3"/>
+      </svg>
+    </button>
+
     <!-- 音乐切换按钮 -->
     <button class="music-btn" @click="toggleMusic" :title="musicOn ? '关闭音乐' : '开启音乐'">
       <svg v-if="musicOn" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -55,7 +64,7 @@
 
     <!-- 底部导航 -->
     <nav class="bottom-nav">
-      <button class="bnav-item bnav-home active" @click="goToChat">
+      <button class="bnav-item bnav-home" @click="goToChat">
         <div class="icon-wrap">
           <!-- 像素风显示器图标 (16x16 网格) -->
           <svg class="icon-outline" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" shape-rendering="crispEdges">
@@ -158,12 +167,27 @@
           <div class="panel-section" v-if="Object.keys(distribution).length">
             <div class="panel-sec-title">情绪分布</div>
             <div class="panel-dist">
-              <div class="pdist-row" v-for="(count, label) in distribution" :key="label">
+              <div
+                class="pdist-row" v-for="(count, label) in distribution" :key="label"
+                :class="{ 'is-top': topMoodLabels.includes(label) }"
+                @mouseenter="showTooltip(label)" @mouseleave="hideTooltip"
+              >
                 <span class="pdist-emoji">{{ getEmoji(label) }}</span>
                 <span class="pdist-label">{{ label }}</span>
-                <div class="pdist-track"><div class="pdist-fill" :style="{ width: getPercent(count)+'%' }"></div></div>
+                <div class="pdist-track">
+                  <div class="pdist-fill" :style="{ width: getPercent(count)+'%', background: getMoodColor(label) }"></div>
+                </div>
                 <span class="pdist-pct">{{ getPercent(count) }}%</span>
+                <!-- 自定义tooltip -->
+                <Transition name="tip-fade">
+                  <div class="pdist-tooltip" v-if="hoveredMood === label">
+                    {{ moodJudgeNote[label] }}
+                    <div class="pdist-tooltip-arrow"></div>
+                  </div>
+                </Transition>
               </div>
+              <!-- 占比最大时的安慰建议 -->
+              <div class="pdist-comfort" v-for="(msg, i) in topMoodComforts" :key="i">{{ msg }}</div>
             </div>
           </div>
 
@@ -308,6 +332,153 @@
             </button>
           </div>
           <button class="back-btn" @click="showCityPanel = false; showTransportPanel = true">← 返回选择交通工具</button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ══ 音乐推荐面板 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showMusicPanel" class="profile-overlay" @click="showMusicPanel = false">
+        <div class="profile-panel music-panel" @click.stop>
+          <div class="panel-close" @click="showMusicPanel = false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+
+          <!-- 标题 -->
+          <div class="trend-header">
+            <h2>🎵 今日音乐推荐</h2>
+            <p v-if="primaryEmotion">
+              你今天的<span class="emotion-badge">{{ getEmoji(primaryEmotion) }} {{ primaryEmotion }}</span>占了{{ primaryEmotionPct }}%，为你定制了以下歌单
+            </p>
+            <p v-else>还没有情绪记录，先来倾诉一下吧 💬</p>
+          </div>
+
+          <!-- 算法说明卡片 -->
+          <div class="algo-card" v-if="primaryEmotion">
+            <div class="algo-title">📊 推荐算法</div>
+            <div class="algo-factors">
+              <div class="algo-factor">
+                <div class="factor-bar-wrap">
+                  <div class="factor-bar" style="width:50%"></div>
+                </div>
+                <div class="factor-meta">
+                  <span class="factor-label">情绪匹配度</span>
+                  <span class="factor-w">50%</span>
+                </div>
+              </div>
+              <div class="algo-factor">
+                <div class="factor-bar-wrap">
+                  <div class="factor-bar" style="width:20%"></div>
+                </div>
+                <div class="factor-meta">
+                  <span class="factor-label">情绪倾向</span>
+                  <span class="factor-w">20%</span>
+                </div>
+              </div>
+              <div class="algo-factor">
+                <div class="factor-bar-wrap">
+                  <div class="factor-bar" style="width:15%; background:#7FB3A6;"></div>
+                </div>
+                <div class="factor-meta">
+                  <span class="factor-label">{{ timeFactorLabel }}</span>
+                  <span class="factor-w">15%</span>
+                </div>
+              </div>
+              <div class="algo-factor">
+                <div class="factor-bar-wrap">
+                  <div class="factor-bar" style="width:15%; background:#E8C468;"></div>
+                </div>
+                <div class="factor-meta">
+                  <span class="factor-label">{{ weatherFactorLabel }}</span>
+                  <span class="factor-w">15%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 推荐歌单卡片列表 -->
+          <div class="music-list" v-if="musicRecs.length">
+            <div
+              v-for="(rec, i) in musicRecs" :key="i"
+              class="music-card"
+              :class="{ 'is-top': i === 0, 'is-expanded': expandedCard === i }"
+            >
+              <!-- 卡片头部：点击展开/折叠 -->
+              <div class="mc-header" @click="toggleCard(i)">
+                  <div class="mc-rank">
+                  <span v-if="i === 0" class="rank-crown">🏆</span>
+                  <span v-else class="rank-num">{{ i + 1 }}</span>
+                </div>
+                <div class="mc-style-info">
+                  <div class="mc-style-name">
+                    <span class="mc-emoji">{{ rec.emoji }}</span>
+                    {{ rec.style }}
+                  </div>
+                  <div class="mc-reason">{{ rec.reason }}</div>
+                </div>
+                <div class="mc-score-wrap">
+                  <span class="mc-score-num" :style="{ color: rec.scoreColor }">{{ rec.totalScore }}</span>
+                  <span class="mc-score-label">分</span>
+                </div>
+                <div class="mc-arrow" :class="{ 'is-open': expandedCard === i }">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+
+              <!-- 展开区域：歌曲列表 + 播放器 -->
+              <Transition name="mc-expand">
+                <div v-if="expandedCard === i" class="mc-body">
+                  <div
+                    v-for="(song, si) in rec.songs" :key="si"
+                    class="mc-song"
+                  >
+                    <!-- 上行：封面 + 歌名歌手 + 详情按钮 -->
+                    <div class="mc-song-row">
+                      <img
+                        class="mc-cover"
+                        :src="song.cover"
+                        :alt="song.name"
+                        loading="lazy"
+                        @error="onCoverError"
+                        referrerpolicy="no-referrer"
+                      />
+                      <div class="mc-song-info">
+                        <div class="mc-song-name">{{ song.name }}</div>
+                        <div class="mc-song-artist">{{ song.artist }}</div>
+                      </div>
+                      <a
+                        class="mc-detail-btn"
+                        :href="neteaseSongUrl(song.songId)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        title="在网易云查看详情"
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+                        详情
+                      </a>
+                    </div>
+                    <!-- 下行：播放器（占满整行） -->
+                    <div class="mc-player-wrap">
+                      <iframe
+                        class="mc-player"
+                        :src="neteasePlayerUrl(song.songId)"
+                        frameborder="0"
+                        allow="autoplay"
+                        referrerpolicy="no-referrer"
+                      ></iframe>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+          </div>
+
+          <!-- 空状态 -->
+          <div class="empty-state" v-else-if="!primaryEmotion">
+            <div class="empty-icon">🎶</div>
+            <p>分享你的心情，获取专属音乐推荐</p>
+          </div>
         </div>
       </div>
     </Transition>
@@ -663,6 +834,319 @@ function clearStatus() {
 const distribution = ref({})
 const totalMoodCount = computed(() => Object.values(distribution.value).reduce((a, b) => a + b, 0))
 
+// 情绪分布 — 评判说明
+const moodJudgeNote = {
+  '开心': '通过对话中的积极关键词、感叹词、愉悦语气和正面事件描述综合判定',
+  '平静': '由中性平稳的叙述节奏、日常话题和低情绪波动表达判定',
+  '焦虑': '依据不安词汇、反复确认、急促表达和对未来的担忧信号识别',
+  '难过': '从低能量措辞、悲伤表达、回避性话题和自我否定倾向判断',
+  '愤怒': '基于激烈用语、否定句式、不满情绪和对事件的强烈反应分析',
+}
+// 占比最大时的安慰/建议
+const moodComfort = {
+  '开心': '太棒了！保持这份好心情，你值得每一刻的快乐 🌟',
+  '平静': '内心宁静是一种力量。慢慢来，一切都在变好的路上 🌿',
+  '焦虑': '焦虑是大脑在提醒你重视某事，不是你的敌人。试着深呼吸，你已经做得很好了 💛',
+  '难过': '难过没关系，它是你柔软内心的证明。如果愿意，我一直在这里倾听 🤍',
+  '愤怒': '愤怒是边界被触碰的信号。允许自己生气，但别让情绪控制你。找个出口释放它吧 💪',
+}
+const topMoodLabels = computed(() => {
+  const dist = distribution.value
+  if (!Object.keys(dist).length) return []
+  const entries = Object.entries(dist)
+  const maxVal = Math.max(...entries.map(e => e[1]))
+  if (maxVal <= 0) return []
+  // 只取一个占比最高的情绪作为主导情绪（即使有并列也只取第一个）
+  const topEntry = entries.find(e => e[1] === maxVal)
+  return topEntry ? [topEntry[0]] : []
+})
+const topMoodComforts = computed(() => {
+  return topMoodLabels.value.map(l => moodComfort[l]).filter(Boolean)
+})
+const hoveredMood = ref(null)
+function showTooltip(label) { hoveredMood.value = label }
+function hideTooltip() { hoveredMood.value = null }
+
+// ═══ 音乐推荐 ═══
+const showMusicPanel = ref(false)
+const expandedCard = ref(-1) // -1 = 全部折叠，0-4 = 展开第N张卡片
+
+function toggleCard(idx) {
+  expandedCard.value = expandedCard.value === idx ? -1 : idx
+}
+
+function openMusicPanel() {
+  showMusicPanel.value = true
+  expandedCard.value = -1
+}
+
+// 构建网易云 outchain 播放器 URL（用于 iframe 嵌入）
+function neteasePlayerUrl(songId) {
+  // auto=0 不自动播放（需用户点击），height=66 显示迷你播放器（66px高）
+  return `https://music.163.com/outchain/player?type=2&id=${songId}&auto=0&height=66`
+}
+
+// 构建网易云歌曲详情页 URL
+function neteaseSongUrl(songId) {
+  return `https://music.163.com/song?id=${songId}`
+}
+
+// 封面图片加载失败时，替换为占位符
+function onCoverError(e) {
+  const target = e.target
+  if (target && target.tagName === 'IMG') {
+    target.style.display = 'none'
+    const parent = target.parentElement
+    if (!parent.querySelector('.mc-cover-placeholder')) {
+      const div = document.createElement('div')
+      div.className = 'mc-cover-placeholder'
+      div.textContent = '🎵'
+      parent.insertBefore(div, target)
+    }
+  }
+}
+
+// 主导情绪 & 占比
+const primaryEmotion = computed(() => {
+  return topMoodLabels.value[0] || null
+})
+const primaryEmotionPct = computed(() => {
+  const p = primaryEmotion.value
+  if (!p || !distribution.value[p]) return 0
+  return Math.round(distribution.value[p] / totalMoodCount.value * 100)
+})
+
+// ─── 音乐风格库：每种风格对 5 种情绪的亲和力评分 (0-10)，并附带代表性歌曲 ───
+const musicStyles = [
+  {
+    style: '欢快流行', emoji: '🎉', color: '#E8C468',
+    searchKeyword: '欢快 流行 华语',
+    reason: '适合开心时放大愉悦感',
+    affinity: { '开心': 10, '平静': 4, '焦虑': 1, '难过': 0, '愤怒': 2 },
+    timeAffinity: { day: 9, evening: 6, night: 3 },
+    weatherAffinity: { sun: 9, cloud: 7, rain: 3, snow: 3, fog: 4 },
+    // 代表性歌曲：歌名、歌手、网易云songId（用于iframe播放器）
+    songs: [
+      { name: '晴天', artist: '周杰伦', songId: 186016, cover: 'https://p4.music.126.net/r-CWlZZ3ZU7716vHnPtZaA==/109951168014981496.jpg' },
+      { name: '告白气球', artist: '周杰伦', songId: 569213183, cover: 'https://p4.music.126.net/lBZ-3zTk3rlI--Zs5bO_VQ==/109951167649325638.jpg' },
+      { name: '小幸运', artist: '田馥甄', songId: 2917134, cover: 'https://p4.music.126.net/A5DOyN6udBo6prR9txnoZg==/3300172974333834.jpg' },
+    ]
+  },
+  {
+    style: '治愈轻音乐', emoji: '🎹', color: '#7FB3A6',
+    searchKeyword: '治愈 轻音乐 纯音乐',
+    reason: '安抚焦虑，带来内心平静',
+    affinity: { '开心': 5, '平静': 8, '焦虑': 10, '难过': 9, '愤怒': 4 },
+    timeAffinity: { day: 6, evening: 9, night: 10 },
+    weatherAffinity: { sun: 6, cloud: 8, rain: 10, snow: 9, fog: 9 },
+    songs: [
+      { name: '城南花已开', artist: '三亩地', songId: 1359357042, cover: 'https://p4.music.126.net/2BZNWsdfxUxs6M_ZGyGmTg==/109951163499504746.jpg' },
+      { name: '夜的钢琴曲五', artist: '石进', songId: 67295, cover: 'https://p4.music.126.net/vW0JU-yxP4oWukbPhBZZmw==/109951167605441267.jpg' },
+      { name: '所念皆星河', artist: 'CMJ', songId: 1444918783, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
+    ]
+  },
+  {
+    style: '温暖民谣', emoji: '🎸', color: '#C9A86C',
+    searchKeyword: '温暖 民谣 治愈',
+    reason: '像朋友在耳边讲故事',
+    affinity: { '开心': 6, '平静': 9, '焦虑': 7, '难过': 8, '愤怒': 3 },
+    timeAffinity: { day: 7, evening: 9, night: 7 },
+    weatherAffinity: { sun: 7, cloud: 9, rain: 8, snow: 7, fog: 8 },
+    songs: [
+      { name: '成都', artist: '赵雷', songId: 436514312, cover: 'https://p4.music.126.net/ta-5Zaw8FukCr4S0-CZ2NA==/109951162964647935.jpg' },
+      { name: '理想三旬', artist: '赵雷', songId: 483671599, cover: 'https://p4.music.126.net/VD194VKS930_5Hd_IrQQQ==/109951163234348210.jpg' },
+      { name: '给他', artist: '赵雷', songId: 436514315, cover: 'https://p4.music.126.net/RV8VaucIiH6S5c_xiqe_rQ==/109951162964647837.jpg' },
+    ]
+  },
+  {
+    style: '节奏电子', emoji: '🎧', color: '#D4776A',
+    searchKeyword: '电子 节奏 House 中文',
+    reason: '用节拍点燃能量',
+    affinity: { '开心': 9, '平静': 3, '焦虑': 2, '难过': 1, '愤怒': 6 },
+    timeAffinity: { day: 9, evening: 7, night: 2 },
+    weatherAffinity: { sun: 10, cloud: 7, rain: 3, snow: 2, fog: 3 },
+    songs: [
+      { name: '你要跳舞吗', artist: '新裤子', songId: 1356068210, cover: 'https://p4.music.126.net/NG6I1PbgTb8DdKgOD-e1gQ==/109951163403002902.jpg' },
+      { name: '生活因你而火热', artist: '新裤子', songId: 1356068220, cover: 'https://p4.music.126.net/NG6I1PbgTb8DdKgOD-e1gQ==/109951163403002902.jpg' },
+      { name: '没有理想的人不伤心', artist: '新裤子', songId: 29787149, cover: 'https://p4.music.126.net/V_FjcTnOsvhdHeMmis2eNQ==/109951163093426385.jpg' },
+    ]
+  },
+  {
+    style: '舒缓R&B', emoji: '🎷', color: '#8B7BA6',
+    searchKeyword: 'R&B 舒缓 中文',
+    reason: '柔和的律动让你放松下来',
+    affinity: { '开心': 7, '平静': 8, '焦虑': 6, '难过': 5, '愤怒': 3 },
+    timeAffinity: { day: 6, evening: 10, night: 8 },
+    weatherAffinity: { sun: 7, cloud: 8, rain: 9, snow: 6, fog: 7 },
+    songs: [
+      { name: '关键词', artist: '林俊杰', songId: 37115780, cover: 'https://p4.music.126.net/IpCLRDAYGIYNCYcKKAWMNg==/109951165464070043.jpg' },
+      { name: '修炼爱情', artist: '林俊杰', songId: 25706282, cover: 'https://p4.music.126.net/R-JyO7XZdL9GoPcANGzXvA==/109951163204871949.jpg' },
+      { name: '不为谁而作的歌', artist: '林俊杰', songId: 436514197, cover: 'https://p4.music.126.net/ta-5Zaw8FukCr4S0-CZ2NA==/109951162964647935.jpg' },
+    ]
+  },
+  {
+    style: '释放摇滚', emoji: '🎸', color: '#C94A4A',
+    searchKeyword: '摇滚 释放 中文摇滚',
+    reason: '让积压的情绪随鼓点释放',
+    affinity: { '开心': 5, '平静': 1, '焦虑': 3, '难过': 2, '愤怒': 10 },
+    timeAffinity: { day: 8, evening: 5, night: 1 },
+    weatherAffinity: { sun: 8, cloud: 6, rain: 5, snow: 3, fog: 4 },
+    songs: [
+      { name: '山海', artist: '草东没有派对', songId: 1358695895, cover: 'https://p4.music.126.net/ROQS6nZtZP6xPYZ7TJSxgQ==/109951163905929032.jpg' },
+      { name: '丑', artist: '草东没有派对', songId: 5276217, cover: 'https://p4.music.126.net/ROQS6nZtZP6xPYZ7TJSxgQ==/109951163905929032.jpg' },
+      { name: '大风吹', artist: '刘柏辛', songId: 1496091321, cover: 'https://p4.music.126.net/MLfaOmYafqKN_m5y_hKA==/109951165110000590.jpg' },
+    ]
+  },
+  {
+    style: '自然白噪音', emoji: '🌿', color: '#6DB58B',
+    searchKeyword: '自然 白噪音 雨声',
+    reason: '回归自然的频率，抚平焦躁',
+    affinity: { '开心': 3, '平静': 10, '焦虑': 8, '难过': 6, '愤怒': 4 },
+    timeAffinity: { day: 7, evening: 8, night: 10 },
+    weatherAffinity: { sun: 5, cloud: 8, rain: 10, snow: 8, fog: 9 },
+    songs: [
+      { name: '雨声白噪音', artist: '自然之声', songId: 1465849737, cover: 'https://p4.music.126.net/0QxRJ-yVthKqKqeKNmS6HA==/109951164323339256.jpg' },
+      { name: '森林鸟鸣', artist: '自然之声', songId: 1465849758, cover: 'https://p4.music.126.net/0QxRJ-yVthKqKqeKNmS6HA==/109951164323339256.jpg' },
+      { name: '海浪声', artist: '自然之声', songId: 1444918786, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
+    ]
+  },
+  {
+    style: '经典爵士', emoji: '🎺', color: '#C9A050',
+    searchKeyword: '爵士 经典 咖啡',
+    reason: '在优雅旋律中品味独处时光',
+    affinity: { '开心': 6, '平静': 9, '焦虑': 5, '难过': 6, '愤怒': 2 },
+    timeAffinity: { day: 6, evening: 9, night: 8 },
+    weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
+    songs: [
+      { name: 'Fly Me to the Moon', artist: 'Frank Sinatra', songId: 4168622, cover: 'https://p4.music.126.net/RMJAQWdANYQ1tmXXR3s5xg==/109951163353110145.jpg' },
+      { name: 'What a Wonderful World', artist: 'Louis Armstrong', songId: 26383868, cover: 'https://p4.music.126.net/XcZXPrCqjMYr0i0pPBE9LA==/109951163003703625.jpg' },
+      { name: 'L-O-V-E', artist: 'Nat King Cole', songId: 18402858, cover: 'https://p4.music.126.net/axFCkHJLCpD3g_1qefwqg==/109951167204947786.jpg' },
+    ]
+  },
+  {
+    style: '能量说唱', emoji: '🎤', color: '#D4776A',
+    searchKeyword: '说唱 正能量 中文说唱',
+    reason: '用有力的词句为自己打气',
+    affinity: { '开心': 8, '平静': 2, '焦虑': 4, '难过': 2, '愤怒': 7 },
+    timeAffinity: { day: 9, evening: 5, night: 1 },
+    weatherAffinity: { sun: 9, cloud: 6, rain: 3, snow: 2, fog: 3 },
+    songs: [
+      { name: '野狼Disco', artist: '宝石Gem', songId: 1359094256, cover: 'https://p4.music.126.net/b8NnZ5KyG3asdRiCwQyRg==/109951163905928781.jpg' },
+      { name: '我tm年轻人', artist: 'Bridge', songId: 1444918784, cover: 'https://p4.music.126.net/RxbTuL-p1-xeUlCImOy2Tg==/109951164520549347.jpg' },
+      { name: '经济舱', artist: '满舒克', songId: 1298137594, cover: 'https://p4.music.126.net/7YKV4zOBxKwFfbwSDYyhQ==/109951163093426396.jpg' },
+    ]
+  },
+  {
+    style: '怀旧金曲', emoji: '📻', color: '#A0846C',
+    searchKeyword: '经典老歌 怀旧 华语金曲',
+    reason: '熟悉的旋律是最好的陪伴',
+    affinity: { '开心': 7, '平静': 7, '焦虑': 5, '难过': 9, '愤怒': 2 },
+    timeAffinity: { day: 6, evening: 8, night: 7 },
+    weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
+    songs: [
+      { name: '后来', artist: '刘若英', songId: 254128, cover: 'https://p4.music.126.net/h-xoy0pFupbiMIAi1F7c4g==/109951167793884671.jpg' },
+      { name: '红豆', artist: '王菲', songId: 254033, cover: 'https://p4.music.126.net/RWp07p2aSbaZ7fKBSGoGsA==/109951162964647862.jpg' },
+      { name: '情非得已', artist: '庾澄庆', songId: 254492, cover: 'https://p4.music.126.net/0Ypj0BWEa8P6N7I0b0i0w==/109951163456789012.jpg' },
+    ]
+  },
+]
+
+// ─── 天气分类 ───
+const weatherCategory = computed(() => {
+  const code = weatherCode.value
+  if (code === 0) return 'sun'
+  if (code <= 3) return 'cloud'
+  if (code <= 48) return 'fog'
+  if (code <= 67) return 'rain'
+  if (code <= 86) return 'snow'
+  return 'rain'
+})
+
+// ─── 时段与天气标签 ───
+const timeFactorLabel = computed(() => {
+  const t = timeOfDay.value
+  if (t === 'day') return '☀️ 白天活力'
+  if (t === 'evening') return '🌅 傍晚放松'
+  return '🌙 夜间舒缓'
+})
+const weatherFactorLabel = computed(() => {
+  const w = weatherCategory.value
+  if (w === 'sun') return '☀️ 晴天偏明快'
+  if (w === 'cloud') return '⛅ 多云偏温暖'
+  if (w === 'rain') return '🌧️ 雨天偏治愈'
+  if (w === 'snow') return '❄️ 雪天偏温暖'
+  return '🌫️ 雾天偏沉静'
+})
+
+// ─── 情绪倾向：正值=积极主导，负值=消极主导 ───
+const emotionTendency = computed(() => {
+  const dist = distribution.value
+  if (!Object.keys(dist).length) return 0
+  const total = totalMoodCount.value
+  const pos = (dist['开心'] || 0) + (dist['平静'] || 0) * 0.5
+  const neg = (dist['焦虑'] || 0) + (dist['难过'] || 0) + (dist['愤怒'] || 0)
+  if (total === 0) return 0
+  return Math.round(((pos - neg) / total) * 100)
+})
+
+// ─── 核心推荐算法 ───
+const musicRecs = computed(() => {
+  const dist = distribution.value
+  if (!Object.keys(dist).length || !primaryEmotion.value) return []
+
+  const total = totalMoodCount.value
+  const pct = {}
+  for (const [label, count] of Object.entries(dist)) {
+    pct[label] = count / total
+  }
+
+  const primary = primaryEmotion.value
+  const time = timeOfDay.value
+  const weather = weatherCategory.value
+  const tendency = emotionTendency.value
+
+  const scored = musicStyles.map(s => {
+    const primaryMatch = s.affinity[primary] || 0
+    const emotionScore = (primaryMatch / 10) * 50
+
+    const posAffinity = Math.max(s.affinity['开心'] || 0, s.affinity['平静'] || 0)
+    const negAffinity = Math.max(s.affinity['焦虑'] || 0, s.affinity['难过'] || 0, s.affinity['愤怒'] || 0)
+    let tendencyBonus = 0
+    if (tendency > 0) {
+      tendencyBonus = (posAffinity / 10) * (tendency / 100) * 20
+    } else {
+      tendencyBonus = (negAffinity / 10) * (Math.abs(tendency) / 100) * 20
+  }
+
+    const timeScore = ((s.timeAffinity[time] || 5) / 10) * 15
+    const weatherScore = ((s.weatherAffinity[weather] || 5) / 10) * 15
+
+    const totalScore = Math.round(emotionScore + tendencyBonus + timeScore + weatherScore)
+
+    let scoreColor
+    if (totalScore >= 75) scoreColor = '#D4776A'
+    else if (totalScore >= 60) scoreColor = '#E8C468'
+    else if (totalScore >= 40) scoreColor = '#7FB3A6'
+    else scoreColor = '#8B8B8B'
+
+    return {
+      style: s.style,
+      emoji: s.emoji,
+      color: s.color,
+      reason: s.reason,
+      songs: s.songs || [],
+      totalScore,
+      scoreColor,
+      _emotionScore: Math.round(emotionScore),
+      _tendencyBonus: Math.round(tendencyBonus),
+      _timeScore: Math.round(timeScore),
+      _weatherScore: Math.round(weatherScore),
+    }
+  })
+
+  return scored.sort((a, b) => b.totalScore - a.totalScore).slice(0, 5)
+})
+
 // ═══ 情绪回顾面板 ═══
 const showTrendPanel = ref(false)
 const trendActiveTab = ref(7)
@@ -989,12 +1473,12 @@ const inputEl = ref(null)
 const ttsPlaying = ref(-1)
 
 const emotions = [
-  { emoji: '😰', text: '今天有点焦虑' },
-  { emoji: '😊', text: '我感到很开心' },
-  { emoji: '😩', text: '最近压力很大' },
-  { emoji: '😢', text: '有点难过' },
-  { emoji: '😤', text: '我想吐槽一下' },
-  { emoji: '😴', text: '感觉很疲惫' },
+  { emoji: '😊', text: '今天有好事发生' },
+  { emoji: '🌟', text: '我想分享快乐' },
+  { emoji: '💪', text: '给自己打个气' },
+  { emoji: '🌈', text: '来点正能量' },
+  { emoji: '✨', text: '感恩小确幸' },
+  { emoji: '🎯', text: '聊聊小目标' },
 ]
 
 function getEmotionEmoji(emotion) {
@@ -1023,6 +1507,7 @@ async function sendChatMsg(text) {
     chatMessages.value.push({ role: 'assistant', content: '网络异常，请检查连接后重试...' })
   }
   chatLoading.value = false
+  loadStats()
   await nextTick()
   scrollChatBottom()
 }
@@ -1119,7 +1604,7 @@ async function openChatPanel() {
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar() })
+onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (audioEl.value) audioEl.value.pause()
@@ -1327,69 +1812,83 @@ onUnmounted(() => {
 .back-btn:hover { background: rgba(255,255,255,0.1); }
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  height: 52px;
-  display: flex; align-items: flex-end; justify-content: center;
-  gap: 56px; padding-bottom: 8px;
-  z-index: 100; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; padding: 0 0 16px; z-index: 100;
+  background: transparent; pointer-events: none;
+}
+.bottom-nav::before {
+  content: ''; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 56px; border-radius: 28px;
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .bnav-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
   background: none; border: none; cursor: pointer;
-  color: inherit; -webkit-tap-highlight-color: transparent;
-  position: relative; padding: 2px;
+  -webkit-tap-highlight-color: transparent;
+  position: relative; z-index: 1;
+  width: 68px; height: 52px; border-radius: 16px;
+  color: rgba(255,255,255,0.7); transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  pointer-events: auto;
 }
 .bnav-item .icon-wrap {
-  width: 38px; height: 38px;
+  width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(4px);
-  border: 1.5px solid rgba(255,255,255,0.12);
-  transition: all 0.2s;
+  background: transparent; border: none;
+  transition: all 0.25s;
 }
-.bnav-item:hover .icon-wrap {
-  background: rgba(255,255,255,0.18);
-  transform: scale(1.08);
+.bnav-item:hover {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transform: scale(1.05);
 }
-.bnav-item:active .icon-wrap { transform: scale(0.92); }
-.bnav-item.active .icon-wrap {
-  background: rgba(255,255,255,0.22);
-  border-color: rgba(255,255,255,0.25);
-  animation: tab-bounce 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+.bnav-item:active { transform: scale(0.93); }
+.bnav-item.active {
+  color: #FFFFFF;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12);
 }
+.bnav-item.active .icon-wrap { background: transparent; border: none; animation: none; }
 .bnav-item svg { width: 22px; height: 22px; image-rendering: pixelated; shape-rendering: crispEdges; }
 .bnav-item .icon-outline { display: block; }
 .bnav-item .icon-fill    { display: none; }
-.bnav-item.active .icon-outline { display: none; }
-.bnav-item.active .icon-fill    { display: block; }
+.bnav-item.active .icon-outline { display: block; }
+.bnav-item.active .icon-fill    { display: none; }
 .bnav-item .bnav-label {
-  font-size: 10px; margin-top: 2px;
-  opacity: 0.65; letter-spacing: 0.5px;
+  font-size: 10px; font-weight: 500;
+  opacity: 0.7; letter-spacing: 0.5px;
   transition: opacity 0.2s;
 }
-.bnav-item:hover .bnav-label { opacity: 0.9; }
-.bnav-item.active .bnav-label { opacity: 1; font-weight: 500; }
+.bnav-item.active .bnav-label { opacity: 1; font-weight: 600; }
 @keyframes tab-bounce {
   0%   { transform: scale(1); }
-  40%  { transform: scale(1.15); }
+  40%  { transform: scale(1.1); }
   100% { transform: scale(1); }
 }
 
 /* 白天 */
-.day .bnav-item           { color: rgba(80,90,100,0.6); }
-.day .bnav-item:hover     { color: rgba(50,60,70,0.9); }
-.day .bnav-item.active    { color: rgba(45,80,60,0.95); }
-.day .bnav-item .icon-wrap{ background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.45); }
+.day .bottom-nav::before { background: rgba(255,255,255,0.35); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border-color: rgba(255,255,255,0.4); box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6); }
+.day .bnav-item           { color: rgba(50,55,60,0.65); }
+.day .bnav-item:hover     { color: rgba(20,25,30,0.85); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.day .bnav-item.active    { color: rgba(20,25,30,0.95); background: rgba(255,255,255,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.5); }
 /* 傍晚 */
-.evening .bnav-item       { color: rgba(120,100,80,0.65); }
-.evening .bnav-item:hover { color: rgba(90,70,45,0.9); }
-.evening .bnav-item.active{ color: rgba(140,95,55,0.95); }
-.evening .bnav-item .icon-wrap{ background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.4); }
+.evening .bottom-nav::before { background: rgba(40,30,20,0.3); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); border-color: rgba(255,255,255,0.15); box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
+.evening .bnav-item       { color: rgba(255,255,255,0.7); }
+.evening .bnav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.evening .bnav-item.active{ color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1); }
 /* 夜晚 */
-.night .bnav-item         { color: rgba(200,210,220,0.5); }
-.night .bnav-item:hover   { color: rgba(230,240,250,0.9); }
-.night .bnav-item.active  { color: rgba(190,220,250,0.95); }
-.night .bnav-item .icon-wrap{ background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
+.night .bottom-nav::before { background: rgba(0,0,0,0.25); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border-color: rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1); }
+.night .bnav-item         { color: rgba(255,255,255,0.7); }
+.night .bnav-item:hover   { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.night .bnav-item.active  { color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12); }
 
 /* ═══════════ 个人中心面板 ═══════════ */
 /* 背景遮罩 */
@@ -1507,12 +2006,45 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.05); border-radius: 14px; padding: 12px;
   display: flex; flex-direction: column; gap: 8px;
 }
-.pdist-row { display: flex; align-items: center; gap: 8px; }
+.pdist-row { display: flex; align-items: center; gap: 8px; transition: background 0.2s; border-radius: 8px; padding: 3px 4px; position: relative; }
+.pdist-row:hover { background: rgba(255,255,255,0.05); }
+.pdist-row.is-top { background: rgba(255,255,255,0.07); }
 .pdist-emoji { font-size: 16px; width: 22px; text-align: center; }
 .pdist-label { width: 36px; font-size: 13px; color: #D0C8C0; flex-shrink: 0; }
+.pdist-row.is-top .pdist-label { color: #F0EAE0; font-weight: 600; }
 .pdist-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
-.pdist-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #8EA89A, #A8C4B8); transition: width 0.8s ease; }
+.pdist-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
 .pdist-pct { width: 34px; font-size: 11px; color: rgba(200,200,200,0.5); text-align: right; }
+.pdist-row.is-top .pdist-pct { color: rgba(220,220,220,0.8); font-weight: 600; }
+/* 自定义tooltip */
+.pdist-tooltip {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 8px; padding: 8px 14px;
+  background: rgba(30,28,26,0.95); color: rgba(230,220,210,0.92);
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+  font-size: 11px; line-height: 1.5; white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 300; pointer-events: none;
+}
+.pdist-tooltip-arrow {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-top: 6px solid rgba(30,28,26,0.95);
+}
+.tip-fade-enter-active, .tip-fade-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.tip-fade-enter-from, .tip-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(4px); }
+.pdist-comfort {
+  margin-top: 6px; padding: 10px 12px;
+  background: rgba(255,255,255,0.06); border-radius: 10px;
+  border-left: 3px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(220,210,200,0.85); line-height: 1.6;
+  animation: fadeInUp 0.4s ease;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* 成就 */
 .panel-badges {
@@ -1602,6 +2134,214 @@ onUnmounted(() => {
 .panel-slide-leave-active .profile-panel { transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
 .panel-slide-enter-from .profile-panel { transform: translateY(100%); }
 .panel-slide-leave-to .profile-panel { transform: translateY(100%); }
+
+/* ═══════════ 音乐推荐按钮 ═══════════ */
+.music-recommend-btn {
+  position: absolute; top: 12%; right: 4%; z-index: 100;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.25s ease;
+}
+.music-recommend-btn:hover {
+  background: rgba(255,255,255,0.25); color: #FFF;
+  transform: scale(1.1); box-shadow: 0 4px 20px rgba(212,119,106,0.25);
+}
+.night .music-recommend-btn {
+  background: rgba(0,0,0,0.35); color: rgba(180,200,220,0.6);
+  border-color: rgba(255,255,255,0.06);
+}
+.night .music-recommend-btn:hover { color: rgba(220,235,250,0.9); box-shadow: 0 4px 20px rgba(160,180,220,0.2); }
+
+/* ═══════════ 音乐推荐面板 ═══════════ */
+.music-panel {
+  padding-top: 14px; max-height: 82vh; overflow-y: auto;
+}
+.music-panel .trend-header .emotion-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  background: rgba(212,119,106,0.2); color: #E8C468;
+  font-weight: 500;
+}
+
+/* 算法卡片 */
+.algo-card {
+  margin: 10px 0 14px; padding: 16px 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+}
+.algo-title {
+  font-size: 13px; font-weight: 600; color: #E8E2D8;
+  margin-bottom: 12px; letter-spacing: 0.5px;
+}
+.algo-factors {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.algo-factor {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.factor-bar-wrap {
+  width: 100%; height: 8px; background: rgba(255,255,255,0.06);
+  border-radius: 4px; position: relative; overflow: hidden;
+}
+.factor-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: #D4776A; border-radius: 4px;
+  transition: width 0.6s ease;
+}
+.factor-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 2px;
+}
+.factor-label {
+  font-size: 12px; color: #B8B0A6; font-weight: 500;
+}
+.factor-w {
+  font-size: 12px; color: #E8C468; font-weight: 700;
+}
+
+/* 推荐歌单卡片 */
+.music-list {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 0 0 16px;
+}
+.music-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+.music-card:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.1);
+}
+.music-card.is-top {
+  background: rgba(212,119,106,0.08);
+  border-color: rgba(212,119,106,0.18);
+}
+.music-card.is-expanded {
+  background: rgba(255,255,255,0.06);
+}
+
+/* 卡片头部 */
+.mc-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; cursor: pointer;
+  transition: background 0.2s;
+}
+.mc-header:hover { background: rgba(255,255,255,0.04); }
+.mc-rank {
+  width: 32px; height: 32px; display: flex;
+  align-items: center; justify-content: center;
+  flex-shrink: 0; border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+.is-top .mc-rank { background: rgba(212,119,106,0.15); }
+.rank-crown { font-size: 16px; line-height: 1; }
+.rank-num {
+  font-size: 13px; font-weight: 700; color: #B8B0A6; line-height: 1;
+}
+.is-top .rank-num { color: #D4776A; }
+.mc-style-info { flex: 1; min-width: 0; }
+.mc-style-name {
+  font-size: 14px; font-weight: 600; color: #E8E2D8;
+  margin-bottom: 2px; display: flex; align-items: center; gap: 4px;
+}
+.mc-emoji { font-size: 16px; }
+.mc-reason {
+  font-size: 11px; color: #7A756E; line-height: 1.3;
+}
+.mc-score-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  flex-shrink: 0; margin-right: 4px;
+}
+.mc-score-num {
+  font-size: 18px; font-weight: 700; line-height: 1;
+}
+.mc-score-label {
+  font-size: 10px; color: #6A645E;
+}
+.mc-arrow {
+  width: 20px; height: 20px; display: flex; align-items: center;
+  justify-content: center; color: #6A645E;
+  transition: transform 0.25s ease; flex-shrink: 0;
+}
+.mc-arrow.is-open { transform: rotate(180deg); }
+
+/* 展开内容 */
+.mc-expand-enter-active, .mc-expand-leave-active {
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+.mc-expand-enter-from, .mc-expand-leave-to {
+  max-height: 0; opacity: 0;
+}
+.mc-expand-enter-to, .mc-expand-leave-from {
+  max-height: 500px; opacity: 1;
+}
+.mc-body {
+  padding: 0 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* 歌曲行 */
+.mc-song {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+}
+.mc-song-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.mc-cover {
+  width: 44px; height: 44px; border-radius: 8px;
+  object-fit: cover; flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+}
+.mc-cover-placeholder {
+  width: 44px; height: 44px; border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0; color: rgba(255,255,255,0.2);
+}
+.mc-song-info { flex: 1; min-width: 0; }
+.mc-song-name {
+  font-size: 13px; font-weight: 600; color: #E8E2D8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mc-song-artist {
+  font-size: 11px; color: #7A756E;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 内嵌播放器 */
+.mc-player-wrap {
+  width: 100%; height: 66px; flex-shrink: 0;
+  border-radius: 8px; overflow: hidden;
+  background: rgba(0,0,0,0.2);
+}
+.mc-player {
+  width: 100%; height: 100%; border: none;
+}
+
+/* 查看详情按钮 */
+.mc-detail-btn {
+  display: flex; align-items: center; gap: 3px;
+  padding: 5px 10px; border-radius: 8px;
+  background: rgba(212,119,106,0.12); color: #D4776A;
+  font-size: 11px; font-weight: 500; text-decoration: none;
+  transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
+  border: 1px solid rgba(212,119,106,0.15);
+}
+.mc-detail-btn:hover {
+  background: rgba(212,119,106,0.25); color: #FF8A80;
+  border-color: rgba(212,119,106,0.3);
+}
 
 /* ═══════════ 情绪回顾面板 ═══════════ */
 .trend-panel { padding-top: 14px; }
@@ -1758,6 +2498,9 @@ onUnmounted(() => {
 
   /* 音乐按钮 */
   .music-btn { bottom: 70px; right: 30px; width: 38px; height: 38px; }
+  .music-recommend-btn { top: 14%; right: 6%; width: 44px; height: 44px; }
+  .music-panel { max-height: 78vh; }
+  .mc-player-wrap { height: 66px; }
 
   /* 底部导航居中 */
   .bottom-nav { max-width: 100%; left: 0; transform: none; }
@@ -1925,16 +2668,16 @@ onUnmounted(() => {
 .chat-panel .input-wrap input::placeholder { color: #6A645E; }
 
 .chat-panel .voice-btn {
-  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.08); color: #8EA89A;
-  border: 1.5px solid rgba(255,255,255,0.1); transition: all 0.2s;
+  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
   cursor: pointer;
 }
-.chat-panel .voice-btn:hover { background: rgba(255,255,255,0.14); }
+.chat-panel .voice-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); border-color: rgba(255,255,255,0.15); }
 .chat-panel .voice-btn.recording {
-  background: rgba(212,119,106,0.15); color: #D4776A; border-color: #D4776A;
-  animation: pulse-rec 1s infinite;
+  background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.3);
+  animation: pulse-rec 1s infinite; box-shadow: 0 0 16px rgba(255,255,255,0.15);
 }
 .chat-panel .rec-wave {
   display: block; width: 18px; height: 18px;
@@ -1945,13 +2688,14 @@ onUnmounted(() => {
 @keyframes pulse-rec { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
 
 .chat-panel .send-btn {
-  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: #8EA89A; color: white; transition: all 0.2s;
-  border: none; cursor: pointer;
+  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.12); transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  cursor: pointer;
 }
-.chat-panel .send-btn:hover:not(:disabled) { background: #7A9A8C; transform: scale(1.05); }
-.chat-panel .send-btn:disabled { background: #5A7064; }
+.chat-panel .send-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); color: #FFFFFF; border-color: rgba(255,255,255,0.25); transform: scale(1.04); }
+.chat-panel .send-btn:disabled { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.2); border-color: transparent; }
 
 /* 录音提示 */
 .chat-panel .recording-hint {
@@ -1983,5 +2727,11 @@ onUnmounted(() => {
 }
 .icp-footer a:hover {
   color: rgba(255,255,255,0.7);
+}
+
+/* ══ 移动端适配 ══ */
+@media (max-width: 480px) {
+  .mc-player-wrap { height: 66px; }
+  .mc-detail-btn { padding: 4px 8px; font-size: 10px; }
 }
 </style>
