@@ -396,18 +396,8 @@
             </div>
           </div>
 
-          <!-- 迷你播放器条：选中歌曲后显示在歌单下方 -->
-          <div class="am-mini-player" v-if="activeSongId">
-            <iframe
-              :key="activeSongId"
-              :src="neteasePlayerUrl(activeSongId)"
-              frameborder="0"
-              width="100%"
-              height="52"
-              allow="autoplay"
-              referrerpolicy="no-referrer"
-            ></iframe>
-          </div>
+          <!-- 隐藏音频元素：通过后端代理播放网易云音频 -->
+          <audio ref="musicAudioEl" class="am-hidden-audio" preload="none" controls></audio>
 
           <!-- 推荐歌单卡片列表 -->
           <div class="music-list" v-if="musicRecs.length">
@@ -892,25 +882,43 @@ function hideTooltip() { hoveredMood.value = null }
 const showMusicPanel = ref(false)
 const expandedCard = ref(-1) // -1 = 全部折叠，0-4 = 展开第N张卡片
 const activeSongId = ref(null) // 当前播放中的歌曲 songId
+const musicAudioEl = ref(null) // <audio> 元素引用
 
 function toggleCard(idx) {
   expandedCard.value = expandedCard.value === idx ? -1 : idx
 }
 
 function toggleSongPlay(song) {
-  // 点击同一首则停止，否则切换到新歌（v-if 重新创建 iframe 实现自动播放）
-  activeSongId.value = activeSongId.value === song.songId ? null : song.songId
+  if (activeSongId.value === song.songId) {
+    // 暂停当前
+    activeSongId.value = null
+    if (musicAudioEl.value) {
+      musicAudioEl.value.pause()
+      musicAudioEl.value.src = ''
+    }
+  } else {
+    // 播放新歌：通过后端代理获取音频
+    activeSongId.value = song.songId
+    if (musicAudioEl.value) {
+      musicAudioEl.value.src = proxyAudioUrl(song.songId)
+      musicAudioEl.value.play().catch(() => { /* 静默忽略浏览器拦截 */ })
+    }
+  }
 }
 
 function openMusicPanel() {
   showMusicPanel.value = true
   expandedCard.value = -1
   activeSongId.value = null
+  if (musicAudioEl.value) {
+    musicAudioEl.value.pause()
+    musicAudioEl.value.src = ''
+  }
 }
 
-// 网易云外链播放器 URL（用于 iframe 嵌入，auto=1 自动播放）
-function neteasePlayerUrl(songId) {
-  return `https://music.163.com/outchain/player?type=2&id=${songId}&auto=1&height=66`
+// 后端代理音频 URL（绕过网易云 Referer 限制）
+function proxyAudioUrl(songId) {
+  return `${import.meta.env.VITE_API_BASE || ''}/api/music/proxy?song_id=${songId}`
 }
 
 // 构建网易云歌曲详情页 URL
@@ -2431,19 +2439,10 @@ onUnmounted(() => {
 }
 .am-link-btn:hover { color: #B8B0A6; background: rgba(255,255,255,0.08); }
 
-/* 迷你网易云播放条 */
-.am-mini-player {
-  margin: 10px 12px 4px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: rgba(40,38,36,0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.am-mini-player iframe {
-  display: block;
-  width: 100%;
-  border: none;
+/* 隐藏音频元素（仅用于播放，不可见） */
+.am-hidden-audio {
+  position: absolute; width: 0; height: 0;
+  opacity: 0; pointer-events: none;
 }
 
 /* 来源标注 */

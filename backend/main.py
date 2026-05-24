@@ -8,7 +8,7 @@ from database import init_db
 import models  # 确保模型被加载
 
 # 导入路由
-from api import chat, user, mood, admin
+from api import chat, user, mood, admin, music
 
 app = FastAPI(title="咕哝 API", description="AI情绪健康助手", version="1.0.0")
 
@@ -26,6 +26,7 @@ app.include_router(chat.router)
 app.include_router(user.router)
 app.include_router(mood.router)
 app.include_router(admin.router)
+app.include_router(music.router)
 
 @app.get("/")
 async def root():
