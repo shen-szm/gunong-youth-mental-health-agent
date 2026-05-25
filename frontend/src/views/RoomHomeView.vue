@@ -336,7 +336,7 @@
       </div>
     </Transition>
 
-    <!-- ══ 西安城市探索 - 全屏热区交互 ══ -->
+    <!-- ══ 西安城市探索 - 全屏热区 + 弹窗交互 ══ -->
     <Transition name="xian-fade">
       <div v-if="showXianPanel" class="xian-fullscreen">
         <!-- 全屏西安场景图 -->
@@ -354,101 +354,105 @@
           <div class="xian-top-spacer"></div>
         </div>
 
-        <!-- 热区层 -->
-        <div class="xian-hotzones">
-          <div
-            v-for="(step, i) in shadowPuppetSteps"
-            :key="step.id"
-            class="xian-hotzone"
-            :class="{ active: shadowPuppetStep === i + 1, done: shadowPuppetStep > i + 1, upcoming: shadowPuppetStep < i + 1 }"
-            :style="{ left: hotzonePositions[i].left, top: hotzonePositions[i].top }"
-            @click.stop="triggerStep(i + 1)"
-          >
-            <div class="hz-outer-ring"></div>
-            <div class="hz-dot">
-              <span v-if="shadowPuppetStep > i + 1" class="hz-check">✓</span>
-              <span v-else class="hz-num">{{ i + 1 }}</span>
-            </div>
-            <span class="hz-label">{{ step.title }}</span>
+        <!-- 单个交互热区（弹窗未打开时显示） -->
+        <div v-if="!showPuppetPopup" class="xian-hotspot" @click="startPuppetMaking">
+          <div class="hs-outer-ring"></div>
+          <div class="hs-inner">
+            <span class="hs-emoji">🎭</span>
           </div>
+          <span class="hs-label">探索皮影制作</span>
+          <p class="hs-sub">点击此处开始</p>
         </div>
 
-        <!-- 底部提示（未开始时） -->
-        <div v-if="shadowPuppetStep === 0" class="xian-hint">
-          <span class="xian-hint-icon">👆</span>
-          <span>点击地图上的光点，开启皮影制作之旅</span>
-        </div>
-
-        <!-- 步骤详情卡（浮层） -->
-        <Transition name="card-pop">
-          <div v-if="shadowPuppetStep >= 1 && shadowPuppetStep <= 7" class="xian-card-overlay">
-            <div class="xian-step-card">
-              <div class="xsc-visual" :class="currentStepData?.animClass">
-                <span class="xsc-emoji">{{ currentStepData?.emoji }}</span>
-              </div>
-              <div class="xsc-num">步骤 {{ currentStepData?.id }} / 7</div>
-              <h3 class="xsc-title">{{ currentStepData?.title }}</h3>
-              <p class="xsc-desc">{{ currentStepData?.desc }}</p>
-              <p class="xsc-detail">{{ currentStepData?.detail }}</p>
-              <button class="xsc-btn" @click="nextStep">
-                <span>{{ shadowPuppetStep < 7 ? '下一步' : '完成制作' }}</span>
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              </button>
-            </div>
-          </div>
-        </Transition>
-
-        <!-- 完成卡 -->
-        <Transition name="card-pop">
-          <div v-if="shadowPuppetStep === 8" class="xian-card-overlay">
-            <div class="xian-step-card xian-done-card">
-              <div class="xsc-puppet-wrap">
-                <svg viewBox="0 0 120 200" class="xsc-puppet-svg">
-                  <circle cx="60" cy="35" r="18" fill="none" stroke="#C4A35A" stroke-width="2"/>
-                  <ellipse cx="60" cy="38" rx="12" ry="8" fill="rgba(196,163,90,0.15)" stroke="rgba(196,163,90,0.3)" stroke-width="1"/>
-                  <path d="M42 28 Q50 12 60 10 Q70 12 78 28" fill="none" stroke="#D4B76A" stroke-width="1.5"/>
-                  <path d="M45 26 L60 6 L75 26" fill="none" stroke="#C4A35A" stroke-width="1" stroke-dasharray="3,3"/>
-                  <circle cx="54" cy="33" r="2.5" fill="#C4A35A" opacity="0.6"/>
-                  <circle cx="66" cy="33" r="2.5" fill="#C4A35A" opacity="0.6"/>
-                  <rect x="42" y="55" width="36" height="55" rx="8" fill="none" stroke="#C4A35A" stroke-width="2"/>
-                  <path d="M46 60 Q60 68 74 60" fill="none" stroke="#D4B76A" stroke-width="1" stroke-dasharray="2,4"/>
-                  <path d="M48 80 Q60 86 72 80" fill="none" stroke="rgba(196,163,90,0.35)" stroke-width="0.8" stroke-dasharray="1,5"/>
-                  <line x1="46" y1="90" x2="74" y2="90" stroke="rgba(196,163,90,0.2)" stroke-width="0.5"/>
-                  <line x1="48" y1="95" x2="72" y2="95" stroke="rgba(196,163,90,0.2)" stroke-width="0.5"/>
-                  <path d="M42 62 Q28 60 22 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
-                  <circle cx="22" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1"/>
-                  <path d="M78 62 Q92 60 98 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
-                  <circle cx="98" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1"/>
-                  <path d="M48 110 L42 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M72 110 L78 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="60" y1="10" x2="60" y2="-8" stroke="#8A847E" stroke-width="1.5" stroke-linecap="round"/>
-                  <circle cx="60" cy="-10" r="3" fill="#8A847E"/>
-                  <line x1="22" y1="45" x2="18" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round"/>
-                  <circle cx="18" cy="37" r="2" fill="#8A847E"/>
-                  <line x1="98" y1="45" x2="102" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round"/>
-                  <circle cx="102" cy="37" r="2" fill="#8A847E"/>
-                </svg>
-              </div>
-              <h3 class="xsc-title">恭喜！皮影制作完成</h3>
-              <p class="xsc-detail">你完成了一盏传统陕西皮影的制作，这是中华民族千年智慧的结晶。</p>
-              <div class="xsc-actions">
-                <button class="xsc-btn-ghost" @click="resetShadowPuppet">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                  <span>重新制作</span>
+        <!-- 皮影制作弹窗 -->
+        <Transition name="popup-scale">
+          <div v-if="showPuppetPopup" class="puppet-popup-overlay">
+            <div class="puppet-popup">
+              <!-- 弹窗头部：步骤圆点 + 关闭按钮 -->
+              <div class="pp-header">
+                <div class="pp-step-dots">
+                  <span
+                    v-for="s in 7"
+                    :key="s"
+                    class="pp-dot"
+                    :class="{ active: shadowPuppetStep >= s, current: shadowPuppetStep === s }"
+                  ></span>
+                </div>
+                <button class="pp-close" @click="closePuppetPopup">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
-                <button class="xsc-btn-main" @click="showXianPanel = false; showCityPanel = true">返回城市</button>
+              </div>
+
+              <!-- 步骤内容 (1-7) -->
+              <div v-if="shadowPuppetStep >= 1 && shadowPuppetStep <= 7" class="pp-body">
+                <div class="pp-visual" :class="currentStepData?.animClass">
+                  <span class="pp-emoji">{{ currentStepData?.emoji }}</span>
+                </div>
+                <div class="pp-num">步骤 {{ currentStepData?.id }} / 7</div>
+                <h3 class="pp-step-title">{{ currentStepData?.title }}</h3>
+                <p class="pp-desc">{{ currentStepData?.desc }}</p>
+                <p class="pp-detail">{{ currentStepData?.detail }}</p>
+              </div>
+
+              <!-- 完成内容 -->
+              <div v-if="shadowPuppetStep === 8" class="pp-body pp-done-body">
+                <div class="xsc-puppet-wrap">
+                  <svg viewBox="0 0 120 200" class="xsc-puppet-svg">
+                    <circle cx="60" cy="35" r="18" fill="none" stroke="#C4A35A" stroke-width="2"/>
+                    <ellipse cx="60" cy="38" rx="12" ry="8" fill="rgba(196,163,90,0.15)" stroke="rgba(196,163,90,0.3)" stroke-width="1"/>
+                    <path d="M42 28 Q50 12 60 10 Q70 12 78 28" fill="none" stroke="#D4B76A" stroke-width="1.5"/>
+                    <path d="M45 26 L60 6 L75 26" fill="none" stroke="#C4A35A" stroke-width="1" stroke-dasharray="3,3"/>
+                    <circle cx="54" cy="33" r="2.5" fill="#C4A35A" opacity="0.6"/>
+                    <circle cx="66" cy="33" r="2.5" fill="#C4A35A" opacity="0.6"/>
+                    <rect x="42" y="55" width="36" height="55" rx="8" fill="none" stroke="#C4A35A" stroke-width="2"/>
+                    <path d="M46 60 Q60 68 74 60" fill="none" stroke="#D4B76A" stroke-width="1" stroke-dasharray="2,4"/>
+                    <path d="M48 80 Q60 86 72 80" fill="none" stroke="rgba(196,163,90,0.35)" stroke-width="0.8" stroke-dasharray="1,5"/>
+                    <line x1="46" y1="90" x2="74" y2="90" stroke="rgba(196,163,90,0.2)" stroke-width="0.5"/>
+                    <line x1="48" y1="95" x2="72" y2="95" stroke="rgba(196,163,90,0.2)" stroke-width="0.5"/>
+                    <path d="M42 62 Q28 60 22 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="22" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1"/>
+                    <path d="M78 62 Q92 60 98 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="98" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1"/>
+                    <path d="M48 110 L42 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M72 110 L78 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round"/>
+                    <line x1="60" y1="10" x2="60" y2="-8" stroke="#8A847E" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="60" cy="-10" r="3" fill="#8A847E"/>
+                    <line x1="22" y1="45" x2="18" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round"/>
+                    <circle cx="18" cy="37" r="2" fill="#8A847E"/>
+                    <line x1="98" y1="45" x2="102" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round"/>
+                    <circle cx="102" cy="37" r="2" fill="#8A847E"/>
+                  </svg>
+                </div>
+                <h3 class="pp-step-title">恭喜！皮影制作完成</h3>
+                <p class="pp-detail">你完成了一盏传统陕西皮影的制作，这是中华民族千年智慧的结晶。</p>
+              </div>
+
+              <!-- 底部操作（步骤中） -->
+              <div class="pp-footer" v-if="shadowPuppetStep >= 1 && shadowPuppetStep <= 7">
+                <div class="pp-progress-bar">
+                  <div class="pp-track">
+                    <div class="pp-fill" :style="{ width: (shadowPuppetStep / 7 * 100) + '%' }"></div>
+                  </div>
+                </div>
+                <button class="pp-btn" @click="nextStep">
+                  <span>{{ shadowPuppetStep < 7 ? '下一步' : '完成制作' }}</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+
+              <!-- 底部操作（完成时） -->
+              <div class="pp-footer" v-if="shadowPuppetStep === 8">
+                <div class="pp-actions">
+                  <button class="pp-btn-ghost" @click="resetPuppet">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    <span>重新制作</span>
+                  </button>
+                  <button class="pp-btn-main" @click="closeXianPanel">完成</button>
+                </div>
               </div>
             </div>
           </div>
         </Transition>
-
-        <!-- 底部进度条 -->
-        <div class="xian-progress" v-if="shadowPuppetStep > 0 && shadowPuppetStep <= 8">
-          <div class="xp-track">
-            <div class="xp-fill" :style="{ width: (shadowPuppetStep / 8 * 100) + '%' }"></div>
-          </div>
-          <span class="xp-text">{{ shadowPuppetStep < 8 ? '步骤 ' + shadowPuppetStep + ' / 7' : '制作完成' }}</span>
-        </div>
       </div>
     </Transition>
 
@@ -898,8 +902,8 @@ function selectCity(city) {
 
 // ═══ 西安城市探索 & 皮影制作 ═══
 const showXianPanel = ref(false)
+const showPuppetPopup = ref(false)
 const shadowPuppetStep = ref(0) // 0=未开始, 1-7=步骤, 8=完成
-const isStepAnimating = ref(false)
 
 const shadowPuppetSteps = [
   {
@@ -967,53 +971,39 @@ const currentStepData = computed(() => {
   return null
 })
 
-// 热区坐标（百分比定位，按图片场景分布）
-const hotzonePositions = [
-  { left: '15%', top: '18%' },   // 制皮 - 左上工坊
-  { left: '48%', top: '12%' },   // 画稿 - 上方画室
-  { left: '78%', top: '22%' },   // 雕刻 - 右上雕刻台
-  { left: '20%', top: '48%' },   // 上色 - 左中染坊
-  { left: '55%', top: '42%' },   // 脱水 - 中右晾晒场
-  { left: '30%', top: '72%' },   // 组装 - 左下工坊
-  { left: '68%', top: '65%' },   // 装杆 - 右下戏台
-]
-
 function openXianPanel() {
   showCityPanel.value = false
   showXianPanel.value = true
+  showPuppetPopup.value = false
   shadowPuppetStep.value = 0
 }
 
 function closeXianPanel() {
   showXianPanel.value = false
+  showPuppetPopup.value = false
   shadowPuppetStep.value = 0
 }
 
-function triggerStep(stepNum) {
-  // 只能点击当前激活的热区
-  if (stepNum === shadowPuppetStep.value + 1) {
-    shadowPuppetStep.value = stepNum
-  }
+function startPuppetMaking() {
+  showPuppetPopup.value = true
+  shadowPuppetStep.value = 1
+}
+
+function closePuppetPopup() {
+  showPuppetPopup.value = false
+  shadowPuppetStep.value = 0
+}
+
+function resetPuppet() {
+  shadowPuppetStep.value = 1
 }
 
 function nextStep() {
   if (shadowPuppetStep.value < 7) {
-    isStepAnimating.value = true
-    setTimeout(() => {
-      shadowPuppetStep.value++
-      isStepAnimating.value = false
-    }, 300)
+    shadowPuppetStep.value++
   } else {
-    isStepAnimating.value = true
-    setTimeout(() => {
-      shadowPuppetStep.value = 8
-      isStepAnimating.value = false
-    }, 300)
+    shadowPuppetStep.value = 8
   }
-}
-
-function resetShadowPuppet() {
-  shadowPuppetStep.value = 0
 }
 
 // ═══ 微信状态 ═══
@@ -3087,7 +3077,7 @@ onUnmounted(() => {
   color: rgba(255,255,255,0.7);
 }
 
-/* ══════════ 西安全屏热区交互 ══════════ */
+/* ══════════ 西安全屏 + 弹窗交互 ══════════ */
 
 /* 全屏容器 & 渐入动画 */
 .xian-fade-enter-active { transition: opacity 0.4s ease; }
@@ -3157,156 +3147,163 @@ onUnmounted(() => {
 }
 .xian-top-spacer { width: 36px; }
 
-/* ── 热区层 ── */
-.xian-hotzones {
-  position: absolute; inset: 0; z-index: 5;
-}
-.xian-hotzone {
+/* ── 单个交互热区 ── */
+.xian-hotspot {
   position: absolute;
+  top: 55%; left: 50%;
   transform: translate(-50%, -50%);
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
   cursor: pointer;
-  transition: opacity 0.4s;
-}
-.xian-hotzone.upcoming {
-  opacity: 0.35;
-  pointer-events: none;
-}
-.xian-hotzone.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-.xian-hotzone.done {
-  opacity: 0.7;
-  pointer-events: none;
 }
 
-/* 脉冲外环 */
-.hz-outer-ring {
+/* 脉冲外环（始终动画吸引注意） */
+.hs-outer-ring {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 48px; height: 48px;
+  width: 80px; height: 80px;
   border-radius: 50%;
-  border: 2px solid rgba(196,163,90,0.3);
-  opacity: 0;
+  border: 2.5px solid rgba(196,163,90,0.35);
+  animation: hs-ring-pulse 2.5s ease-out infinite;
 }
-.xian-hotzone.active .hz-outer-ring {
-  animation: hz-pulse 2s ease-out infinite;
-}
-@keyframes hz-pulse {
-  0%   { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
-  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+@keyframes hs-ring-pulse {
+  0%   { transform: translate(-50%, -50%) scale(0.7); opacity: 0.9; }
+  50%  { transform: translate(-50%, -50%) scale(1.0); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
 }
 
-/* 圆点 */
-.hz-dot {
+.hs-inner {
   position: relative;
   z-index: 1;
-  width: 44px; height: 44px;
+  width: 72px; height: 72px;
   border-radius: 50%;
-  background: rgba(20,20,20,0.75);
-  backdrop-filter: blur(6px);
-  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(20,20,20,0.8);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(196,163,90,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 0 28px rgba(196,163,90,0.3);
+  animation: hs-glow 2s ease-in-out infinite;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+@keyframes hs-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(196,163,90,0.3); }
+  50%      { box-shadow: 0 0 40px rgba(196,163,90,0.55); }
+}
+.xian-hotspot:hover .hs-inner {
+  transform: scale(1.08);
+  box-shadow: 0 0 40px rgba(196,163,90,0.5);
+}
+.xian-hotspot:active .hs-inner { transform: scale(0.95); }
+
+.hs-emoji {
+  font-size: 32px;
+  animation: hs-bounce 1.5s ease-in-out infinite;
+}
+@keyframes hs-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+.hs-label {
+  margin-top: 16px;
+  font-size: 15px; font-weight: 600; color: #FFF;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.6);
+  letter-spacing: 1px;
+}
+.hs-sub {
+  margin-top: 4px;
+  font-size: 12px; color: rgba(255,255,255,0.55);
+}
+
+/* ── 皮影制作弹窗 ── */
+.puppet-popup-overlay {
+  position: absolute;
+  inset: 0; z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* 弹窗弹出动画 */
+.popup-scale-enter-active { transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.popup-scale-leave-active { transition: all 0.2s ease; }
+.popup-scale-enter-from { opacity: 0; transform: scale(0.85); }
+.popup-scale-leave-to   { opacity: 0; transform: scale(0.9); }
+
+.puppet-popup {
+  width: 100%;
+  max-width: 380px;
+  max-height: 85vh;
+  background: rgba(22,22,24,0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 28px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+
+/* 弹窗头部：步骤圆点 + 关闭按钮 */
+.pp-header {
+  display: flex;
+  align-items: center;
+  padding: 18px 20px 12px;
+}
+.pp-step-dots {
+  display: flex; gap: 6px; flex: 1;
+}
+.pp-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
   transition: all 0.35s;
 }
-.xian-hotzone.active .hz-dot {
-  background: rgba(196,163,90,0.25);
-  border-color: rgba(196,163,90,0.6);
-  box-shadow: 0 0 20px rgba(196,163,90,0.35);
-  animation: hz-glow 2s ease-in-out infinite;
+.pp-dot.active {
+  background: #C4A35A;
 }
-@keyframes hz-glow {
-  0%, 100% { box-shadow: 0 0 16px rgba(196,163,90,0.3); }
-  50%      { box-shadow: 0 0 32px rgba(196,163,90,0.55); }
+.pp-dot.current {
+  background: #D4B76A;
+  box-shadow: 0 0 8px rgba(212,183,106,0.5);
+  transform: scale(1.3);
 }
-.xian-hotzone.done .hz-dot {
-  background: rgba(196,163,90,0.4);
-  border-color: #C4A35A;
-}
-
-.hz-num {
-  font-size: 16px; font-weight: 700; color: #D4B76A;
-}
-.hz-check {
-  font-size: 18px; font-weight: 700; color: #C4A35A;
-}
-
-/* 标签 */
-.hz-label {
-  font-size: 12px; font-weight: 600; color: #FFF;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
-  white-space: nowrap;
-  letter-spacing: 1px;
-  transition: color 0.3s;
-}
-.xian-hotzone.active .hz-label { color: #D4B76A; }
-
-/* 底部提示 */
-.xian-hint {
-  position: absolute;
-  bottom: 120px; left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
+.pp-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: none; color: #999;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: 20px;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(10px);
-  color: #FFF;
-  font-size: 13px;
-  white-space: nowrap;
-  animation: hint-bounce 2s ease-in-out infinite;
-}
-@keyframes hint-bounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%      { transform: translateX(-50%) translateY(-6px); }
-}
-.xian-hint-icon { font-size: 18px; }
-
-/* ── 步骤详情浮层卡 ── */
-.xian-card-overlay {
-  position: absolute;
-  inset: 0; z-index: 20;
-  display: flex;
-  align-items: flex-end;
   justify-content: center;
-  padding: 24px;
-  padding-bottom: 140px;
-  background: rgba(0,0,0,0.35);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
-.xian-step-card {
-  width: 100%;
-  max-width: 360px;
-  background: rgba(22,22,24,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 24px;
-  padding: 28px 24px 24px;
+.pp-close:hover { background: rgba(255,255,255,0.16); color: #FFF; }
+
+/* 弹窗内容区 */
+.pp-body {
+  padding: 8px 24px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  overflow-y: auto;
+  flex: 1;
 }
 
-/* 卡片弹出动画 */
-.card-pop-enter-active { transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.card-pop-leave-active { transition: all 0.2s ease; }
-.card-pop-enter-from { opacity: 0; transform: translateY(40px) scale(0.92); }
-.card-pop-leave-to   { opacity: 0; transform: translateY(20px) scale(0.96); }
-
-/* 卡片内容 */
-.xsc-visual {
-  width: 88px; height: 88px;
+.pp-visual {
+  width: 80px; height: 80px;
   border-radius: 50%;
   background: rgba(255,255,255,0.06);
   border: 1.5px solid rgba(255,255,255,0.1);
@@ -3314,67 +3311,121 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   margin-bottom: 14px;
+  flex-shrink: 0;
 }
-.xsc-emoji {
-  font-size: 42px;
-  animation: xsc-pop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+.pp-emoji {
+  font-size: 38px;
+  animation: pp-pop 0.5s cubic-bezier(0.34,1.56,0.64,1);
 }
-@keyframes xsc-pop {
+@keyframes pp-pop {
   0% { transform: scale(0.3); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 
 /* 步骤emoji动画 */
-.anim-leather .xsc-emoji { animation: a-wobble 2s ease-in-out infinite; }
+.anim-leather .pp-emoji { animation: a-wobble 2s ease-in-out infinite; }
 @keyframes a-wobble { 0%,100%{transform:rotate(-3deg)} 50%{transform:rotate(3deg)} }
-.anim-draw .xsc-emoji { animation: a-bright 2s ease-in-out infinite; }
+.anim-draw .pp-emoji { animation: a-bright 2s ease-in-out infinite; }
 @keyframes a-bright { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.3)} }
-.anim-carve .xsc-emoji { animation: a-shake 0.3s ease-in-out infinite; }
+.anim-carve .pp-emoji { animation: a-shake 0.3s ease-in-out infinite; }
 @keyframes a-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
-.anim-paint .xsc-emoji { animation: a-hue 3s ease-in-out infinite; }
+.anim-paint .pp-emoji { animation: a-hue 3s ease-in-out infinite; }
 @keyframes a-hue { 0%,100%{filter:hue-rotate(0)} 50%{filter:hue-rotate(30deg)} }
-.anim-dry .xsc-emoji { animation: a-fade 2s ease-in-out infinite; }
+.anim-dry .pp-emoji { animation: a-fade 2s ease-in-out infinite; }
 @keyframes a-fade { 0%,100%{opacity:0.7} 50%{opacity:1} }
-.anim-assemble .xsc-emoji { animation: a-bump 1.5s ease-in-out infinite; }
+.anim-assemble .pp-emoji { animation: a-bump 1.5s ease-in-out infinite; }
 @keyframes a-bump { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
-.anim-rod .xsc-emoji { animation: a-sway 2s ease-in-out infinite; }
+.anim-rod .pp-emoji { animation: a-sway 2s ease-in-out infinite; }
 @keyframes a-sway { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
 
-.xsc-num {
+.pp-num {
   font-size: 11px; color: #C4A35A; font-weight: 600;
   letter-spacing: 1px; margin-bottom: 6px;
 }
-.xsc-title {
+.pp-step-title {
   font-size: 20px; font-weight: 700; color: #E8E2D8;
   margin: 0 0 8px;
 }
-.xsc-desc {
+.pp-desc {
   font-size: 13px; line-height: 1.6; color: #B8B0A6;
-  margin: 0 0 6px; padding: 0 4px;
+  margin: 0 0 6px;
 }
-.xsc-detail {
+.pp-detail {
   font-size: 12px; line-height: 1.5; color: #8A847E;
-  margin: 0 0 20px; padding: 0 4px;
+  margin: 0;
 }
-.xsc-btn {
+
+/* 完成内容 */
+.pp-done-body {
+  padding-bottom: 12px;
+}
+
+/* 弹窗底部 */
+.pp-footer {
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* 进度条 */
+.pp-progress-bar {
+  width: 100%;
+}
+.pp-progress-bar .pp-track {
+  width: 100%; height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden;
+}
+.pp-progress-bar .pp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #C4A35A, #D4B76A);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* 主按钮 */
+.pp-btn {
   display: flex; align-items: center; gap: 6px;
-  padding: 12px 32px; border-radius: 22px;
+  padding: 12px 36px; border-radius: 22px;
   background: linear-gradient(135deg, #C4A35A, #D4B76A);
   color: #1a1a1a; font-size: 15px; font-weight: 600;
   border: none; cursor: pointer;
   transition: all 0.25s;
   box-shadow: 0 4px 20px rgba(196,163,90,0.25);
 }
-.xsc-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(196,163,90,0.35); }
-.xsc-btn:active { transform: scale(0.97); }
+.pp-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(196,163,90,0.35); }
+.pp-btn:active { transform: scale(0.97); }
 
-/* ── 完成卡片 ── */
-.xian-done-card { padding-top: 20px; }
+/* 完成操作按钮 */
+.pp-actions {
+  display: flex; gap: 10px;
+}
+.pp-btn-ghost {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 20px; border-radius: 18px;
+  background: rgba(255,255,255,0.08); color: #C8C0B6;
+  font-size: 13px; border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer; transition: all 0.2s;
+}
+.pp-btn-ghost:hover { background: rgba(255,255,255,0.14); }
+.pp-btn-main {
+  padding: 10px 24px; border-radius: 18px;
+  background: rgba(196,163,90,0.18); color: #D4B76A;
+  font-size: 13px; border: 1.5px solid rgba(196,163,90,0.35);
+  cursor: pointer; transition: all 0.2s;
+}
+.pp-btn-main:hover { background: rgba(196,163,90,0.28); }
+
+/* ── 皮影SVG（弹窗内完成视图） ── */
 .xsc-puppet-wrap {
   width: 100px; height: 160px;
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 12px;
   animation: puppet-pop 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  flex-shrink: 0;
 }
 @keyframes puppet-pop {
   0% { transform: scale(0); opacity: 0; }
@@ -3401,57 +3452,12 @@ onUnmounted(() => {
 }
 @keyframes svg-draw { to { stroke-dashoffset: 0; } }
 
-.xsc-actions {
-  display: flex; gap: 10px; margin-top: 4px;
-}
-.xsc-btn-ghost {
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 20px; border-radius: 18px;
-  background: rgba(255,255,255,0.08); color: #C8C0B6;
-  font-size: 13px; border: 1px solid rgba(255,255,255,0.1);
-  cursor: pointer; transition: all 0.2s;
-}
-.xsc-btn-ghost:hover { background: rgba(255,255,255,0.14); }
-.xsc-btn-main {
-  padding: 10px 20px; border-radius: 18px;
-  background: rgba(196,163,90,0.18); color: #D4B76A;
-  font-size: 13px; border: 1.5px solid rgba(196,163,90,0.35);
-  cursor: pointer; transition: all 0.2s;
-}
-.xsc-btn-main:hover { background: rgba(196,163,90,0.28); }
-
-/* ── 底部进度条 ── */
-.xian-progress {
-  position: absolute;
-  bottom: 24px; left: 24px; right: 24px;
-  z-index: 15;
-  display: flex; align-items: center; gap: 12px;
-}
-.xp-track {
-  flex: 1; height: 4px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px; overflow: hidden;
-}
-.xp-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #C4A35A, #D4B76A);
-  border-radius: 2px;
-  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
-}
-.xp-text {
-  font-size: 11px; color: rgba(255,255,255,0.5);
-  white-space: nowrap;
-}
-
 /* 移动端适配 */
 @media (max-width: 480px) {
-  .xian-step-card { max-width: 320px; padding: 22px 18px 20px; }
-  .xsc-visual { width: 72px; height: 72px; }
-  .xsc-emoji { font-size: 36px; }
-  .xsc-title { font-size: 18px; }
-  .hz-dot { width: 38px; height: 38px; }
-  .hz-num { font-size: 14px; }
-  .hz-label { font-size: 11px; }
-  .hz-outer-ring { width: 40px; height: 40px; }
+  .puppet-popup { max-width: 340px; border-radius: 24px; }
+  .pp-body { padding: 6px 20px 16px; }
+  .pp-visual { width: 68px; height: 68px; }
+  .pp-emoji { font-size: 32px; }
+  .pp-step-title { font-size: 18px; }
 }
 </style>
