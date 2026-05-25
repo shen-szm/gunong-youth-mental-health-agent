@@ -336,6 +336,143 @@
       </div>
     </Transition>
 
+    <!-- ══ 西安城市探索面板 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showXianPanel" class="profile-overlay" @click="closeXianPanel">
+        <div class="profile-panel xian-panel" @click.stop>
+          <!-- 关闭按钮 -->
+          <div class="panel-close" @click="closeXianPanel">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+
+          <!-- 西安场景图 -->
+          <div class="xian-hero">
+            <img src="/images/西安.png" alt="西安古城" class="xian-hero-img" />
+            <div class="xian-hero-overlay">
+              <h2 class="xian-title">🏯 西安</h2>
+              <p class="xian-subtitle">十三朝古都，长安风韵</p>
+            </div>
+          </div>
+
+          <!-- 皮影制作体验区 -->
+          <div class="shadow-puppet-section">
+            <div class="sp-header">
+              <span class="sp-icon">🎭</span>
+              <h3>陕西皮影制作体验</h3>
+              <p class="sp-desc">亲手体验千年非遗技艺，七步制成一盏皮影</p>
+            </div>
+
+            <!-- 步骤进度条 -->
+            <div class="sp-progress" v-if="shadowPuppetStep > 0 && shadowPuppetStep < 8">
+              <div class="sp-progress-track">
+                <div class="sp-progress-fill" :style="{ width: (shadowPuppetStep / 7 * 100) + '%' }"></div>
+              </div>
+              <span class="sp-progress-text">步骤 {{ shadowPuppetStep }} / 7</span>
+            </div>
+
+            <!-- 未开始状态 -->
+            <div v-if="shadowPuppetStep === 0" class="sp-intro">
+              <div class="sp-intro-visual">
+                <div class="sp-puppet-silhouette">🎭</div>
+                <div class="sp-sparkles">
+                  <span v-for="n in 6" :key="n" class="sp-sparkle" :style="{ animationDelay: (n * 0.3) + 's' }">✨</span>
+                </div>
+              </div>
+              <p class="sp-intro-text">皮影戏，又称"影子戏"，是中国民间古老的传统艺术。陕西皮影以其精美的造型、细腻的雕刻和浓郁的地方特色闻名于世。</p>
+              <button class="sp-start-btn" @click="startShadowPuppet">
+                <span>开始制作</span>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+
+            <!-- 步骤展示 -->
+            <Transition name="step-fade" mode="out-in">
+              <div v-if="shadowPuppetStep >= 1 && shadowPuppetStep <= 7" :key="shadowPuppetStep" class="sp-step-card" :class="{ 'is-animating': isStepAnimating }">
+                <div class="sp-step-visual" :class="currentStepData.animClass">
+                  <div class="sp-step-emoji">{{ currentStepData.emoji }}</div>
+                </div>
+                <div class="sp-step-info">
+                  <div class="sp-step-number">步骤 {{ currentStepData.id }}</div>
+                  <h4 class="sp-step-title">{{ currentStepData.title }}</h4>
+                  <p class="sp-step-desc">{{ currentStepData.desc }}</p>
+                  <p class="sp-step-detail">{{ currentStepData.detail }}</p>
+                </div>
+                <button class="sp-next-btn" @click="nextStep">
+                  <span>{{ shadowPuppetStep < 7 ? '下一步' : '完成制作' }}</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+            </Transition>
+
+            <!-- 完成状态 -->
+            <Transition name="step-fade">
+              <div v-if="shadowPuppetStep === 8" class="sp-completion">
+                <div class="sp-completion-visual">
+                  <!-- 皮影成品 SVG -->
+                  <div class="sp-finished-puppet">
+                    <svg viewBox="0 0 120 200" class="sp-puppet-svg">
+                      <!-- 头部 -->
+                      <circle cx="60" cy="35" r="18" fill="none" stroke="#C4A35A" stroke-width="2" />
+                      <ellipse cx="60" cy="38" rx="12" ry="8" fill="rgba(196,163,90,0.15)" stroke="rgba(196,163,90,0.3)" stroke-width="1" />
+                      <!-- 头饰 -->
+                      <path d="M42 28 Q50 12 60 10 Q70 12 78 28" fill="none" stroke="#D4B76A" stroke-width="1.5" />
+                      <path d="M45 26 L60 6 L75 26" fill="none" stroke="#C4A35A" stroke-width="1" stroke-dasharray="3,3" />
+                      <!-- 眼睛 -->
+                      <circle cx="54" cy="33" r="2.5" fill="#C4A35A" opacity="0.6" />
+                      <circle cx="66" cy="33" r="2.5" fill="#C4A35A" opacity="0.6" />
+                      <!-- 身体 -->
+                      <rect x="42" y="55" width="36" height="55" rx="8" fill="none" stroke="#C4A35A" stroke-width="2" />
+                      <!-- 衣领花纹 -->
+                      <path d="M46 60 Q60 68 74 60" fill="none" stroke="#D4B76A" stroke-width="1" stroke-dasharray="2,4" />
+                      <path d="M48 80 Q60 86 72 80" fill="none" stroke="rgba(196,163,90,0.35)" stroke-width="0.8" stroke-dasharray="1,5" />
+                      <line x1="46" y1="90" x2="74" y2="90" stroke="rgba(196,163,90,0.2)" stroke-width="0.5" />
+                      <line x1="48" y1="95" x2="72" y2="95" stroke="rgba(196,163,90,0.2)" stroke-width="0.5" />
+                      <!-- 左臂 -->
+                      <path d="M42 62 Q28 60 22 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round" />
+                      <circle cx="22" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1" />
+                      <!-- 右臂 -->
+                      <path d="M78 62 Q92 60 98 45" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round" />
+                      <circle cx="98" cy="45" r="4" fill="none" stroke="#D4B76A" stroke-width="1" />
+                      <!-- 左腿 -->
+                      <path d="M48 110 L42 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round" />
+                      <!-- 右腿 -->
+                      <path d="M72 110 L78 165" fill="none" stroke="#C4A35A" stroke-width="2" stroke-linecap="round" />
+                      <!-- 操纵杆 -->
+                      <line x1="60" y1="10" x2="60" y2="-8" stroke="#8A847E" stroke-width="1.5" stroke-linecap="round" />
+                      <circle cx="60" cy="-10" r="3" fill="#8A847E" />
+                      <line x1="22" y1="45" x2="18" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round" />
+                      <circle cx="18" cy="37" r="2" fill="#8A847E" />
+                      <line x1="98" y1="45" x2="102" y2="38" stroke="#8A847E" stroke-width="1" stroke-linecap="round" />
+                      <circle cx="102" cy="37" r="2" fill="#8A847E" />
+                    </svg>
+                  </div>
+                  <div class="sp-confetti">
+                    <span v-for="n in 12" :key="n" class="sp-confetti-piece" :style="{ animationDelay: (n * 0.1) + 's', left: (n * 8) + '%' }">🎉</span>
+                  </div>
+                </div>
+                <h4 class="sp-completion-title">恭喜！皮影制作完成</h4>
+                <p class="sp-completion-desc">你完成了一盏传统陕西皮影的制作，这是中华民族千年智慧的结晶。</p>
+                <div class="sp-completion-actions">
+                  <button class="sp-restart-btn" @click="resetShadowPuppet">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    <span>重新制作</span>
+                  </button>
+                  <button class="sp-back-btn" @click="closeXianPanel">
+                    <span>返回城市</span>
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- 返回按钮 -->
+          <button class="back-btn" @click="showXianPanel = false; showCityPanel = true">
+            ← 返回城市选择
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- ══ 音乐推荐面板 ══ -->
     <Transition name="panel-slide">
       <div v-if="showMusicPanel" class="profile-overlay" @click="showMusicPanel = false">
@@ -772,8 +909,118 @@ function openCityPanel(type) {
 }
 
 function selectCity(city) {
-  alert(`你选择了${selectedTransportName.value}前往${city.name} ${city.emoji}`)
+  if (city.name === '西安') {
+    openXianPanel()
+  } else {
+    alert(`你选择了${selectedTransportName.value}前往${city.name} ${city.emoji}`)
+    showCityPanel.value = false
+  }
+}
+
+// ═══ 西安城市探索 & 皮影制作 ═══
+const showXianPanel = ref(false)
+const shadowPuppetStep = ref(0) // 0=未开始, 1-7=步骤, 8=完成
+const isStepAnimating = ref(false)
+
+const shadowPuppetSteps = [
+  {
+    id: 1,
+    title: '制皮',
+    emoji: '🐂',
+    desc: '选用上等牛皮，经过浸泡、刮毛、去脂，制成薄如纸、韧如丝的皮影原料。',
+    detail: '牛皮需在水中浸泡三天三夜，再用特制刀具反复刮削，直至厚度均匀透光。',
+    animClass: 'anim-leather'
+  },
+  {
+    id: 2,
+    title: '画稿',
+    emoji: '🖌️',
+    desc: '将人物造型描绘在牛皮上，线条流畅，神态生动。',
+    detail: '画师需精通戏曲人物造型，一笔一画勾勒出角色的忠奸善恶。',
+    animClass: 'anim-draw'
+  },
+  {
+    id: 3,
+    title: '雕刻',
+    emoji: '🔪',
+    desc: '以刻刀代笔，在牛皮上镂刻出精细的纹样与轮廓。',
+    detail: '陕西皮影采用"推皮触刀"技法，刀锋不动而推皮行走，线条细如发丝。',
+    animClass: 'anim-carve'
+  },
+  {
+    id: 4,
+    title: '上色',
+    emoji: '🎨',
+    desc: '用传统矿物颜料为皮影着色，红绿黄黑，对比鲜明。',
+    detail: '皮影着色讲究"红忠紫孝、黑正粉老、水白奸邪"的色彩语言。',
+    animClass: 'anim-paint'
+  },
+  {
+    id: 5,
+    title: '脱水',
+    emoji: '☀️',
+    desc: '将上好色的皮影平铺晾干，使色彩牢固附着。',
+    detail: '需在阴凉通风处自然晾干，不可暴晒，否则容易开裂变形。',
+    animClass: 'anim-dry'
+  },
+  {
+    id: 6,
+    title: '组装',
+    emoji: '🔗',
+    desc: '将头、身、四肢用线连接，使皮影关节灵活可动。',
+    detail: '关节连接处需精准打孔，用丝线或铁丝串联，保证舞动时协调自然。',
+    animClass: 'anim-assemble'
+  },
+  {
+    id: 7,
+    title: '装杆',
+    emoji: '🎭',
+    desc: '在皮影的关键部位装上操纵杆，便于表演者操控。',
+    detail: '主杆装在脖颈，手杆分装两臂，三杆配合可演绎千军万马。',
+    animClass: 'anim-rod'
+  }
+]
+
+const currentStepData = computed(() => {
+  if (shadowPuppetStep.value >= 1 && shadowPuppetStep.value <= 7) {
+    return shadowPuppetSteps[shadowPuppetStep.value - 1]
+  }
+  return null
+})
+
+function openXianPanel() {
   showCityPanel.value = false
+  showXianPanel.value = true
+  shadowPuppetStep.value = 0
+}
+
+function closeXianPanel() {
+  showXianPanel.value = false
+  shadowPuppetStep.value = 0
+}
+
+function startShadowPuppet() {
+  shadowPuppetStep.value = 1
+}
+
+function nextStep() {
+  if (shadowPuppetStep.value < 7) {
+    isStepAnimating.value = true
+    setTimeout(() => {
+      shadowPuppetStep.value++
+      isStepAnimating.value = false
+    }, 300)
+  } else {
+    isStepAnimating.value = true
+    setTimeout(() => {
+      shadowPuppetStep.value = 8
+      isStepAnimating.value = false
+    }, 300)
+  }
+}
+
+function resetShadowPuppet() {
+  shadowPuppetStep.value = 0
 }
 
 // ═══ 微信状态 ═══
@@ -2847,11 +3094,449 @@ onUnmounted(() => {
   color: rgba(255,255,255,0.7);
 }
 
-/* ══ 移动端适配 ══ */
+/* ══════════ 西安城市探索面板 ══════════ */
+.xian-panel { padding: 0 0 28px; overflow: hidden; }
+
+/* 西安场景图 */
+.xian-hero {
+  position: relative;
+  width: calc(100% + 40px);
+  margin: -20px -20px 0;
+  height: 200px;
+  overflow: hidden;
+}
+.xian-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.xian-hero-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%);
+  backdrop-filter: blur(1px);
+}
+.xian-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFF;
+  margin: 0;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  letter-spacing: 4px;
+}
+.xian-subtitle {
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  margin: 6px 0 0;
+  letter-spacing: 2px;
+}
+
+/* 皮影制作区域 */
+.shadow-puppet-section {
+  padding: 20px 4px 0;
+}
+.sp-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.sp-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+}
+.sp-header h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #E8E2D8;
+  margin: 0 0 6px;
+}
+.sp-desc {
+  font-size: 12px;
+  color: #8A847E;
+  margin: 0;
+}
+
+/* 进度条 */
+.sp-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+.sp-progress-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.sp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #C4A35A, #D4B76A);
+  border-radius: 3px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sp-progress-text {
+  font-size: 11px;
+  color: #8A847E;
+  white-space: nowrap;
+}
+
+/* 未开始状态 */
+.sp-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 0;
+}
+.sp-intro-visual {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.sp-puppet-silhouette {
+  font-size: 56px;
+  filter: grayscale(0.6) opacity(0.7);
+  animation: puppet-float 3s ease-in-out infinite;
+}
+@keyframes puppet-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.sp-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sp-sparkle {
+  position: absolute;
+  font-size: 14px;
+  animation: sparkle-twinkle 2s ease-in-out infinite;
+  opacity: 0;
+}
+.sp-sparkle:nth-child(1) { top: 0; left: 20%; }
+.sp-sparkle:nth-child(2) { top: 10%; right: 15%; }
+.sp-sparkle:nth-child(3) { bottom: 20%; left: 10%; }
+.sp-sparkle:nth-child(4) { bottom: 10%; right: 20%; }
+.sp-sparkle:nth-child(5) { top: 30%; left: 5%; }
+.sp-sparkle:nth-child(6) { top: 40%; right: 5%; }
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.sp-intro-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #B8B0A6;
+  margin: 0 0 20px;
+  padding: 0 8px;
+}
+.sp-start-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #C4A35A, #D4B76A);
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 20px rgba(196, 163, 90, 0.25);
+}
+.sp-start-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 28px rgba(196, 163, 90, 0.35);
+}
+.sp-start-btn:active {
+  transform: scale(0.97);
+}
+.sp-start-btn svg {
+  transition: transform 0.2s;
+}
+.sp-start-btn:hover svg {
+  transform: translateX(3px);
+}
+
+/* 步骤卡片 */
+.sp-step-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 4px;
+  transition: all 0.3s ease;
+}
+.sp-step-card.is-animating {
+  opacity: 0;
+  transform: translateX(20px);
+}
+.sp-step-visual {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.08);
+}
+.sp-step-emoji {
+  font-size: 52px;
+  animation: step-emoji-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes step-emoji-bounce {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 各步骤特殊动画 */
+.anim-leather .sp-step-emoji { animation: leather-wobble 2s ease-in-out infinite; }
+@keyframes leather-wobble {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+.anim-draw .sp-step-emoji { animation: draw-stroke 2s ease-in-out infinite; }
+@keyframes draw-stroke {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+.anim-carve .sp-step-emoji { animation: carve-shake 0.3s ease-in-out infinite; }
+@keyframes carve-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+.anim-paint .sp-step-emoji { animation: paint-rainbow 3s ease-in-out infinite; }
+@keyframes paint-rainbow {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(30deg); }
+}
+.anim-dry .sp-step-emoji { animation: dry-pulse 2s ease-in-out infinite; }
+@keyframes dry-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+.anim-assemble .sp-step-emoji { animation: assemble-click 1.5s ease-in-out infinite; }
+@keyframes assemble-click {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+.anim-rod .sp-step-emoji { animation: rod-sway 2s ease-in-out infinite; }
+@keyframes rod-sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+.sp-step-info {
+  margin-bottom: 20px;
+}
+.sp-step-number {
+  font-size: 11px;
+  color: #C4A35A;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.sp-step-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #E8E2D8;
+  margin: 0 0 10px;
+}
+.sp-step-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #C8C0B6;
+  margin: 0 0 8px;
+}
+.sp-step-detail {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8A847E;
+  margin: 0;
+  padding: 0 12px;
+}
+.sp-next-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 28px;
+  border-radius: 22px;
+  background: rgba(196, 163, 90, 0.15);
+  color: #D4B76A;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid rgba(196, 163, 90, 0.3);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sp-next-btn:hover {
+  background: rgba(196, 163, 90, 0.25);
+  border-color: rgba(196, 163, 90, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(196, 163, 90, 0.15);
+}
+.sp-next-btn:active {
+  transform: scale(0.96);
+}
+
+/* 完成状态 */
+.sp-completion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 4px;
+}
+.sp-completion-visual {
+  position: relative;
+  width: 140px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.sp-finished-puppet {
+  width: 120px;
+  height: 200px;
+  animation: completion-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sp-puppet-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 12px rgba(196, 163, 90, 0.3));
+  animation: puppet-float 3s ease-in-out infinite;
+}
+.sp-puppet-svg path,
+.sp-puppet-svg circle,
+.sp-puppet-svg rect,
+.sp-puppet-svg ellipse,
+.sp-puppet-svg line {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: puppet-draw 2s ease-out forwards;
+}
+@keyframes puppet-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes completion-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.sp-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.sp-confetti-piece {
+  position: absolute;
+  font-size: 16px;
+  top: -10px;
+  animation: confetti-fall 2s ease-out forwards;
+  opacity: 0;
+}
+@keyframes confetti-fall {
+  0% { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(100px) rotate(360deg); }
+}
+.sp-completion-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #E8E2D8;
+  margin: 0 0 8px;
+}
+.sp-completion-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #B8B0A6;
+  margin: 0 0 20px;
+  padding: 0 12px;
+}
+.sp-completion-actions {
+  display: flex;
+  gap: 10px;
+}
+.sp-restart-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  color: #C8C0B6;
+  font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sp-restart-btn:hover {
+  background: rgba(255,255,255,0.14);
+}
+.sp-back-btn {
+  padding: 10px 20px;
+  border-radius: 18px;
+  background: rgba(196, 163, 90, 0.15);
+  color: #D4B76A;
+  font-size: 13px;
+  border: 1.5px solid rgba(196, 163, 90, 0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sp-back-btn:hover {
+  background: rgba(196, 163, 90, 0.25);
+}
+
+/* 步骤切换过渡动画 */
+.step-fade-enter-active,
+.step-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.step-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+.step-fade-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+/* 移动端适配 */
 @media (max-width: 480px) {
-  .am-cover-wrap { width: 44px; height: 44px; border-radius: 10px; }
-  .am-song-name { font-size: 13px; }
-  .am-song-artist { font-size: 11px; }
-  .am-play-btn { width: 32px; height: 32px; }
+  .xian-hero { height: 160px; }
+  .xian-title { font-size: 22px; }
+  .sp-step-visual { width: 100px; height: 100px; }
+  .sp-step-emoji { font-size: 42px; }
+  .sp-completion-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .sp-restart-btn,
+  .sp-back-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>
