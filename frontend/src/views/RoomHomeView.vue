@@ -364,6 +364,16 @@
           <p class="hs-sub">点击此处开始</p>
         </div>
 
+        <!-- 视频播放热区 -->
+        <div v-if="!showPuppetPopup && !showVideoPlayer" class="xian-hotspot xian-video-hotspot" @click="openVideoPlayer">
+          <div class="hs-outer-ring"></div>
+          <div class="hs-inner">
+            <span class="hs-emoji">🎬</span>
+          </div>
+          <span class="hs-label">观看皮影戏</span>
+          <p class="hs-sub">点击播放视频</p>
+        </div>
+
         <!-- 皮影制作弹窗 -->
         <Transition name="popup-scale">
           <div v-if="showPuppetPopup" class="puppet-popup-overlay">
@@ -434,10 +444,16 @@
                     <div class="pp-fill" :style="{ width: (shadowPuppetStep / 7 * 100) + '%' }"></div>
                   </div>
                 </div>
-                <button class="pp-btn" @click="nextStep">
-                  <span>{{ shadowPuppetStep < 7 ? '下一步' : '完成制作' }}</span>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
+                <div class="pp-btns">
+                  <button v-if="shadowPuppetStep > 1" class="pp-btn-prev" @click="prevStep">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    <span>上一步</span>
+                  </button>
+                  <button class="pp-btn" @click="nextStep">
+                    <span>{{ shadowPuppetStep < 7 ? '下一步' : '完成制作' }}</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
               </div>
 
               <!-- 底部操作（完成时） -->
@@ -447,12 +463,183 @@
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                     <span>重新制作</span>
                   </button>
-                  <button class="pp-btn-main" @click="closeXianPanel">完成</button>
+                  <button class="pp-btn-main" @click="closePuppetPopup">完成</button>
                 </div>
               </div>
             </div>
           </div>
         </Transition>
+
+        <!-- 视频播放弹窗 -->
+        <Transition name="popup-scale">
+          <div v-if="showVideoPlayer" class="video-player-overlay" @click.self="closeVideoPlayer">
+            <div class="video-player-card">
+              <div class="vp-header">
+                <span class="vp-title">皮影戏 · 光影之美</span>
+                <button class="vp-close" @click="closeVideoPlayer">✕</button>
+              </div>
+              <div class="vp-body">
+                <video
+                  ref="videoRef"
+                  class="vp-video"
+                  :src="videoSrc"
+                  controls
+                  autoplay
+                  playsinline
+                  webkit-playsinline
+                  @ended="onVideoEnded"
+                ></video>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+      </div>
+    </Transition>
+
+    <!-- ══ 洛阳城市探索 - 全屏热区 + 弹窗交互 ══ -->
+    <Transition name="xian-fade">
+      <div v-if="showLuoyangPanel" class="xian-fullscreen luoyang-fullscreen">
+        <!-- 全屏洛阳场景图 -->
+        <div class="xian-bg-wrap">
+          <img src="/images/洛阳.png" alt="洛阳古城" class="xian-bg-img" />
+          <div class="xian-bg-vignette"></div>
+        </div>
+
+        <!-- 顶部返回栏 -->
+        <div class="xian-top-bar">
+          <button class="xian-back-btn" @click="closeLuoyangPanel">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span class="xian-top-label">洛阳 · 非遗拓印</span>
+          <div class="xian-top-spacer"></div>
+        </div>
+
+        <!-- 拓印制作热区 -->
+        <div v-if="!showRubbingPopup && !showLuoyangVideoPlayer" class="xian-hotspot" @click="startRubbing">
+          <div class="hs-outer-ring"></div>
+          <div class="hs-inner">
+            <span class="hs-emoji">🖌️</span>
+          </div>
+          <span class="hs-label">体验非遗拓印</span>
+          <p class="hs-sub">点击此处开始</p>
+        </div>
+
+        <!-- 视频播放热区 -->
+        <div v-if="!showRubbingPopup && !showLuoyangVideoPlayer" class="xian-hotspot luoyang-video-hotspot" @click="openLuoyangVideoPlayer">
+          <div class="hs-outer-ring"></div>
+          <div class="hs-inner">
+            <span class="hs-emoji">🎬</span>
+          </div>
+          <span class="hs-label">观看拓印技艺</span>
+          <p class="hs-sub">点击播放视频</p>
+        </div>
+
+        <!-- 拓印制作弹窗 -->
+        <Transition name="popup-scale">
+          <div v-if="showRubbingPopup" class="puppet-popup-overlay" @click.self="closeRubbingPopup">
+            <div class="puppet-popup">
+              <!-- 弹窗头部：步骤圆点 + 关闭按钮 -->
+              <div class="pp-header">
+                <div class="pp-step-dots">
+                  <span
+                    v-for="s in 6"
+                    :key="s"
+                    class="pp-dot"
+                    :class="{ active: rubbingStep >= s, current: rubbingStep === s }"
+                  ></span>
+                </div>
+                <button class="pp-close" @click="closeRubbingPopup">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+
+              <!-- 步骤内容 (1-6) -->
+              <div v-if="rubbingStep >= 1 && rubbingStep <= 6" class="pp-body">
+                <div class="pp-visual">
+                  <span class="pp-emoji">{{ rubbingSteps[rubbingStep - 1].emoji }}</span>
+                </div>
+                <div class="pp-num">步骤 {{ rubbingSteps[rubbingStep - 1].id }} / 6</div>
+                <h3 class="pp-step-title">{{ rubbingSteps[rubbingStep - 1].title }}</h3>
+                <p class="pp-desc">{{ rubbingSteps[rubbingStep - 1].desc }}</p>
+                <p class="pp-detail">{{ rubbingSteps[rubbingStep - 1].detail }}</p>
+              </div>
+
+              <!-- 完成内容 -->
+              <div v-if="rubbingStep === 7" class="pp-body pp-done-body">
+                <div class="xsc-puppet-wrap">
+                  <svg viewBox="0 0 200 260" class="xsc-puppet-svg" style="width:120px;height:156px;">
+                    <rect x="30" y="20" width="140" height="200" rx="4" fill="none" stroke="#C4A35A" stroke-width="2"/>
+                    <line x1="30" y1="60" x2="170" y2="60" stroke="#C4A35A" stroke-width="1.5"/>
+                    <line x1="30" y1="100" x2="170" y2="100" stroke="#C4A35A" stroke-width="1.5"/>
+                    <line x1="30" y1="140" x2="170" y2="140" stroke="#C4A35A" stroke-width="1.5"/>
+                    <line x1="30" y1="180" x2="170" y2="180" stroke="#C4A35A" stroke-width="1.5"/>
+                    <text x="100" y="45" text-anchor="middle" fill="#C4A35A" font-size="14" font-family="serif">洛阳碑刻</text>
+                    <text x="100" y="85" text-anchor="middle" fill="#C4A35A" font-size="10" font-family="serif">千年文脉</text>
+                    <text x="100" y="125" text-anchor="middle" fill="#C4A35A" font-size="10" font-family="serif">一纸传薪</text>
+                    <text x="100" y="165" text-anchor="middle" fill="#C4A35A" font-size="10" font-family="serif">非遗瑰宝</text>
+                    <text x="100" y="205" text-anchor="middle" fill="#C4A35A" font-size="10" font-family="serif">匠心传承</text>
+                  </svg>
+                </div>
+                <h3 class="pp-step-title">恭喜！拓印完成</h3>
+                <p class="pp-detail">你完成了非遗拓印的全部 6 个步骤，感受了千年碑刻的传续技艺。</p>
+              </div>
+
+              <!-- 底部操作（步骤中） -->
+              <div class="pp-footer" v-if="rubbingStep >= 1 && rubbingStep <= 6">
+                <div class="pp-progress-bar">
+                  <div class="pp-track">
+                    <div class="pp-fill" :style="{ width: (rubbingStep / 6 * 100) + '%' }"></div>
+                  </div>
+                </div>
+                <div class="pp-btns">
+                  <button v-if="rubbingStep > 1" class="pp-btn-prev" @click="prevRubbingStep">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    <span>上一步</span>
+                  </button>
+                  <button class="pp-btn" @click="nextRubbingStep">
+                    <span>{{ rubbingStep === 6 ? '完成制作' : '下一步' }}</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 底部操作（完成时） -->
+              <div class="pp-footer" v-if="rubbingStep === 7">
+                <div class="pp-btns">
+                  <button class="pp-btn" @click="resetRubbing">重新体验</button>
+                  <button class="pp-btn-prev" @click="closeRubbingPopup">完成</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </Transition>
+
+        <!-- 视频播放弹窗 -->
+        <Transition name="popup-scale">
+          <div v-if="showLuoyangVideoPlayer" class="video-player-overlay" @click.self="closeLuoyangVideoPlayer">
+            <div class="video-player-card">
+              <div class="vp-header">
+                <span class="vp-title">非遗拓印 · 匠心传承</span>
+                <button class="vp-close" @click="closeLuoyangVideoPlayer">✕</button>
+              </div>
+              <div class="vp-body">
+                <video
+                  ref="luoyangVideoRef"
+                  class="vp-video"
+                  :src="luoyangVideoSrc"
+                  controls
+                  autoplay
+                  playsinline
+                  webkit-playsinline
+                  @ended="onLuoyangVideoEnded"
+                ></video>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
       </div>
     </Transition>
 
@@ -894,6 +1081,8 @@ function openCityPanel(type) {
 function selectCity(city) {
   if (city.name === '西安') {
     openXianPanel()
+  } else if (city.name === '洛阳') {
+    openLuoyangPanel()
   } else {
     alert(`你选择了${selectedTransportName.value}前往${city.name} ${city.emoji}`)
     showCityPanel.value = false
@@ -904,6 +1093,11 @@ function selectCity(city) {
 const showXianPanel = ref(false)
 const showPuppetPopup = ref(false)
 const shadowPuppetStep = ref(0) // 0=未开始, 1-7=步骤, 8=完成
+
+// 视频播放
+const showVideoPlayer = ref(false)
+const videoRef = ref(null)
+const videoSrc = ref('/videos/puppet-show.mp4')
 
 const shadowPuppetSteps = [
   {
@@ -994,8 +1188,114 @@ function closePuppetPopup() {
   shadowPuppetStep.value = 0
 }
 
+// ═══ 视频播放 ═══
+function openVideoPlayer() {
+  showVideoPlayer.value = true
+  // 暂停背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.pause()
+  }
+}
+function closeVideoPlayer() {
+  showVideoPlayer.value = false
+  if (videoRef.value) {
+    videoRef.value.pause()
+    videoRef.value.currentTime = 0
+  }
+  // 恢复背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
+}
+function onVideoEnded() {
+  // 视频播放结束，恢复背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
+}
+
+// ═══ 洛阳城市探索 & 非遗拓印 ═══
+const showLuoyangPanel = ref(false)
+const showRubbingPopup = ref(false)
+const rubbingStep = ref(0) // 0=未开始, 1-6=步骤, 7=完成
+
+const rubbingSteps = [
+  { id: 1, title: '清理器物', emoji: '🧹', desc: '用软毛刷轻轻清理碑刻表面的灰尘和杂物，确保碑面干净平整。', detail: '清碑是拓印的第一步，需耐心细致，为后续上纸打好基础。' },
+  { id: 2, title: '上纸润纸', emoji: '📜', desc: '将宣纸轻轻覆盖在碑刻表面，用喷壶均匀喷洒清水。', detail: '纸张充分湿润后与碑面紧密贴合，是拓印成败的关键一步。' },
+  { id: 3, title: '敲打入凹', emoji: '🔨', desc: '用棕刷从中心向四周轻轻敲打，使纸张嵌入碑文的凹槽中。', detail: '刷纸需力道均匀，确保字迹凹凸分明，为扑墨做好准备。' },
+  { id: 4, title: '自然晾干', emoji: '💨', desc: '等待纸张自然晾干至半干状态，纸张与碑面贴合紧密。', detail: '不可急用热源烘干，自然晾干才能保证纸张张力和墨色均匀。' },
+  { id: 5, title: '扑墨拓印', emoji: '🖌️', desc: '用拓包蘸取适量墨汁，在纸上轻轻拍打，使字迹清晰显现。', detail: '打墨讲究"淡施轻扑"，层层叠加，墨色浓淡相宜方为上品。' },
+  { id: 6, title: '揭取拓片', emoji: '🖼️', desc: '待墨汁干透后，从一角轻轻揭起拓片。', detail: '一张完整的碑刻拓印作品便完成了，千年文脉一纸传薪。' },
+]
+
+// 洛阳视频播放
+const showLuoyangVideoPlayer = ref(false)
+const luoyangVideoRef = ref(null)
+const luoyangVideoSrc = ref('/videos/luoyang-rubbing.mp4')
+
+function openLuoyangPanel() {
+  showCityPanel.value = false
+  showLuoyangPanel.value = true
+}
+function closeLuoyangPanel() {
+  showLuoyangPanel.value = false
+  closeLuoyangVideoPlayer()
+  closeRubbingPopup()
+}
+function startRubbing() {
+  showRubbingPopup.value = true
+  rubbingStep.value = 1
+}
+function closeRubbingPopup() {
+  showRubbingPopup.value = false
+  rubbingStep.value = 0
+}
+function prevRubbingStep() {
+  if (rubbingStep.value > 1) rubbingStep.value--
+}
+function nextRubbingStep() {
+  if (rubbingStep.value < 6) {
+    rubbingStep.value++
+  } else {
+    rubbingStep.value = 7
+  }
+}
+function resetRubbing() {
+  rubbingStep.value = 1
+}
+
+function openLuoyangVideoPlayer() {
+  showLuoyangVideoPlayer.value = true
+  // 暂停背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.pause()
+  }
+}
+function closeLuoyangVideoPlayer() {
+  showLuoyangVideoPlayer.value = false
+  if (luoyangVideoRef.value) {
+    luoyangVideoRef.value.pause()
+    luoyangVideoRef.value.currentTime = 0
+  }
+  // 恢复背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
+}
+function onLuoyangVideoEnded() {
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
+}
+
 function resetPuppet() {
   shadowPuppetStep.value = 1
+}
+
+function prevStep() {
+  if (shadowPuppetStep.value > 1) {
+    shadowPuppetStep.value--
+  }
 }
 
 function nextStep() {
@@ -3150,7 +3450,7 @@ onUnmounted(() => {
 /* ── 单个交互热区 ── */
 .xian-hotspot {
   position: absolute;
-  top: 55%; left: 50%;
+  top: 84%; left: 32%;
   transform: translate(-50%, -50%);
   z-index: 5;
   display: flex;
@@ -3218,6 +3518,11 @@ onUnmounted(() => {
 .hs-sub {
   margin-top: 4px;
   font-size: 12px; color: rgba(255,255,255,0.55);
+}
+
+/* 视频热区位置（与皮影热区分开） */
+.xian-video-hotspot {
+  top: 40%; left: 70%;
 }
 
 /* ── 皮影制作弹窗 ── */
@@ -3386,6 +3691,11 @@ onUnmounted(() => {
   transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
 }
 
+/* 按钮组 */
+.pp-btns {
+  display: flex; gap: 12px; align-items: center;
+}
+
 /* 主按钮 */
 .pp-btn {
   display: flex; align-items: center; gap: 6px;
@@ -3398,6 +3708,17 @@ onUnmounted(() => {
 }
 .pp-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(196,163,90,0.35); }
 .pp-btn:active { transform: scale(0.97); }
+
+/* 上一步按钮 */
+.pp-btn-prev {
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px 24px; border-radius: 22px;
+  background: rgba(255,255,255,0.08); color: #C8C0B6;
+  font-size: 14px; border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer; transition: all 0.2s;
+}
+.pp-btn-prev:hover { background: rgba(255,255,255,0.14); color: #FFF; }
+.pp-btn-prev:active { transform: scale(0.97); }
 
 /* 完成操作按钮 */
 .pp-actions {
@@ -3452,6 +3773,76 @@ onUnmounted(() => {
 }
 @keyframes svg-draw { to { stroke-dashoffset: 0; } }
 
+/* ── 视频播放弹窗 ── */
+.video-player-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+}
+.video-player-card {
+  width: 100%;
+  max-width: 640px;
+  background: rgba(30,30,30,0.92);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(196,163,90,0.3);
+  overflow: hidden;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+  animation: popup-scale-in 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popup-scale-in {
+  0%   { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.vp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.vp-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #C8C0B6;
+  letter-spacing: 1px;
+}
+.vp-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: #C8C0B6;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.vp-close:hover { background: rgba(255,255,255,0.16); }
+.vp-body { padding: 0; }
+.vp-video { width: 100%; display: block; background: #000; }
+
+/* ── 洛阳特定样式 ── */
+.luoyang-video-hotspot {
+  top: 40%; left: 70%;
+}
+.pp-rubbing-result {
+  margin: 16px 0;
+  padding: 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(196,163,90,0.15);
+}
+
 /* 移动端适配 */
 @media (max-width: 480px) {
   .puppet-popup { max-width: 340px; border-radius: 24px; }
@@ -3459,5 +3850,8 @@ onUnmounted(() => {
   .pp-visual { width: 68px; height: 68px; }
   .pp-emoji { font-size: 32px; }
   .pp-step-title { font-size: 18px; }
+  .video-player-card { border-radius: 12px; }
+  .vp-header { padding: 10px 14px; }
+  .vp-title { font-size: 13px; }
 }
 </style>
