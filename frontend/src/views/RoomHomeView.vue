@@ -1032,49 +1032,7 @@
           <div class="panel-close" @click="showHealingPanel = false">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </div>
-          <div class="trend-header">
-            <h2>🧘 治愈空间</h2>
-            <p>放慢脚步，给自己一点温柔</p>
-          </div>
-
-          <!-- 呼吸练习 -->
-          <div class="card healing-card" @click="startBreathing">
-            <div class="hc-icon">{{ breathingActive ? '🌬️' : '💨' }}</div>
-            <div class="hc-info">
-              <div class="hc-title">呼吸练习</div>
-              <div class="hc-desc">{{ breathingActive ? '正在引导呼吸...' : '4-7-8 呼吸法，放松身心' }}</div>
-            </div>
-            <div class="hc-arrow">›</div>
-          </div>
-
-          <!-- 正念冥想 -->
-          <div class="card healing-card" @click="startMeditation('body')">
-            <div class="hc-icon">🧘</div>
-            <div class="hc-info">
-              <div class="hc-title">身体扫描</div>
-              <div class="hc-desc">从头到脚感受身体的每个部分</div>
-            </div>
-            <div class="hc-arrow">›</div>
-          </div>
-
-          <div class="card healing-card" @click="startMeditation('gratitude')">
-            <div class="hc-icon">🙏</div>
-            <div class="hc-info">
-              <div class="hc-title">感恩冥想</div>
-              <div class="hc-desc">回想今天值得感恩的三件事</div>
-            </div>
-            <div class="hc-arrow">›</div>
-          </div>
-
-          <!-- 呼吸动画区域 -->
-          <Transition name="popup-scale">
-            <div v-if="breathingActive" class="breathing-circle-wrap">
-              <div class="breathing-circle" :class="'breath-' + breathPhase">
-                <span class="breath-text">{{ breathLabel }}</span>
-              </div>
-              <button class="pp-btn-ghost" @click="stopBreathing" style="margin-top:16px">结束练习</button>
-            </div>
-          </Transition>
+          <HealingView :inline="true" @close="showHealingPanel = false" />
         </div>
       </div>
     </Transition>
@@ -1086,39 +1044,7 @@
           <div class="panel-close" @click="showTreeHolePanel = false">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </div>
-          <div class="trend-header">
-            <h2>🌳 树洞</h2>
-            <p>匿名倾诉，有人与你共鸣</p>
-          </div>
-
-          <!-- 发布留言 -->
-          <div class="th-post-wrap">
-            <textarea v-model="treeHoleInput" placeholder="说点什么吧...匿名发布，放心倾诉" rows="3" class="th-textarea"></textarea>
-            <button class="th-post-btn" @click="postTreeHoleMsg" :disabled="!treeHoleInput.trim()">发布</button>
-          </div>
-
-          <!-- 留言列表 -->
-          <div class="th-list" ref="treeHoleListEl">
-            <div v-if="treeHoleLoading" class="empty-state">
-              <div class="empty-icon">🍃</div>
-              <p>加载中...</p>
-            </div>
-            <div v-else-if="!treeHoleMsgs.length" class="empty-state">
-              <div class="empty-icon">🌳</div>
-              <p>树洞还是空的，来做第一个倾诉的人吧</p>
-            </div>
-            <div v-for="msg in treeHoleMsgs" :key="msg.id" class="th-msg">
-              <div class="th-msg-content">{{ msg.content }}</div>
-              <div class="th-msg-footer">
-                <span class="th-msg-time">{{ formatTreeHoleTime(msg.created_at) }}</span>
-                <button class="th-resonate-btn" :class="{ resonated: msg.my_resonate }" @click="resonateMsg(msg)">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                  <span>我也一样</span>
-                  <span v-if="msg.resonate_count" class="th-res-count">{{ msg.resonate_count }}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+          <TreeHoleView :inline="true" @close="showTreeHolePanel = false" />
         </div>
       </div>
     </Transition>
@@ -1191,6 +1117,8 @@ import { useUserStore } from '../stores/user'
 import { updateProfile } from '../api/user'
 import { getMoodStats, getMoodInsight } from '../api/mood'
 import { getChatHistory, sendMessage } from '../api/chat'
+import HealingView from './HealingView.vue'
+import TreeHoleView from './TreeHoleView.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1204,122 +1132,6 @@ const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
-
-// ═══ 治愈空间 ═══
-const breathingActive = ref(false)
-const breathPhase = ref('inhale') // inhale, hold, exhale
-const breathLabel = computed(() => {
-  if (breathPhase.value === 'inhale') return '吸气...'
-  if (breathPhase.value === 'hold') return '屏住...'
-  return '呼气...'
-})
-let breathTimer = null
-
-function startBreathing() {
-  breathingActive.value = true
-  breathPhase.value = 'inhale'
-  runBreathCycle()
-}
-function runBreathCycle() {
-  // 4秒吸气 → 7秒屏住 → 8秒呼气
-  breathPhase.value = 'inhale'
-  breathTimer = setTimeout(() => {
-    breathPhase.value = 'hold'
-    breathTimer = setTimeout(() => {
-      breathPhase.value = 'exhale'
-      breathTimer = setTimeout(() => {
-        if (breathingActive.value) runBreathCycle()
-      }, 8000)
-    }, 7000)
-  }, 4000)
-}
-function stopBreathing() {
-  breathingActive.value = false
-  if (breathTimer) { clearTimeout(breathTimer); breathTimer = null }
-}
-function startMeditation(type) {
-  const msgs = {
-    body: '请闭上眼睛，从头顶开始，慢慢感受你的额头、眉毛、眼睛...逐渐向下，感受每个部分的温度和感觉。',
-    gratitude: '请闭上眼睛，回想今天发生的三件让你感恩的事，不论大小，都值得被记住。'
-  }
-  alert(msgs[type] || msgs.body)
-}
-
-// ═══ 树洞 ═══
-const treeHoleInput = ref('')
-const treeHoleMsgs = ref([])
-const treeHoleLoading = ref(false)
-const treeHoleListEl = ref(null)
-
-// 从 localStorage 加载树洞数据（简单实现，无后端）
-const TREEHOLE_KEY = 'shengyu_treehole_msgs'
-const RESONATE_KEY = 'shengyu_resonated_ids'
-
-function loadTreeHoleMsgs() {
-  treeHoleLoading.value = true
-  try {
-    const saved = localStorage.getItem(TREEHOLE_KEY)
-    if (saved) treeHoleMsgs.value = JSON.parse(saved)
-  } catch {}
-  treeHoleLoading.value = false
-}
-
-function saveTreeHoleMsgs() {
-  localStorage.setItem(TREEHOLE_KEY, JSON.stringify(treeHoleMsgs.value))
-}
-
-function getResonatedIds() {
-  try {
-    return JSON.parse(localStorage.getItem(RESONATE_KEY) || '[]')
-  } catch { return [] }
-}
-
-function markResonated(msgId) {
-  const ids = getResonatedIds()
-  if (!ids.includes(msgId)) ids.push(msgId)
-  localStorage.setItem(RESONATE_KEY, JSON.stringify(ids))
-}
-
-function postTreeHoleMsg() {
-  if (!treeHoleInput.value.trim()) return
-  const msg = {
-    id: Date.now(),
-    content: treeHoleInput.value.trim(),
-    created_at: new Date().toISOString(),
-    resonate_count: 0,
-    my_resonate: false
-  }
-  treeHoleMsgs.value.unshift(msg)
-  saveTreeHoleMsgs()
-  treeHoleInput.value = ''
-}
-
-function resonateMsg(msg) {
-  if (msg.my_resonate) return // 已共鸣过
-  msg.my_resonate = true
-  msg.resonate_count = (msg.resonate_count || 0) + 1
-  markResonated(msg.id)
-  saveTreeHoleMsgs()
-}
-
-function formatTreeHoleTime(isoStr) {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-// 加载时恢复共鸣状态
-watch(showTreeHolePanel, (v) => {
-  if (v) {
-    loadTreeHoleMsgs()
-    // 恢复当前用户的共鸣状态
-    const ids = getResonatedIds()
-    treeHoleMsgs.value.forEach(m => {
-      m.my_resonate = ids.includes(m.id)
-    })
-  }
-})
 
 // ═══ 报告 ═══
 const reportData = ref(null)
@@ -2781,102 +2593,9 @@ onUnmounted(() => {
 
 /* ═══════════ 治愈面板 ═══════════ */
 .healing-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
-.healing-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px; margin-bottom: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 14px; cursor: pointer;
-  transition: background 0.2s;
-}
-.healing-card:hover { background: rgba(255,255,255,0.08); }
-.hc-icon { font-size: 28px; flex-shrink: 0; }
-.hc-info { flex: 1; }
-.hc-title { font-size: 14px; font-weight: 600; color: #E8E2D8; }
-.hc-desc { font-size: 12px; color: rgba(232,226,216,0.5); margin-top: 2px; }
-.hc-arrow { font-size: 18px; color: rgba(232,226,216,0.3); }
-
-/* 呼吸动画 */
-.breathing-circle-wrap {
-  display: flex; flex-direction: column; align-items: center;
-  margin-top: 20px; padding: 20px;
-}
-.breathing-circle {
-  width: 120px; height: 120px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(127,179,166,0.15);
-  border: 2px solid rgba(127,179,166,0.4);
-  transition: all 1s ease;
-}
-.breathing-circle.breath-inhale {
-  transform: scale(1.3);
-  background: rgba(127,179,166,0.25);
-  border-color: rgba(127,179,166,0.6);
-}
-.breathing-circle.breath-hold {
-  transform: scale(1.3);
-  background: rgba(232,196,104,0.2);
-  border-color: rgba(232,196,104,0.5);
-}
-.breathing-circle.breath-exhale {
-  transform: scale(1);
-  background: rgba(212,119,106,0.15);
-  border-color: rgba(212,119,106,0.4);
-}
-.breath-text { font-size: 14px; color: #E8E2D8; font-weight: 500; }
 
 /* ═══════════ 树洞面板 ═══════════ */
 .treehole-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
-.th-post-wrap {
-  display: flex; gap: 8px; margin-bottom: 16px;
-}
-.th-textarea {
-  flex: 1; background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px; padding: 10px 12px;
-  color: #E8E2D8; font-size: 13px; resize: none;
-  outline: none;
-  font-family: inherit;
-}
-.th-textarea:focus { border-color: rgba(127,179,166,0.5); }
-.th-post-btn {
-  align-self: flex-end; padding: 8px 16px;
-  background: rgba(127,179,166,0.3); color: #7FB3A6;
-  border: none; border-radius: 10px; cursor: pointer;
-  font-size: 13px; font-weight: 500;
-  transition: all 0.2s;
-}
-.th-post-btn:disabled { opacity: 0.4; cursor: default; }
-.th-post-btn:not(:disabled):hover { background: rgba(127,179,166,0.5); }
-
-.th-list { display: flex; flex-direction: column; gap: 10px; }
-.th-msg {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 14px; padding: 12px 14px;
-}
-.th-msg-content { font-size: 14px; color: #E8E2D8; line-height: 1.6; }
-.th-msg-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px;
-}
-.th-msg-time { font-size: 11px; color: rgba(232,226,216,0.35); }
-.th-resonate-btn {
-  display: flex; align-items: center; gap: 4px;
-  background: none; border: none; cursor: pointer;
-  color: rgba(232,226,216,0.4); font-size: 12px;
-  padding: 4px 8px; border-radius: 8px;
-  transition: all 0.2s;
-}
-.th-resonate-btn:hover { background: rgba(255,255,255,0.06); color: rgba(232,226,216,0.7); }
-.th-resonate-btn.resonated {
-  color: #D4776A; cursor: default;
-}
-.th-resonate-btn.resonated:hover { background: transparent; }
-.th-res-count {
-  background: rgba(212,119,106,0.2); color: #D4776A;
-  padding: 0 6px; border-radius: 8px; font-size: 11px;
-}
 
 /* ═══════════ 报告面板 ═══════════ */
 .report-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
