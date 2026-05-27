@@ -6,7 +6,7 @@
       <div v-if="showSplash" class="splash" @click="enterApp">
         <div class="splash-logo">
           <span>咕哝</span>
-          <span class="splash-version">V1</span>
+          <span class="splash-version">V3</span>
         </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>

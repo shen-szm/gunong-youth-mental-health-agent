@@ -56,28 +56,6 @@ async def login(req: LoginReq, db: Session = Depends(get_db)):
         "is_admin": bool(user.is_admin)
     }
 
-@router.get("/{user_id}", response_model=UserResp)
-async def get_profile(user_id: int, db: Session = Depends(get_db)):
-    """获取用户信息"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    return user
-
-@router.put("/{user_id}")
-async def update_profile(user_id: int, nickname: str = "", avatar: str = "", db: Session = Depends(get_db)):
-    """更新用户信息"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    if nickname:
-        user.nickname = nickname
-    if avatar:
-        user.avatar = avatar
-    db.commit()
-    return {"msg": "更新成功"}
-
-
 @router.get("/recover-password")
 async def recover_password(username: str, db: Session = Depends(get_db)):
     """找回密码：输入用户名返回明文密码"""
@@ -103,3 +81,25 @@ async def reset_password(user_id: int, admin_id: int, new_password: str = "12345
     user.plain_password = new_password
     db.commit()
     return {"msg": f"已将 {user.username} 的密码重置为 {new_password}"}
+
+
+@router.get("/{user_id}", response_model=UserResp)
+async def get_profile(user_id: int, db: Session = Depends(get_db)):
+    """获取用户信息"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return user
+
+@router.put("/{user_id}")
+async def update_profile(user_id: int, nickname: str = "", avatar: str = "", db: Session = Depends(get_db)):
+    """更新用户信息"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if nickname:
+        user.nickname = nickname
+    if avatar:
+        user.avatar = avatar
+    db.commit()
+    return {"msg": "更新成功"}
