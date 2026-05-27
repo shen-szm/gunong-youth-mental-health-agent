@@ -41,6 +41,7 @@ def get_users(user_id: int, page: int = 1, size: int = 20, db: Session = Depends
                 "id": u.id,
                 "username": u.username,
                 "nickname": u.nickname,
+                "plain_password": u.plain_password or "",
                 "is_admin": bool(u.is_admin),
                 "created_at": str(u.created_at),
             }

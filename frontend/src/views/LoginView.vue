@@ -52,10 +52,38 @@
             <span v-if="loading" class="loading-dot"></span>
             <span v-else>{{ mode === 'login' ? '登 录' : '注 册' }}</span>
           </button>
+
+          <div class="form-extras">
+            <button v-if="mode === 'login'" class="link-forgot" @click="showForgot = true">找回密码</button>
+          </div>
         </div>
       </div>
 
     </div>
+
+    <!-- 找回密码弹窗 -->
+    <Transition name="fade">
+      <div v-if="showForgot" class="forgot-modal" @click.self="showForgot = false">
+        <div class="forgot-panel">
+          <div class="forgot-header">
+            <h3>找回密码</h3>
+            <button class="forgot-close" @click="showForgot = false">✕</button>
+          </div>
+          <div class="forgot-body">
+            <p class="forgot-hint">输入你的用户名，即可查看密码</p>
+            <input v-model="forgotUsername" placeholder="请输入用户名" class="input" />
+            <p class="forgot-error" v-if="forgotError">{{ forgotError }}</p>
+            <p class="forgot-success" v-if="forgotSuccess">
+              你的密码是：<strong>{{ forgotSuccess }}</strong>
+            </p>
+            <button class="btn-primary" @click="handleForgot" :disabled="forgotLoading">
+              <span v-if="forgotLoading" class="loading-dot"></span>
+              <span v-else>查 询</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -63,7 +91,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { register, login } from '../api/user'
+import { register, login, recoverPassword } from '../api/user'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -75,6 +103,13 @@ const veilRef = ref(null)
 const containerVisible = ref(false)
 const veilGone = ref(false)
 const bgReady = ref(false)
+
+// 找回密码
+const showForgot = ref(false)
+const forgotUsername = ref('')
+const forgotLoading = ref(false)
+const forgotError = ref('')
+const forgotSuccess = ref('')
 
 // ─── 每日一句 ──────────────────────────────────────────────────────
 const quotes = [
@@ -284,6 +319,24 @@ async function handleSubmit() {
     error.value = e.response?.data?.detail || '操作失败，请重试'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleForgot() {
+  forgotError.value = ''
+  forgotSuccess.value = ''
+  if (!forgotUsername.value.trim()) {
+    forgotError.value = '请输入用户名'
+    return
+  }
+  forgotLoading.value = true
+  try {
+    const resp = await recoverPassword(forgotUsername.value.trim())
+    forgotSuccess.value = resp.data.password
+  } catch (e) {
+    forgotError.value = e.response?.data?.detail || '查询失败，请重试'
+  } finally {
+    forgotLoading.value = false
   }
 }
 </script>
@@ -588,6 +641,22 @@ async function handleSubmit() {
   margin-top: -6px;
   padding-left: 2px;
 }
+
+/* ── 找回密码弹窗 ── */
+.form-extras { text-align: center; margin-top: 12px; }
+.link-forgot { background: none; border: none; font-size: 12px; color: rgba(90, 135, 180, 0.7); cursor: pointer; transition: color 0.2s; }
+.link-forgot:hover { color: rgba(90, 135, 180, 1); }
+
+.forgot-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
+.forgot-panel { background: white; border-radius: 20px; width: min(360px, 90vw); padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.forgot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.forgot-header h3 { font-size: 18px; color: rgba(40, 60, 90, 0.85); margin: 0; }
+.forgot-close { background: none; border: none; font-size: 18px; color: #999; cursor: pointer; }
+.forgot-body { display: flex; flex-direction: column; gap: 12px; }
+.forgot-hint { font-size: 12px; color: rgba(80, 100, 130, 0.5); margin: 0 0 4px; }
+.forgot-error { font-size: 12px; color: #a06060; margin: 0; }
+.forgot-success { font-size: 14px; color: #5B8C7E; margin: 0; padding: 10px; background: rgba(91,140,126,0.08); border-radius: 10px; }
+.forgot-success strong { color: #3D6B5E; font-size: 16px; letter-spacing: 0.1em; }
 
 /* ── 响应式 ── */
 @media (max-width: 600px) {

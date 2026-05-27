@@ -15,5 +15,13 @@ export function updateProfile(userId, nickname, avatar) {
   return instance.put(`/${userId}`, null, { params: { nickname, avatar } });
 }
 
+export function recoverPassword(username) {
+  return instance.get("/recover-password", { params: { username } });
+}
+
+export function resetPassword(userId, adminId, newPassword) {
+  return instance.post(`/reset-password/${userId}`, null, { params: { admin_id: adminId, new_password: newPassword } });
+}
+
 // 导出基础实例供AdminView使用
 export default instance;

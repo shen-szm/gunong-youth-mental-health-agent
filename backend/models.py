@@ -8,6 +8,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
+    plain_password = Column(String(255), nullable=True)  # 明文密码，用于找回密码和管理员查看
     nickname = Column(String(50), nullable=True)
     avatar = Column(String(255), nullable=True)
     is_admin = Column(Integer, default=0, nullable=False)  # 0=普通用户, 1=管理员

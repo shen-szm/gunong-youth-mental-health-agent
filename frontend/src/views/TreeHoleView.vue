@@ -128,9 +128,14 @@
           <p class="thc-content">{{ post.content }}</p>
           <div class="thc-footer">
             <span class="thc-time">{{ formatTime(post.created_at) }}</span>
-            <button class="thc-resonance" @click="addResonance(post.id)">
-              🤝 我也一样 ({{ post.resonance_count }})
-            </button>
+            <div class="thc-actions">
+              <button v-if="post.is_local" class="thc-delete" @click="deletePost(post.id)">
+                🗑️ 删除
+              </button>
+              <button class="thc-resonance" @click="addResonance(post.id)">
+                🤝 我也一样 ({{ post.resonance_count }})
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -254,6 +259,7 @@ async function createPost() {
     mood_card: mood,
     created_at: new Date().toISOString(),
     resonance_count: 0,
+    is_local: true,
   }
 
   // 优先走 API
@@ -274,6 +280,14 @@ async function createPost() {
     newContent.value = ''
     selectedMood.value = ''
   }
+}
+
+function deletePost(postId) {
+  if (!confirm('确定要删除这条倾诉吗？')) return
+  const local = loadLocalPosts()
+  const filtered = local.filter(p => p.id !== postId)
+  saveLocalPosts(filtered)
+  posts.value = posts.value.filter(p => p.id !== postId)
 }
 
 async function addResonance(postId) {
@@ -777,8 +791,12 @@ function openDriftBottle() {
 
 /* 发布区域 */
 .post-area { margin: 0 16px 16px; padding: 14px 16px; background: white; border-radius: 16px; }
-.mood-selector { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-.mood-selector::-webkit-scrollbar { display: none; }
+.mood-selector { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+/* 自定义滚动条 - 滑块效果 */
+.mood-selector::-webkit-scrollbar { height: 4px; }
+.mood-selector::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 2px; }
+.mood-selector::-webkit-scrollbar-thumb { background: #5B8C7E; border-radius: 2px; }
+.mood-selector::-webkit-scrollbar-thumb:hover { background: #4a7a6e; }
 .mood-btn {
   padding: 8px 14px; border-radius: 20px; border: 1px solid #e8e8e8;
   background: #f8f8f8; font-size: 13px; cursor: pointer; transition: all 0.2s;
@@ -813,11 +831,18 @@ function openDriftBottle() {
 .thc-content { font-size: 14px; color: #333; line-height: 1.6; margin: 0 0 10px; }
 .thc-footer { display: flex; justify-content: space-between; align-items: center; }
 .thc-time { font-size: 11px; color: #bbb; }
+.thc-footer { display: flex; justify-content: space-between; align-items: center; }
+.thc-actions { display: flex; align-items: center; gap: 6px; }
 .thc-resonance {
   background: none; border: none; font-size: 12px; color: #5B8C7E;
   cursor: pointer; padding: 4px 10px; border-radius: 12px; transition: all 0.2s;
 }
 .thc-resonance:hover { background: rgba(91,140,126,0.1); }
+.thc-delete {
+  background: none; border: none; font-size: 12px; color: #D4766A;
+  cursor: pointer; padding: 4px 10px; border-radius: 12px; transition: all 0.2s;
+}
+.thc-delete:hover { background: rgba(212,118,106,0.1); }
 .empty-hint { text-align: center; padding: 40px; font-size: 13px; color: #999; }
 
 /* 过渡动画 */
@@ -837,12 +862,17 @@ function openDriftBottle() {
 .treehole-page.inline-mode .post-area { background: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .mood-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: rgba(232,226,216,0.7); }
 .treehole-page.inline-mode .mood-btn.active { background: #5B8C7E; color: white; border-color: #5B8C7E; }
+/* inline 深色滚动条 */
+.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb { background: #7FB3A6; }
+.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb:hover { background: #5B8C7E; }
 .treehole-page.inline-mode .input-row input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #E8E2D8; }
 .treehole-page.inline-mode .input-row input::placeholder { color: rgba(232,226,216,0.35); }
 .treehole-page.inline-mode .treehole-card { background: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .thc-content { color: rgba(232,226,216,0.85); }
 .treehole-page.inline-mode .thc-time { color: rgba(232,226,216,0.35); }
 .treehole-page.inline-mode .thc-resonance { color: #7FB3A6; }
+.treehole-page.inline-mode .thc-delete { color: #D4968A; }
 .treehole-page.inline-mode .empty-hint { color: rgba(232,226,216,0.35); }
 
 /* inline 弹窗深色适配 */

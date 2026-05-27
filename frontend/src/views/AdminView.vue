@@ -42,9 +42,13 @@
             <div class="user-avatar">{{ (u.nickname || u.username)[0] }}</div>
             <div class="user-info">
               <span class="user-name">{{ u.nickname || u.username }}</span>
-              <span class="user-meta">ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }}</span>
+              <span class="user-meta">
+                ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }}
+                <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
+              </span>
             </div>
             <div class="user-actions">
+              <button class="btn-sm warn" @click.stop="resetUserPwd(u)">重置密码</button>
               <button class="btn-sm" @click.stop="toggleAdmin(u)">{{ u.is_admin ? '取消管理' : '设管理' }}</button>
               <button class="btn-sm danger" @click.stop="deleteUser(u)">删除</button>
             </div>
@@ -64,9 +68,15 @@
             <div class="user-avatar">{{ (u.nickname || u.username)[0] }}</div>
             <div class="user-info">
               <span class="user-name">{{ u.nickname || u.username }}</span>
-              <span class="user-meta">ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }} · {{ u.created_at?.slice(0, 10) }}</span>
+              <span class="user-meta">
+                ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }} · {{ u.created_at?.slice(0, 10) }}
+                <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
+              </span>
             </div>
-            <span class="arrow">→</span>
+            <div class="user-actions">
+              <button class="btn-sm warn" @click.stop="resetUserPwd(u)">重置密码</button>
+              <span class="arrow">→</span>
+            </div>
           </div>
           <p v-if="users.length === 0" class="empty">暂无用户</p>
           <div class="pagination" v-if="totalPages > 1">
@@ -194,6 +204,7 @@
 import { ref, computed, onMounted, watch, nextTick } from "vue"
 import { useRouter } from "vue-router"
 import { useUserStore } from "../stores/user"
+import { resetPassword } from "../api/user"
 import axios from "axios"
 
 const router = useRouter()
@@ -301,6 +312,17 @@ async function deleteUser(u) {
     loadUsers()
     loadStats()
   } catch { error.value = "删除失败" }
+}
+
+async function resetUserPwd(u) {
+  if (!confirm(`确认将用户【${u.username}】的密码重置为初始密码 123456 吗？`)) return
+  try {
+    await resetPassword(u.id, userStore.userId, "123456")
+    alert(`已将 ${u.username} 的密码重置为 123456`)
+    loadUsers()
+  } catch (e) {
+    error.value = e.response?.data?.detail || "重置密码失败"
+  }
 }
 
 function handleBack() {
@@ -537,6 +559,9 @@ onMounted(() => {
 .btn-sm:hover { background: #D8E4DB; }
 .btn-sm.danger { background: #F5E8E5; color: #D4766A; }
 .btn-sm.danger:hover { background: #EDDCD8; }
+.btn-sm.warn { background: #FFF8E5; color: #C49B3A; }
+.btn-sm.warn:hover { background: #F5EDD0; }
+.user-pwd { color: #D4766A; font-weight: 500; }
 .pagination { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; font-size: 13px; }
 .empty, .empty-small { color: #bbb; font-size: 13px; text-align: center; padding: 16px 0; }
 
