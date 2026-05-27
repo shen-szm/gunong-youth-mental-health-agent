@@ -83,6 +83,30 @@ async def reset_password(user_id: int, admin_id: int, new_password: str = "12345
     return {"msg": f"已将 {user.username} 的密码重置为 {new_password}"}
 
 
+class ChangePwdReq(BaseModel):
+    user_id: int
+    old_password: str
+    new_password1: str
+    new_password2: str
+
+@router.post("/change-password")
+async def change_password(req: ChangePwdReq, db: Session = Depends(get_db)):
+    """用户修改密码：验证旧密码，两次新密码一致"""
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not verify_password(req.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="旧密码错误")
+    if req.new_password1 != req.new_password2:
+        raise HTTPException(status_code=400, detail="两次输入的新密码不一致")
+    if len(req.new_password1) < 6:
+        raise HTTPException(status_code=400, detail="新密码至少6位")
+    user.password_hash = get_password_hash(req.new_password1)
+    user.plain_password = req.new_password1
+    db.commit()
+    return {"msg": "密码修改成功"}
+
+
 @router.get("/{user_id}", response_model=UserResp)
 async def get_profile(user_id: int, db: Session = Depends(get_db)):
     """获取用户信息"""

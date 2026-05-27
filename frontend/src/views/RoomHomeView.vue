@@ -59,12 +59,12 @@
 
     <!-- 交互热区 — 音响1（音乐推荐） -->
     <div class="hot-zone zone-speaker zone-speaker-left" @click="openMusicPanel">
-      <div class="hover-tip">🎵 今日推荐</div>
+      <div class="speaker-label">音乐</div>
     </div>
 
     <!-- 交互热区 — 音响2（音乐推荐） -->
     <div class="hot-zone zone-speaker zone-speaker-right" @click="openMusicPanel">
-      <div class="hover-tip">🎵 今日推荐</div>
+      <div class="speaker-label">音乐</div>
     </div>
 
     <!-- 底部导航 -->
@@ -231,6 +231,17 @@
             </div>
           </div>
 
+          <!-- 账号管理 -->
+          <div class="panel-section">
+            <div class="panel-sec-title">账号管理</div>
+            <div class="panel-menu">
+              <div class="panel-setting-row">
+                <span>🔑 修改密码</span>
+                <button @click="showPwdModal = true">修改</button>
+              </div>
+            </div>
+          </div>
+
           <!-- 管理员 -->
           <div class="panel-section" v-if="userStore.isAdmin">
             <div class="panel-sec-title">系统</div>
@@ -246,6 +257,21 @@
         </div>
       </div>
     </Transition>
+
+    <!-- ══ 修改密码弹窗 ══ -->
+    <div class="pwd-modal-overlay" v-if="showPwdModal" @click.self="showPwdModal = false">
+      <div class="pwd-modal-card">
+        <h4>修改密码</h4>
+        <input v-model="oldPwd" type="password" placeholder="请输入旧密码" />
+        <input v-model="newPwd1" type="password" placeholder="请输入新密码（至少6位）" />
+        <input v-model="newPwd2" type="password" placeholder="请再次输入新密码" />
+        <div class="pwd-modal-btns">
+          <button class="pwd-modal-cancel" @click="showPwdModal = false">取消</button>
+          <button class="pwd-modal-confirm" @click="handleChangePwd">确认修改</button>
+        </div>
+        <p v-if="pwdMsg" :class="['pwd-modal-msg', pwdOk ? 'success' : 'error']">{{ pwdMsg }}</p>
+      </div>
+    </div>
 
     <!-- ══ 状态选择器 ══ -->
     <Transition name="panel-slide">
@@ -331,6 +357,29 @@
           </div>
           <button class="back-btn" @click="showCityPanel = false; showTransportPanel = true">← 返回选择交通工具</button>
         </div>
+      </div>
+    </Transition>
+
+    <!-- ══ 西安地铁转场动画 ══ -->
+    <Transition name="transition-fade">
+      <div v-if="showXianTransition" class="metro-transition" :class="`phase-${xianPhase}`">
+        <div class="metro-bg">
+          <img src="/images/xian-metro.jpg" alt="西安地铁" />
+          <div class="metro-window metro-window-left"></div>
+          <div class="metro-window metro-window-right"></div>
+        </div>
+        <div class="speed-lines">
+          <div class="sl-line" v-for="n in 12" :key="n" :style="{ animationDelay: `${n * 0.15}s`, top: `${8 + (n * 7) % 84}%` }"></div>
+        </div>
+        <div class="metro-loading">
+          <div class="ml-train">🚇</div>
+          <p class="ml-text">正在前往西安</p>
+          <div class="ml-track">
+            <div class="ml-progress"></div>
+          </div>
+        </div>
+        <div class="metro-blur-overlay"></div>
+        <div class="metro-white-overlay"></div>
       </div>
     </Transition>
 
@@ -492,6 +541,39 @@
           </div>
         </Transition>
 
+      </div>
+    </Transition>
+
+    <!-- ══ 洛阳地铁转场动画 ══ -->
+    <Transition name="transition-fade">
+      <div v-if="showLuoyangTransition" class="metro-transition" :class="`phase-${luoyangPhase}`">
+        <!-- 地铁车厢背景 -->
+        <div class="metro-bg">
+          <img src="/images/luoyang-metro.jpg" alt="洛阳地铁" />
+          <!-- 两侧窗外运动模糊 -->
+          <div class="metro-window metro-window-left"></div>
+          <div class="metro-window metro-window-right"></div>
+        </div>
+
+        <!-- 速度线（运动感） -->
+        <div class="speed-lines">
+          <div class="sl-line" v-for="n in 12" :key="n" :style="{ animationDelay: `${n * 0.15}s`, top: `${8 + (n * 7) % 84}%` }"></div>
+        </div>
+
+        <!-- 加载文字 -->
+        <div class="metro-loading">
+          <div class="ml-train">🚇</div>
+          <p class="ml-text">正在前往洛阳</p>
+          <div class="ml-track">
+            <div class="ml-progress"></div>
+          </div>
+        </div>
+
+        <!-- 整体模糊遮罩 -->
+        <div class="metro-blur-overlay"></div>
+
+        <!-- 白屏过渡 -->
+        <div class="metro-white-overlay"></div>
       </div>
     </Transition>
 
@@ -1079,22 +1161,34 @@
           </div>
 
           <!-- 生成报告入口 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length > 0" class="report-gen-wrap">
-            <div class="report-pixel-card">
-              <div class="rp-deco">
-                <span class="rp-pixel">■</span>
-                <span class="rp-pixel">▣</span>
-                <span class="rp-pixel">■</span>
-              </div>
-              <div class="rp-icon">📊</div>
-              <div class="rp-title">情绪报告</div>
-              <div class="rp-subtitle">MOOD REPORT</div>
-              <div class="rp-line"></div>
-              <div class="rp-desc">基于近期情绪记录 · 定制心理健康分析</div>
-              <button class="rp-btn" @click="generateReport" :disabled="reportLoading">
-                {{ reportLoading ? '生成中...' : '开始生成 →' }}
-              </button>
+          <div v-if="!reportData && !reportLoading && chatMessages.length > 0" class="report-intro">
+            <div class="report-intro-quote">
+              <span class="rq-mark">"</span>
+              <p>每一段心情都值得被记录</p>
+              <span class="rq-mark">"</span>
             </div>
+            <div class="report-intro-highlights">
+              <div class="rhi-item">
+                <span class="rhi-num">{{ stats.days || 1 }}</span>
+                <span class="rhi-label">天同行</span>
+              </div>
+              <div class="rhi-divider"></div>
+              <div class="rhi-item">
+                <span class="rhi-num">{{ stats.chatCount }}</span>
+                <span class="rhi-label">次对话</span>
+              </div>
+              <div class="rhi-divider"></div>
+              <div class="rhi-item">
+                <span class="rhi-num">{{ stats.moodCount }}</span>
+                <span class="rhi-label">条记录</span>
+              </div>
+            </div>
+            <div class="report-intro-text">
+              咕哝已经默默陪伴你一段时间了，<br>为你准备了一份专属心情日记，来看看这段时间的心路历程吧。
+            </div>
+            <button class="report-intro-btn" @click="generateReport" :disabled="reportLoading">
+              {{ reportLoading ? '生成中...' : '生成我的心情报告' }}
+            </button>
           </div>
 
           <!-- 报告加载 -->
@@ -1127,10 +1221,19 @@
           </div>
 
           <!-- 空状态 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length === 0" class="empty-state">
-            <div class="empty-icon">📝</div>
-            <p>还没有情绪数据，先去倾诉一下吧</p>
-            <button class="go-chat-btn" @click="showReportPanel = false; goToChat()">去倾诉 →</button>
+          <div v-if="!reportData && !reportLoading && chatMessages.length === 0" class="report-empty">
+            <div class="report-empty-art">
+              <div class="re-seed">🌱</div>
+              <div class="re-soil"></div>
+            </div>
+            <div class="report-empty-title">心路才刚刚开始</div>
+            <div class="report-empty-text">
+              每一次倾诉都是一颗种子，<br>
+              等它们慢慢发芽，就会开出属于你的心情花园。
+            </div>
+            <button class="report-empty-btn" @click="showReportPanel = false; goToChat()">
+              去种下第一颗心情种子 →
+            </button>
           </div>
         </div>
       </div>
@@ -1150,7 +1253,7 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { updateProfile } from '../api/user'
+import { updateProfile, changePassword } from '../api/user'
 import { getMoodStats, getMoodInsight } from '../api/mood'
 import { getChatHistory, sendMessage } from '../api/chat'
 import HealingView from './HealingView.vue'
@@ -1168,6 +1271,32 @@ const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
+
+// ═══ 修改密码 ═══
+const showPwdModal = ref(false)
+const oldPwd = ref('')
+const newPwd1 = ref('')
+const newPwd2 = ref('')
+const pwdMsg = ref('')
+const pwdOk = ref(false)
+
+async function handleChangePwd() {
+  pwdMsg.value = ''
+  if (!oldPwd.value) { pwdMsg.value = '请输入旧密码'; return }
+  if (!newPwd1.value.trim()) { pwdMsg.value = '请输入新密码'; return }
+  if (newPwd1.value !== newPwd2.value) { pwdMsg.value = '两次输入的新密码不一致'; return }
+  if (newPwd1.value.length < 6) { pwdMsg.value = '新密码至少6位'; return }
+  try {
+    await changePassword(Number(userStore.userId), oldPwd.value, newPwd1.value, newPwd2.value)
+    pwdOk.value = true
+    pwdMsg.value = '密码修改成功！'
+    oldPwd.value = ''; newPwd1.value = ''; newPwd2.value = ''
+    setTimeout(() => { showPwdModal.value = false; pwdMsg.value = ''; pwdOk.value = false }, 1500)
+  } catch (e) {
+    pwdOk.value = false
+    pwdMsg.value = e.response?.data?.detail || '修改失败'
+  }
+}
 
 // ═══ 报告 ═══
 const reportData = ref(null)
@@ -1252,9 +1381,9 @@ function openCityPanel(type) {
 
 function selectCity(city) {
   if (city.name === '西安') {
-    openXianPanel()
+    startXianTransition()
   } else if (city.name === '洛阳') {
-    openLuoyangPanel()
+    startLuoyangTransition()
   } else {
     alert(`你选择了${selectedTransportName.value}前往${city.name} ${city.emoji}`)
     showCityPanel.value = false
@@ -1263,6 +1392,24 @@ function selectCity(city) {
 
 // ═══ 西安城市探索 & 皮影制作 ═══
 const showXianPanel = ref(false)
+const showXianTransition = ref(false)
+const xianPhase = ref(0)
+
+function startXianTransition() {
+  showCityPanel.value = false
+  showXianTransition.value = true
+  xianPhase.value = 0
+
+  setTimeout(() => { xianPhase.value = 1 }, 1500)
+  setTimeout(() => { xianPhase.value = 2 }, 3200)
+  setTimeout(() => { xianPhase.value = 3 }, 4800)
+  setTimeout(() => {
+    showXianTransition.value = false
+    showXianPanel.value = true
+    xianPhase.value = 0
+  }, 6200)
+}
+
 const showPuppetPopup = ref(false)
 const shadowPuppetStep = ref(0) // 0=未开始, 1-7=步骤, 8=完成
 
@@ -1388,6 +1535,9 @@ function onVideoEnded() {
 
 // ═══ 洛阳城市探索 & 非遗拓印 ═══
 const showLuoyangPanel = ref(false)
+const showLuoyangTransition = ref(false)
+const luoyangPhase = ref(0) // 0=初始 1=运动感 2=模糊 3=白屏 4=显示洛阳
+
 const showRubbingPopup = ref(false)
 const rubbingStep = ref(0) // 0=未开始, 1-6=步骤, 7=完成
 
@@ -1404,6 +1554,22 @@ const rubbingSteps = [
 const showLuoyangVideoPlayer = ref(false)
 const luoyangVideoRef = ref(null)
 const luoyangVideoSrc = ref('/videos/luoyang-rubbing.mp4')
+
+function startLuoyangTransition() {
+  showCityPanel.value = false
+  showLuoyangTransition.value = true
+  luoyangPhase.value = 0
+
+  // 转场时间线
+  setTimeout(() => { luoyangPhase.value = 1 }, 1500)   // 启动运动感
+  setTimeout(() => { luoyangPhase.value = 2 }, 3200)   // 开始模糊
+  setTimeout(() => { luoyangPhase.value = 3 }, 4800)   // 白屏
+  setTimeout(() => {
+    showLuoyangTransition.value = false
+    showLuoyangPanel.value = true
+    luoyangPhase.value = 0
+  }, 6200)                                              // 显示洛阳
+}
 
 function openLuoyangPanel() {
   showCityPanel.value = false
@@ -2538,11 +2704,18 @@ onUnmounted(() => {
 .zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }
 .zone-bed     { bottom: 20%; left: 8%; width: 26%; height: 20%; transform: rotate(-38deg); }
 .zone-window  { top: 14%; left: 12%; width: 30%; height: 33%; transform: rotate(-15deg); }
-.zone-speaker { width: 10%; height: 16%; border-radius: 50%; }
-.zone-speaker-left { top: 52%; left: 4%; }
-.zone-speaker-right { top: 52%; right: 4%; }
+.zone-speaker { width: 3%; height: 10%; border-radius: 30%; }
+.zone-speaker-left { top: 45%; left: 38.6%; }
+.zone-speaker-right { top: 44%; right: 45%; }
 .zone-speaker .hover-tip { font-size: 10px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
 .zone-speaker:hover .hover-tip { opacity: 1; }
+
+.speaker-label {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px; color: #fff; font-weight: 600;
+  white-space: nowrap; pointer-events: none;
+}
 
 .hover-tip {
   position: absolute; bottom: -8px; left: 50%;
@@ -2740,68 +2913,97 @@ onUnmounted(() => {
 }
 .report-back-btn:hover { background: rgba(255,255,255,0.1); color: #E8E2D8; }
 
-/* 报告生成入口 —— 像素简约风 */
-.report-gen-wrap {
+/* 报告生成入口 — 温馨引导 */
+.report-intro {
+  padding: 8px 16px 24px;
+  text-align: center;
+}
+.report-intro-quote {
+  margin-bottom: 20px;
+}
+.report-intro-quote p {
+  display: inline;
+  font-size: 15px; color: rgba(232,226,216,0.5);
+  font-style: italic; line-height: 1.6;
+}
+.rq-mark {
+  font-size: 22px; color: rgba(127,179,166,0.35);
+  vertical-align: middle; margin: 0 6px;
+}
+.report-intro-highlights {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin-bottom: 20px;
+}
+.rhi-item {
   display: flex; flex-direction: column; align-items: center;
-  text-align: center; padding: 20px 16px;
+  padding: 0 18px;
 }
-.report-pixel-card {
-  width: 100%; max-width: 320px;
-  background: rgba(20,20,24,0.6);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 4px;
-  padding: 28px 24px;
-  position: relative;
+.rhi-num {
+  font-size: 28px; font-weight: 700; color: #E8E2D8;
+  line-height: 1.2;
 }
-.report-pixel-card::before {
-  content: '';
-  position: absolute; top: -1px; left: 20px; right: 20px;
-  height: 2px; background: #7FB3A6;
+.rhi-label {
+  font-size: 11px; color: rgba(232,226,216,0.35);
+  margin-top: 2px; letter-spacing: 1px;
 }
-.rp-deco {
-  display: flex; justify-content: center; gap: 6px; margin-bottom: 16px;
+.rhi-divider {
+  width: 1px; height: 32px; background: rgba(255,255,255,0.06);
 }
-.rp-pixel {
-  font-size: 10px; color: rgba(127,179,166,0.4);
-  font-family: 'Courier New', monospace; line-height: 1;
+.report-intro-text {
+  font-size: 13px; color: rgba(232,226,216,0.5);
+  line-height: 1.8; margin-bottom: 24px;
 }
-.rp-icon { font-size: 32px; margin-bottom: 12px; }
-.rp-title {
-  font-size: 18px; font-weight: 600; color: #E8E2D8;
-  letter-spacing: 2px; margin-bottom: 4px;
-}
-.rp-subtitle {
-  font-size: 10px; color: rgba(127,179,166,0.5);
-  font-family: 'Courier New', monospace;
-  letter-spacing: 3px; text-transform: uppercase;
-  margin-bottom: 16px;
-}
-.rp-line {
-  width: 40px; height: 1px;
-  background: rgba(255,255,255,0.1);
-  margin: 0 auto 16px;
-}
-.rp-desc {
-  font-size: 12px; color: rgba(232,226,216,0.4);
-  line-height: 1.6; margin-bottom: 24px;
-  font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
-}
-.rp-btn {
-  width: 100%; padding: 12px;
-  background: transparent;
-  border: 1px solid rgba(127,179,166,0.35);
-  border-radius: 2px;
-  color: #7FB3A6;
-  font-size: 13px; font-weight: 500;
-  letter-spacing: 1px;
+.report-intro-btn {
+  width: 100%; max-width: 260px; padding: 12px;
+  background: #7FB3A6; border: none; border-radius: 12px;
+  color: #1A1A1E; font-size: 14px; font-weight: 600;
   cursor: pointer; transition: all 0.2s;
-  font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
 }
-.rp-btn:hover {
+.report-intro-btn:hover {
+  background: #8EC4B6; transform: scale(1.02);
+}
+.report-intro-btn:disabled { opacity: 0.5; cursor: wait; }
+
+/* 报告空状态 */
+.report-empty {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 24px 16px 32px;
+}
+.report-empty-art {
+  position: relative; margin-bottom: 20px;
+}
+.re-seed {
+  font-size: 48px; display: block;
+  animation: seedFloat 3s ease-in-out infinite;
+}
+.re-soil {
+  width: 40px; height: 4px;
+  background: rgba(127,179,166,0.2);
+  border-radius: 2px; margin: 4px auto 0;
+}
+@keyframes seedFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.report-empty-title {
+  font-size: 17px; font-weight: 600; color: #E8E2D8;
+  margin-bottom: 10px;
+}
+.report-empty-text {
+  font-size: 13px; color: rgba(232,226,216,0.4);
+  line-height: 1.8; margin-bottom: 24px;
+}
+.report-empty-btn {
+  width: 100%; max-width: 240px; padding: 12px;
+  background: transparent; border: 1px solid rgba(127,179,166,0.35);
+  border-radius: 12px; color: #7FB3A6;
+  font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.report-empty-btn:hover {
   background: rgba(127,179,166,0.08);
   border-color: rgba(127,179,166,0.55);
 }
-.rp-btn:disabled { opacity: 0.4; cursor: wait; }
 
 /* 报告加载 */
 .report-loading {
@@ -4230,4 +4432,172 @@ onUnmounted(() => {
   .vp-header { padding: 10px 14px; }
   .vp-title { font-size: 13px; }
 }
+
+/* ═══════════ 修改密码弹窗 ═══════════ */
+.pwd-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+.pwd-modal-card {
+  background: #1E1E24; border-radius: 20px; padding: 28px 24px 20px;
+  width: 300px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+}
+.pwd-modal-card h4 { margin: 0 0 18px; font-size: 18px; color: #E8E2D8; text-align: center; }
+.pwd-modal-card input {
+  width: 100%; padding: 10px 14px; border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 10px; font-size: 14px; outline: none; margin-bottom: 12px;
+  box-sizing: border-box; background: rgba(255,255,255,0.03); color: #E8E2D8;
+  transition: border-color 0.2s;
+}
+.pwd-modal-card input::placeholder { color: rgba(232,226,216,0.3); }
+.pwd-modal-card input:focus { border-color: #7FB3A6; }
+.pwd-modal-btns { display: flex; gap: 10px; margin-top: 4px; }
+.pwd-modal-cancel {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
+  background: rgba(255,255,255,0.06); color: #D0C8C0; text-align: center;
+  border: none; cursor: pointer; transition: background 0.2s;
+}
+.pwd-modal-cancel:hover { background: rgba(255,255,255,0.1); }
+.pwd-modal-confirm {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
+  background: #7FB3A6; color: #1A1A1E; text-align: center;
+  border: none; cursor: pointer; font-weight: 600;
+  transition: background 0.2s;
+}
+.pwd-modal-confirm:hover { background: #8EC4B6; }
+.pwd-modal-msg { text-align: center; margin: 12px 0 0; font-size: 13px; }
+.pwd-modal-msg.success { color: #7FB3A6; }
+.pwd-modal-msg.error { color: #D4776A; }
+
+/* ═══════════ 洛阳地铁转场动画 ═══════════ */
+.metro-transition {
+  position: fixed; inset: 0; z-index: 300;
+  overflow: hidden;
+}
+
+/* 背景图片 */
+.metro-bg {
+  position: absolute; inset: 0;
+  transition: filter 1.2s ease, transform 1.2s ease;
+}
+.metro-bg img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+
+/* 两侧窗外模糊 — 模拟运动感 */
+.metro-window {
+  position: absolute; top: 0; bottom: 0; width: 22%;
+  opacity: 0; transition: opacity 0.8s ease;
+  background: linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0));
+}
+.metro-window-left { left: 0; }
+.metro-window-right { right: 0; }
+
+/* Phase 1~3: 运动感启动，窗外模糊 */
+.phase-1 .metro-window,
+.phase-2 .metro-window,
+.phase-3 .metro-window {
+  opacity: 1;
+}
+.phase-1 .metro-window-left,
+.phase-2 .metro-window-left,
+.phase-3 .metro-window-left {
+  animation: window-blur-left 1.2s ease-in-out infinite;
+  background: linear-gradient(to right, rgba(200,220,255,0.08), rgba(255,255,255,0));
+}
+.phase-1 .metro-window-right,
+.phase-2 .metro-window-right,
+.phase-3 .metro-window-right {
+  animation: window-blur-right 1.2s ease-in-out infinite;
+  background: linear-gradient(to left, rgba(200,220,255,0.08), rgba(255,255,255,0));
+}
+@keyframes window-blur-left {
+  0%, 100% { backdrop-filter: blur(2px) brightness(1); transform: translateX(0); }
+  50% { backdrop-filter: blur(8px) brightness(0.92); transform: translateX(-3px); }
+}
+@keyframes window-blur-right {
+  0%, 100% { backdrop-filter: blur(2px) brightness(1); transform: translateX(0); }
+  50% { backdrop-filter: blur(8px) brightness(0.92); transform: translateX(3px); }
+}
+
+/* 速度线 */
+.speed-lines {
+  position: absolute; inset: 0; pointer-events: none;
+  opacity: 0; transition: opacity 0.5s ease;
+}
+.phase-1 .speed-lines,
+.phase-2 .speed-lines,
+.phase-3 .speed-lines {
+  opacity: 1;
+}
+.sl-line {
+  position: absolute; left: -30%; width: 30%; height: 1.5px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 1px;
+  animation: speed-line 0.5s linear infinite;
+}
+@keyframes speed-line {
+  0% { transform: translateX(0) scaleX(0.5); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateX(450%) scaleX(1.5); opacity: 0; }
+}
+
+/* 加载文字 */
+.metro-loading {
+  position: absolute; bottom: 14%; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; opacity: 1; transition: opacity 0.5s ease;
+}
+.phase-2 .metro-loading,
+.phase-3 .metro-loading {
+  opacity: 0;
+}
+.ml-train { font-size: 38px; animation: train-bounce 0.9s ease-in-out infinite; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
+@keyframes train-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
+}
+.ml-text { font-size: 15px; color: rgba(255,255,255,0.9); font-weight: 500; letter-spacing: 3px; text-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+.ml-track {
+  width: 140px; height: 3px; background: rgba(255,255,255,0.12); border-radius: 2px; overflow: hidden;
+}
+.ml-progress {
+  width: 0%; height: 100%; background: #7FB3A6; border-radius: 2px;
+  animation: track-progress 3.5s ease-in-out forwards;
+}
+@keyframes track-progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+/* 整体模糊遮罩 */
+.metro-blur-overlay {
+  position: absolute; inset: 0;
+  backdrop-filter: blur(0px); opacity: 0;
+  transition: backdrop-filter 1.2s ease, opacity 0.8s ease;
+  background: rgba(0,0,0,0);
+}
+.phase-2 .metro-blur-overlay {
+  backdrop-filter: blur(10px); opacity: 1;
+  background: rgba(0,0,0,0.25);
+}
+.phase-3 .metro-blur-overlay {
+  backdrop-filter: blur(24px); opacity: 1;
+  background: rgba(0,0,0,0.55);
+}
+
+/* 白屏遮罩 */
+.metro-white-overlay {
+  position: absolute; inset: 0; background: #fff;
+  opacity: 0; transition: opacity 0.8s ease;
+}
+.phase-3 .metro-white-overlay {
+  opacity: 1;
+}
+
+/* transition 进入/离开 */
+.transition-fade-enter-active { transition: opacity 0.3s ease; }
+.transition-fade-leave-active { transition: opacity 0.6s ease; }
+.transition-fade-enter-from, .transition-fade-leave-to { opacity: 0; }
 </style>

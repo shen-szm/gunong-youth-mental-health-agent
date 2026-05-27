@@ -72,6 +72,33 @@
       </div>
     </div>
 
+    <!-- 账号管理 -->
+    <div class="section">
+      <div class="section-title">账号管理</div>
+      <div class="menu-card">
+        <div class="setting-row">
+          <span class="setting-icon">🔑</span>
+          <span class="setting-label">修改密码</span>
+          <button class="save-btn" @click="showPwdModal = true">修改</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗 -->
+    <div class="modal-overlay" v-if="showPwdModal" @click.self="showPwdModal = false">
+      <div class="modal-card">
+        <h4>修改密码</h4>
+        <input class="modal-input" v-model="oldPwd" type="password" placeholder="请输入旧密码" />
+        <input class="modal-input" v-model="newPwd1" type="password" placeholder="请输入新密码（至少6位）" />
+        <input class="modal-input" v-model="newPwd2" type="password" placeholder="请再次输入新密码" />
+        <div class="modal-btns">
+          <button class="modal-cancel" @click="showPwdModal = false">取消</button>
+          <button class="modal-confirm" @click="handleChangePwd">确认修改</button>
+        </div>
+        <p v-if="pwdMsg" :class="['pwd-msg', pwdOk ? 'success' : 'error']">{{ pwdMsg }}</p>
+      </div>
+    </div>
+
     <!-- 管理员入口 -->
     <div class="section" v-if="userStore.isAdmin">
       <div class="section-title">系统</div>
@@ -93,6 +120,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile } from '../api/user'
+import { changePassword } from '../api/user'
 import { getMoodStats } from '../api/mood'
 import { getChatHistory } from '../api/chat'
 
@@ -144,6 +172,32 @@ async function saveNickname() {
 
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) { userStore.logout(); router.push('/login') }
+}
+
+// 修改密码
+const showPwdModal = ref(false)
+const oldPwd = ref('')
+const newPwd1 = ref('')
+const newPwd2 = ref('')
+const pwdMsg = ref('')
+const pwdOk = ref(false)
+
+async function handleChangePwd() {
+  pwdMsg.value = ''
+  if (!oldPwd.value) { pwdMsg.value = '请输入旧密码'; return }
+  if (!newPwd1.value.trim()) { pwdMsg.value = '请输入新密码'; return }
+  if (newPwd1.value !== newPwd2.value) { pwdMsg.value = '两次输入的新密码不一致'; return }
+  if (newPwd1.value.length < 6) { pwdMsg.value = '新密码至少6位'; return }
+  try {
+    await changePassword(Number(userStore.userId), oldPwd.value, newPwd1.value, newPwd2.value)
+    pwdOk.value = true
+    pwdMsg.value = '密码修改成功！'
+    oldPwd.value = ''; newPwd1.value = ''; newPwd2.value = ''
+    setTimeout(() => { showPwdModal.value = false; pwdMsg.value = ''; pwdOk.value = false }, 1500)
+  } catch (e) {
+    pwdOk.value = false
+    pwdMsg.value = e.response?.data?.detail || '修改失败'
+  }
 }
 
 onMounted(loadStats)
@@ -276,4 +330,38 @@ onMounted(loadStats)
   transition: all 0.2s;
 }
 .logout-btn:hover { background: #FFF5F3; border-color: #D4776A; }
+
+/* 修改密码弹窗 */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal-card {
+  background: white; border-radius: 20px; padding: 28px 24px 20px;
+  width: 300px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.modal-card h4 { margin: 0 0 18px; font-size: 18px; color: #3A3530; text-align: center; }
+.modal-input {
+  width: 100%; padding: 10px 14px; border: 1.5px solid #E8E0D8;
+  border-radius: 10px; font-size: 14px; outline: none; margin-bottom: 12px;
+  box-sizing: border-box; transition: border-color 0.2s;
+}
+.modal-input:focus { border-color: #8EA89A; }
+.modal-btns { display: flex; gap: 10px; margin-top: 4px; }
+.modal-cancel {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
+  background: #F5F0EC; color: #5A5450; text-align: center;
+  transition: background 0.2s;
+}
+.modal-cancel:hover { background: #EBE4DC; }
+.modal-confirm {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
+  background: #8EA89A; color: white; text-align: center;
+  transition: background 0.2s;
+}
+.modal-confirm:hover { background: #7A9A8C; }
+.pwd-msg { text-align: center; margin: 12px 0 0; font-size: 13px; }
+.pwd-msg.success { color: #5A8070; }
+.pwd-msg.error { color: #C06860; }
 </style>

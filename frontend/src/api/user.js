@@ -23,5 +23,9 @@ export function resetPassword(userId, adminId, newPassword) {
   return instance.post(`/reset-password/${userId}`, null, { params: { admin_id: adminId, new_password: newPassword } });
 }
 
+export function changePassword(userId, oldPassword, newPassword1, newPassword2) {
+  return instance.post("/change-password", { user_id: userId, old_password: oldPassword, new_password1: newPassword1, new_password2: newPassword2 });
+}
+
 // 导出基础实例供AdminView使用
 export default instance;
