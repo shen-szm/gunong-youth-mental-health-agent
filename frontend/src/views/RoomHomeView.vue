@@ -1001,7 +1001,15 @@
 
           <!-- 快捷按钮 -->
           <div class="quick-wrap">
-            <div class="quick-scroll">
+            <div
+              class="quick-scroll"
+              ref="quickScroll"
+              @wheel="onQuickWheel"
+              @mousedown="onQuickMouseDown"
+              @mousemove="onQuickMouseMove"
+              @mouseup="onQuickMouseUp"
+              @mouseleave="onQuickMouseUp"
+            >
               <button v-for="e in emotions" :key="e.text" class="quick-btn" @click="sendChatMsg(e.text)">
                 <span>{{ e.emoji }}</span> {{ e.text }}
               </button>
@@ -1071,19 +1079,30 @@
           </div>
 
           <!-- 生成报告入口 -->
-          <div v-if="!reportData" class="report-gen-wrap">
-            <div class="report-gen-icon">📊</div>
-            <p class="report-gen-title">生成你的情绪报告</p>
-            <p class="report-gen-desc">基于你近期的情绪记录，为你定制专属心理健康分析</p>
-            <button class="inline-gen-btn" @click="generateReport" :disabled="reportLoading">
-              {{ reportLoading ? '正在生成...' : '✨ 立即生成' }}
-            </button>
+          <div v-if="!reportData && !reportLoading && chatMessages.length > 0" class="report-gen-wrap">
+            <div class="report-pixel-card">
+              <div class="rp-deco">
+                <span class="rp-pixel">■</span>
+                <span class="rp-pixel">▣</span>
+                <span class="rp-pixel">■</span>
+              </div>
+              <div class="rp-icon">📊</div>
+              <div class="rp-title">情绪报告</div>
+              <div class="rp-subtitle">MOOD REPORT</div>
+              <div class="rp-line"></div>
+              <div class="rp-desc">基于近期情绪记录 · 定制心理健康分析</div>
+              <button class="rp-btn" @click="generateReport" :disabled="reportLoading">
+                {{ reportLoading ? '生成中...' : '开始生成 →' }}
+              </button>
+            </div>
           </div>
 
           <!-- 报告加载 -->
-          <div v-if="reportLoading" class="empty-state">
-            <div class="empty-icon">📊</div>
-            <p>正在分析你的情绪数据...</p>
+          <div v-if="reportLoading" class="report-loading">
+            <div class="rl-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <p class="rl-text">正在分析情绪数据...</p>
           </div>
 
           <!-- 报告内容 -->
@@ -1108,7 +1127,7 @@
           </div>
 
           <!-- 空状态 -->
-          <div v-if="!reportData && !reportLoading" class="empty-state">
+          <div v-if="!reportData && !reportLoading && chatMessages.length === 0" class="empty-state">
             <div class="empty-icon">📝</div>
             <p>还没有情绪数据，先去倾诉一下吧</p>
             <button class="go-chat-btn" @click="showReportPanel = false; goToChat()">去倾诉 →</button>
@@ -2217,6 +2236,41 @@ const emotions = [
   { emoji: '🌙', text: '夜猫子还没睡' },
 ]
 
+const quickScroll = ref(null)
+let isDragging = false
+let dragStartX = 0
+let dragScrollLeft = 0
+
+function onQuickWheel(e) {
+  if (!quickScroll.value) return
+  // 垂直滚轮转为水平滚动
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    quickScroll.value.scrollLeft += e.deltaY
+    e.preventDefault()
+  }
+}
+
+function onQuickMouseDown(e) {
+  if (!quickScroll.value) return
+  isDragging = true
+  dragStartX = e.pageX - quickScroll.value.offsetLeft
+  dragScrollLeft = quickScroll.value.scrollLeft
+  quickScroll.value.style.cursor = 'grabbing'
+}
+
+function onQuickMouseMove(e) {
+  if (!isDragging || !quickScroll.value) return
+  e.preventDefault()
+  const x = e.pageX - quickScroll.value.offsetLeft
+  const walk = (x - dragStartX) * 1.2
+  quickScroll.value.scrollLeft = dragScrollLeft - walk
+}
+
+function onQuickMouseUp() {
+  isDragging = false
+  if (quickScroll.value) quickScroll.value.style.cursor = 'grab'
+}
+
 function getEmotionEmoji(emotion) {
   const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡', '疲惫': '😴' }
   return map[emotion] || '🙂'
@@ -2686,14 +2740,94 @@ onUnmounted(() => {
 }
 .report-back-btn:hover { background: rgba(255,255,255,0.1); color: #E8E2D8; }
 
-/* 报告生成入口 */
+/* 报告生成入口 —— 像素简约风 */
 .report-gen-wrap {
   display: flex; flex-direction: column; align-items: center;
-  text-align: center; padding: 24px 16px;
+  text-align: center; padding: 20px 16px;
 }
-.report-gen-icon { font-size: 48px; margin-bottom: 16px; }
-.report-gen-title { font-size: 18px; font-weight: 600; color: #E8E2D8; margin-bottom: 8px; }
-.report-gen-desc { font-size: 13px; color: rgba(232,226,216,0.5); margin-bottom: 24px; line-height: 1.6; }
+.report-pixel-card {
+  width: 100%; max-width: 320px;
+  background: rgba(20,20,24,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 28px 24px;
+  position: relative;
+}
+.report-pixel-card::before {
+  content: '';
+  position: absolute; top: -1px; left: 20px; right: 20px;
+  height: 2px; background: #7FB3A6;
+}
+.rp-deco {
+  display: flex; justify-content: center; gap: 6px; margin-bottom: 16px;
+}
+.rp-pixel {
+  font-size: 10px; color: rgba(127,179,166,0.4);
+  font-family: 'Courier New', monospace; line-height: 1;
+}
+.rp-icon { font-size: 32px; margin-bottom: 12px; }
+.rp-title {
+  font-size: 18px; font-weight: 600; color: #E8E2D8;
+  letter-spacing: 2px; margin-bottom: 4px;
+}
+.rp-subtitle {
+  font-size: 10px; color: rgba(127,179,166,0.5);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.rp-line {
+  width: 40px; height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 0 auto 16px;
+}
+.rp-desc {
+  font-size: 12px; color: rgba(232,226,216,0.4);
+  line-height: 1.6; margin-bottom: 24px;
+  font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
+}
+.rp-btn {
+  width: 100%; padding: 12px;
+  background: transparent;
+  border: 1px solid rgba(127,179,166,0.35);
+  border-radius: 2px;
+  color: #7FB3A6;
+  font-size: 13px; font-weight: 500;
+  letter-spacing: 1px;
+  cursor: pointer; transition: all 0.2s;
+  font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
+}
+.rp-btn:hover {
+  background: rgba(127,179,166,0.08);
+  border-color: rgba(127,179,166,0.55);
+}
+.rp-btn:disabled { opacity: 0.4; cursor: wait; }
+
+/* 报告加载 */
+.report-loading {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 16px;
+}
+.rl-dots {
+  display: flex; gap: 6px; margin-bottom: 16px;
+}
+.rl-dots span {
+  width: 6px; height: 6px;
+  background: rgba(127,179,166,0.4);
+  border-radius: 1px;
+  animation: rlPulse 1.2s infinite both;
+}
+.rl-dots span:nth-child(2) { animation-delay: 0.2s; }
+.rl-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes rlPulse {
+  0%,80%,100% { opacity: 0.3; transform: scale(1); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+.rl-text {
+  font-size: 12px; color: rgba(232,226,216,0.4);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+}
 
 /* ═══════════ 个人中心面板 ═══════════ */
 /* 背景遮罩 */
@@ -3521,7 +3655,9 @@ onUnmounted(() => {
   display: flex; gap: 8px; padding: 2px 16px 6px; overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  cursor: grab;
 }
+.chat-panel .quick-scroll:active { cursor: grabbing; }
 .chat-panel .quick-scroll::-webkit-scrollbar { display: none; }
 .chat-panel .quick-btn {
   white-space: nowrap; flex-shrink: 0;
