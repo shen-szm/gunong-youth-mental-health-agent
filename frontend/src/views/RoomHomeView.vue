@@ -15,12 +15,21 @@
       <img class="room-bg" :src="bgImage" alt="温馨房间" />
     </div>
 
+    <!-- 版本标识 -->
+    <div class="version-badge">盛语 V1</div>
+
     <!-- 顶部信息栏 -->
     <div class="top-bar">
       <div class="clock">{{ currentTime }}</div>
       <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
+
+    <!-- 全局音乐开关 -->
+    <button class="global-music-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
+      <span v-if="musicOn">🔊</span>
+      <span v-else>🔇</span>
+    </button>
 
     <!-- 窗外天气浮层 -->
     <div class="weather-float" @click="refreshWeather">
@@ -2190,6 +2199,14 @@ const emotions = [
   { emoji: '🌈', text: '来点正能量' },
   { emoji: '✨', text: '感恩小确幸' },
   { emoji: '🎯', text: '聊聊小目标' },
+  { emoji: '🍀', text: '今天运气不错' },
+  { emoji: '☀️', text: '晒晒太阳充充电' },
+  { emoji: '🌸', text: '被美好治愈了' },
+  { emoji: '🎉', text: '值得庆祝的事' },
+  { emoji: '🤗', text: '想找人抱抱' },
+  { emoji: '📝', text: '记录一下心情' },
+  { emoji: '🎵', text: '想听歌放松下' },
+  { emoji: '🌙', text: '夜猫子还没睡' },
 ]
 
 function getEmotionEmoji(emotion) {
@@ -2386,6 +2403,27 @@ onUnmounted(() => {
   font-size: 12px; margin-top: 2px; opacity: 0.75;
   text-shadow: 0 1px 6px rgba(0,0,0,0.2);
 }
+
+/* 版本标识 */
+.version-badge {
+  position: absolute; top: 12px; left: 12px; z-index: 35;
+  font-size: 11px; font-weight: 500;
+  padding: 3px 10px; border-radius: 10px;
+  background: rgba(0,0,0,0.25); color: rgba(232,226,216,0.6);
+  backdrop-filter: blur(6px); pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
+/* 全局音乐开关 */
+.global-music-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 35;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0,0,0,0.25); border: none;
+  backdrop-filter: blur(6px); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transition: all 0.2s;
+}
+.global-music-btn:hover { background: rgba(0,0,0,0.4); transform: scale(1.1); }
 
 /* ═══════════ 天气浮层 ═══════════ */
 .weather-float {

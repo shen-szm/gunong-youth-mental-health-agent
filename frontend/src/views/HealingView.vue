@@ -111,6 +111,32 @@ const musicRecommend = ref(null)
 const playingNoise = ref(null)
 const noiseAudio = ref(null)
 
+// ═══ 本地 fallback 数据（当后端 API 不可用时显示）═══
+const DEFAULT_ENERGY = { level: 1, level_name: '萌芽', progress: 0.35, total_points: 350 }
+const DEFAULT_TASKS = [
+  { id: 1, desc: '深呼吸三次，感受空气流入肺部', points: 10, completed: false },
+  { id: 2, desc: '写下今天让你感恩的一件小事', points: 15, completed: false },
+  { id: 3, desc: '听一首喜欢的歌，闭上眼睛感受旋律', points: 10, completed: false },
+  { id: 4, desc: '给窗外的一棵树拍张照片', points: 20, completed: false },
+]
+const DEFAULT_TRAVELS = [
+  { name: '楼下公园漫步', desc: '去最近的小公园走走，看看花草树木', emoji: '🌳', duration: '15分钟' },
+  { name: '街角咖啡馆', desc: '点一杯喜欢的饮品，看窗外人来人往', emoji: '☕', duration: '30分钟' },
+  { name: '日落天台', desc: '找一个高处，静静等待日落', emoji: '🌅', duration: '20分钟' },
+  { name: '书店漫游', desc: '去书店随机翻开一本书，读任意一页', emoji: '📚', duration: '40分钟' },
+]
+const DEFAULT_NOISES = [
+  { id: 'rain', name: '细雨绵绵', desc: '窗外小雨', emoji: '🌧️', url: '' },
+  { id: 'thunder', name: '雷雨夜', desc: '夏夜雷暴', emoji: '⛈️', url: '' },
+  { id: 'forest', name: '林间鸟鸣', desc: '清晨森林', emoji: '🐦', url: '' },
+  { id: 'waves', name: '海浪拍岸', desc: '海边微风', emoji: '🌊', url: '' },
+]
+const DEFAULT_MUSIC = {
+  song: { id: 25706282, name: 'Weightless', artist: 'Marconi Union' },
+  emotion_label: '焦虑缓解',
+  reason: '这首被神经科学家认证为"世界上最放松的音乐"，能有效降低 65% 的焦虑感。闭上眼睛，让音符带走你的烦恼。',
+}
+
 onMounted(async () => {
   const userId = Number(userStore.userId)
   try {
@@ -122,9 +148,9 @@ onMounted(async () => {
       axios.get(`${API}/api/music/whitenoise/recommend`, { params: { user_id: userId } }).catch(() => ({ data: { sounds: [], reason: '' } })),
       axios.get(`${API}/api/music/recommend`, { params: { user_id: userId } }).catch(() => ({ data: null })),
     ])
-    energy.value = energyRes.data
-    tasks.value = checklistRes.data?.tasks || []
-    travels.value = travelRes.data?.suggestions || []
+    energy.value = energyRes.data || DEFAULT_ENERGY
+    tasks.value = checklistRes.data?.tasks?.length ? checklistRes.data.tasks : DEFAULT_TASKS
+    travels.value = travelRes.data?.suggestions?.length ? travelRes.data.suggestions : DEFAULT_TRAVELS
 
     // 白噪音：优先显示推荐的
     if (noiseRecRes.data?.sounds?.length) {
@@ -132,14 +158,22 @@ onMounted(async () => {
       noiseReason.value = noiseRecRes.data.reason || ''
     } else if (noiseRes.data?.sounds?.length) {
       whiteNoises.value = noiseRes.data.sounds.slice(0, 4)
+    } else {
+      whiteNoises.value = DEFAULT_NOISES
+      noiseReason.value = '根据你最近的情绪状态，推荐以下白噪音帮助你放松'
     }
 
     // AI音乐推荐
-    if (musicRes.data?.song) {
-      musicRecommend.value = musicRes.data
-    }
+    musicRecommend.value = musicRes.data?.song ? musicRes.data : DEFAULT_MUSIC
   } catch (e) {
     console.error('加载治愈中心失败', e)
+    // 全部使用 fallback
+    energy.value = DEFAULT_ENERGY
+    tasks.value = DEFAULT_TASKS
+    travels.value = DEFAULT_TRAVELS
+    whiteNoises.value = DEFAULT_NOISES
+    noiseReason.value = '根据你最近的情绪状态，推荐以下白噪音帮助你放松'
+    musicRecommend.value = DEFAULT_MUSIC
   }
 })
 
@@ -304,8 +338,30 @@ function playRecommendSong() {
 .tc-desc { font-size: 12px; color: #777; margin-top: 4px; }
 .tc-time { font-size: 11px; color: #5B8C7E; margin-top: 4px; }
 
-/* inline 弹窗模式 */
+/* inline 弹窗模式 - 适配深色背景 */
 .healing-page.inline-mode { background: transparent; padding: 0; min-height: auto; }
+.healing-page.inline-mode .section h2 { color: #7FB3A6; font-size: 15px; }
+.healing-page.inline-mode .energy-card { margin: 0 0 12px; }
+.healing-page.inline-mode .section { margin: 0 0 14px; }
+.healing-page.inline-mode .music-recommend,
+.healing-page.inline-mode .noise-card,
+.healing-page.inline-mode .checklist-item,
+.healing-page.inline-mode .travel-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+.healing-page.inline-mode .mr-name,
+.healing-page.inline-mode .nc-name,
+.healing-page.inline-mode .ci-desc,
+.healing-page.inline-mode .tc-name { color: #E8E2D8; }
+.healing-page.inline-mode .mr-artist,
+.healing-page.inline-mode .nc-desc,
+.healing-page.inline-mode .tc-desc,
+.healing-page.inline-mode .tc-time { color: rgba(232,226,216,0.55); }
+.healing-page.inline-mode .mr-reason { background: rgba(255,255,255,0.05); }
+.healing-page.inline-mode .mr-reason p { color: rgba(232,226,216,0.7); }
+.healing-page.inline-mode .mr-tag { background: rgba(127,179,166,0.2); color: #7FB3A6; }
+.healing-page.inline-mode .loading-hint,
+.healing-page.inline-mode .empty-hint { color: rgba(232,226,216,0.4); }
+.healing-page.inline-mode .noise-card.playing { border-color: #7FB3A6; background: rgba(127,179,166,0.1); }
+.healing-page.inline-mode .nc-status { color: #7FB3A6; }
 .inline-title { text-align: center; margin-bottom: 16px; }
-.inline-title h2 { margin: 0; font-size: 18px; color: #333; }
+.inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
 </style>
