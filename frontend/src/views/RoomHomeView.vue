@@ -4,7 +4,10 @@
     <!-- ══ 欢迎遮罩：点击任意处进入 ══ -->
     <Transition name="splash-fade">
       <div v-if="showSplash" class="splash" @click="enterApp">
-        <div class="splash-logo">咕哝</div>
+        <div class="splash-logo">
+          <span>咕哝</span>
+          <span class="splash-version">V1</span>
+        </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>
       </div>
@@ -14,9 +17,6 @@
     <div class="bg-wrap">
       <img class="room-bg" :src="bgImage" alt="温馨房间" />
     </div>
-
-    <!-- 版本标识 -->
-    <div class="version-badge">盛语 V1</div>
 
     <!-- 顶部信息栏 -->
     <div class="top-bar">
@@ -1070,10 +1070,15 @@
             <p>了解你的心理健康状态</p>
           </div>
 
-          <!-- 生成报告按钮 -->
-          <button v-if="!reportData" class="inline-gen-btn" @click="generateReport" :disabled="reportLoading">
-            {{ reportLoading ? '正在生成...' : '✨ 生成我的情绪报告' }}
-          </button>
+          <!-- 生成报告入口 -->
+          <div v-if="!reportData" class="report-gen-wrap">
+            <div class="report-gen-icon">📊</div>
+            <p class="report-gen-title">生成你的情绪报告</p>
+            <p class="report-gen-desc">基于你近期的情绪记录，为你定制专属心理健康分析</p>
+            <button class="inline-gen-btn" @click="generateReport" :disabled="reportLoading">
+              {{ reportLoading ? '正在生成...' : '✨ 立即生成' }}
+            </button>
+          </div>
 
           <!-- 报告加载 -->
           <div v-if="reportLoading" class="empty-state">
@@ -1097,6 +1102,9 @@
               <h3>🌈 每日寄语</h3>
               <p class="report-affirmation">「{{ reportData.positive_affirmation }}」</p>
             </div>
+            <button class="report-back-btn" @click="reportData = null">
+              <span>←</span> 返回重新生成
+            </button>
           </div>
 
           <!-- 空状态 -->
@@ -2362,6 +2370,15 @@ onUnmounted(() => {
   font-size: 52px; font-weight: 700; letter-spacing: 8px;
   color: #F0EAE0;
   text-shadow: 0 2px 20px rgba(255,220,160,0.25);
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.splash-version {
+  font-size: 14px; font-weight: 700;
+  padding: 4px 12px; border-radius: 10px;
+  background: linear-gradient(135deg, #8B5CF6, #6366F1);
+  color: white; letter-spacing: 1px;
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.35);
+  flex-shrink: 0;
 }
 .splash-sub {
   font-size: 15px; color: rgba(220,215,210,0.7); letter-spacing: 2px;
@@ -2402,16 +2419,6 @@ onUnmounted(() => {
 .greeting-sub {
   font-size: 12px; margin-top: 2px; opacity: 0.75;
   text-shadow: 0 1px 6px rgba(0,0,0,0.2);
-}
-
-/* 版本标识 */
-.version-badge {
-  position: absolute; top: 12px; left: 12px; z-index: 35;
-  font-size: 11px; font-weight: 500;
-  padding: 3px 10px; border-radius: 10px;
-  background: rgba(0,0,0,0.25); color: rgba(232,226,216,0.6);
-  backdrop-filter: blur(6px); pointer-events: none;
-  letter-spacing: 0.5px;
 }
 
 /* 全局音乐开关 */
@@ -2670,6 +2677,23 @@ onUnmounted(() => {
   font-size: 14px; color: #E8C468; font-style: italic;
   text-align: center; line-height: 1.8;
 }
+.report-back-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 12px; border-radius: 12px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(232,226,216,0.6); font-size: 14px; cursor: pointer;
+  transition: all 0.2s; margin-top: 8px;
+}
+.report-back-btn:hover { background: rgba(255,255,255,0.1); color: #E8E2D8; }
+
+/* 报告生成入口 */
+.report-gen-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 24px 16px;
+}
+.report-gen-icon { font-size: 48px; margin-bottom: 16px; }
+.report-gen-title { font-size: 18px; font-weight: 600; color: #E8E2D8; margin-bottom: 8px; }
+.report-gen-desc { font-size: 13px; color: rgba(232,226,216,0.5); margin-bottom: 24px; line-height: 1.6; }
 
 /* ═══════════ 个人中心面板 ═══════════ */
 /* 背景遮罩 */
@@ -3484,18 +3508,28 @@ onUnmounted(() => {
   flex-shrink: 0; padding: 8px 0 6px;
   border-top: 1px solid rgba(255,255,255,0.06);
   background: rgba(25,25,30,0.7);
+  position: relative;
+}
+.chat-panel .quick-wrap::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, transparent, rgba(25,25,30,0.9));
+  pointer-events: none;
 }
 .chat-panel .quick-scroll {
-  display: flex; gap: 6px; padding: 0 16px; overflow-x: auto;
+  display: flex; gap: 8px; padding: 2px 16px 6px; overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 .chat-panel .quick-scroll::-webkit-scrollbar { display: none; }
 .chat-panel .quick-btn {
   white-space: nowrap; flex-shrink: 0;
-  padding: 6px 12px; border-radius: 14px;
-  background: rgba(255,255,255,0.08); color: #B8B0A6; font-size: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.2s; display: flex; align-items: center; gap: 4px;
-  cursor: pointer;
+  padding: 8px 16px; border-radius: 20px;
+  background: rgba(255,255,255,0.08); color: #B8B0A6; font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; -webkit-user-select: none;
 }
 .chat-panel .quick-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.14); }
 

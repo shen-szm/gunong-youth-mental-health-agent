@@ -331,11 +331,21 @@ async function loadStats() {
   } catch (e) { /* ignore */ }
 }
 
+const DEFAULT_COMPANIONS = [
+  { id: 'warm_friend', avatar: '🤗', name: '温暖朋友', desc: '永远站在你这边，陪你吐槽、陪你笑' },
+  { id: 'wise_elder', avatar: '🦉', name: '智慧长者', desc: '用经验和智慧，帮你理清纷乱的思绪' },
+  { id: 'energetic_buddy', avatar: '🐶', name: '活力 buddy', desc: '元气满满，专治各种不开心' },
+  { id: 'quiet_listener', avatar: '🐱', name: '安静倾听者', desc: '不说太多，但每一句都在乎' },
+  { id: 'funny_partner', avatar: '🤡', name: '幽默搭档', desc: '用笑声治愈一切烦恼' },
+]
+
 async function loadCompanions() {
   try {
     const res = await axios.get(`${API}/api/companion/list`)
     companions.value = res.data?.companions || []
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    companions.value = DEFAULT_COMPANIONS
+  }
 }
 
 async function startCompanion(c) {
@@ -445,10 +455,11 @@ function openDriftBottle() {
 /* 入口行 */
 .entry-row { display: flex; gap: 10px; margin: 0 16px 16px; }
 .companion-entry {
-  padding: 16px; background: white;
-  border-radius: 14px; display: flex; align-items: center;
+  padding: 14px 16px; background: white;
+  border-radius: 16px; display: flex; align-items: center;
   justify-content: space-between; cursor: pointer;
   transition: all 0.2s; border: 1px solid #e8e0d8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
 .companion-entry.half { flex: 1; margin: 0; }
 .companion-entry.bottle { background: linear-gradient(135deg, #fff, #f8f4f0); }
@@ -535,12 +546,13 @@ function openDriftBottle() {
 .cc-input button:disabled { background: #ccc; }
 
 /* 发布区域 */
-.post-area { margin: 0 16px 16px; padding: 16px; background: white; border-radius: 14px; }
-.mood-selector { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
+.post-area { margin: 0 16px 16px; padding: 14px 16px; background: white; border-radius: 16px; }
+.mood-selector { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .mood-selector::-webkit-scrollbar { display: none; }
 .mood-btn {
-  padding: 6px 12px; border-radius: 20px; border: 1px solid #e0e0e0;
+  padding: 8px 14px; border-radius: 20px; border: 1px solid #e8e8e8;
   background: #f8f8f8; font-size: 13px; cursor: pointer; transition: all 0.2s;
+  white-space: nowrap; flex-shrink: 0; user-select: none; -webkit-user-select: none;
 }
 .mood-btn.active { background: #5B8C7E; color: white; border-color: #5B8C7E; }
 
@@ -561,8 +573,11 @@ function openDriftBottle() {
 .feed { padding: 0 16px; }
 .treehole-card {
   display: flex; gap: 12px; padding: 16px;
-  background: white; border-radius: 14px; margin-bottom: 10px;
+  background: white; border-radius: 16px; margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: all 0.2s;
 }
+.treehole-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 .thc-mood { font-size: 28px; flex-shrink: 0; }
 .thc-body { flex: 1; }
 .thc-content { font-size: 14px; color: #333; line-height: 1.6; margin: 0 0 10px; }
@@ -599,6 +614,34 @@ function openDriftBottle() {
 .treehole-page.inline-mode .thc-time { color: rgba(232,226,216,0.35); }
 .treehole-page.inline-mode .thc-resonance { color: #7FB3A6; }
 .treehole-page.inline-mode .empty-hint { color: rgba(232,226,216,0.35); }
+
+/* inline 弹窗深色适配 */
+.treehole-page.inline-mode .companion-modal { background: rgba(0,0,0,0.5); }
+.treehole-page.inline-mode .companion-panel {
+  background: rgba(35,35,42,0.98);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.treehole-page.inline-mode .cp-header h3 { color: #E8E2D8; }
+.treehole-page.inline-mode .cp-close { color: rgba(232,226,216,0.5); }
+.treehole-page.inline-mode .cp-item:hover { background: rgba(255,255,255,0.06); }
+.treehole-page.inline-mode .cpi-name { color: #E8E2D8; }
+.treehole-page.inline-mode .cpi-desc { color: rgba(232,226,216,0.45); }
+.treehole-page.inline-mode .cpi-go { color: #7FB3A6; }
+.treehole-page.inline-mode .drift-mood { color: #7FB3A6; }
+.treehole-page.inline-mode .drift-text { color: #E8E2D8; }
+.treehole-page.inline-mode .drift-hint { color: rgba(232,226,216,0.35); }
+
+/* inline 陪伴对话深色适配 */
+.treehole-page.inline-mode .companion-chat { background: rgba(20,20,25,0.98); }
+.treehole-page.inline-mode .cc-header { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }
+.treehole-page.inline-mode .cc-header button { color: #7FB3A6; }
+.treehole-page.inline-mode .cc-header span { color: #E8E2D8; }
+.treehole-page.inline-mode .ccm-bubble { background: rgba(255,255,255,0.08); color: #E8E2D8; }
+.treehole-page.inline-mode .cc-msg.user .ccm-bubble { background: #5B8C7E; }
+.treehole-page.inline-mode .cc-input { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }
+.treehole-page.inline-mode .cc-input input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #E8E2D8; }
+.treehole-page.inline-mode .cc-input input::placeholder { color: rgba(232,226,216,0.35); }
+
 .inline-title { text-align: center; margin-bottom: 16px; }
 .inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
 </style>
