@@ -29,23 +29,9 @@
     </div>
 
     <!-- 音乐推荐按钮 -->
-    <button class="music-recommend-btn" @click="openMusicPanel" title="今日音乐推荐">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 18V5l12-2v13"/>
-        <circle cx="6" cy="18" r="3"/>
-        <circle cx="18" cy="16" r="3"/>
-      </svg>
-    </button>
+    <!-- 已改为热区形式，见下方 zone-speaker -->
 
-    <!-- 音乐切换按钮 -->
-    <button class="music-btn" @click="toggleMusic" :title="musicOn ? '关闭音乐' : '开启音乐'">
-      <svg v-if="musicOn" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-        <path d="M9 3v12.26A3 3 0 107.5 18c0-.17.02-.34.04-.5H7.5a.5.5 0 01-.5-.5V7H17v7.26A3 3 0 1015.5 17c0-.17.02-.34.04-.5H15.5a.5.5 0 01-.5-.5V3H9z"/>
-      </svg>
-      <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-        <path d="M9 3v12.26A3 3 0 107.5 18H7.5V7H17v5M3 3l18 18"/>
-      </svg>
-    </button>
+    <!-- 音乐切换按钮（隐藏，功能移至面板内） -->
 
     <!-- 交互热区 — 电脑（倾诉） -->
     <div class="hot-zone zone-monitor" @click="goToChat">
@@ -62,59 +48,62 @@
       <div class="window-label">出去看看</div>
     </div>
 
+    <!-- 交互热区 — 音响1（音乐推荐） -->
+    <div class="hot-zone zone-speaker zone-speaker-left" @click="openMusicPanel">
+      <div class="hover-tip">🎵 今日推荐</div>
+    </div>
+
+    <!-- 交互热区 — 音响2（音乐推荐） -->
+    <div class="hot-zone zone-speaker zone-speaker-right" @click="openMusicPanel">
+      <div class="hover-tip">🎵 今日推荐</div>
+    </div>
+
     <!-- 底部导航 -->
     <nav class="bottom-nav">
-      <button class="bnav-item bnav-home" @click="goToChat">
+      <button class="bnav-item" @click="goToChat">
         <div class="icon-wrap">
-          <!-- 像素风显示器图标 (16x16 网格) -->
-          <svg class="icon-outline" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" shape-rendering="crispEdges">
-            <!-- 显示器外框 -->
-            <rect x="2" y="1" width="12" height="9" fill="none"/>
-            <!-- 底座 -->
-            <rect x="6.5" y="11" width="3" height="1" fill="currentColor"/>
-            <rect x="7" y="10" width="2" height="1" fill="currentColor"/>
-            <!-- 底座底部 -->
-            <rect x="5" y="12" width="6" height="1" fill="currentColor"/>
-          </svg>
-          <svg class="icon-fill" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges">
-            <!-- 显示器外框 -->
-            <rect x="2" y="1" width="12" height="9"/>
-            <!-- 屏幕内部 -->
-            <rect x="3.5" y="2.5" width="9" height="6" fill="none" stroke="currentColor" stroke-width="0.8"/>
-            <!-- 底座 -->
-            <rect x="6.5" y="11" width="3" height="1"/>
-            <rect x="7" y="10" width="2" height="1"/>
-            <rect x="5" y="12" width="6" height="1"/>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
           </svg>
         </div>
         <span class="bnav-label">倾诉</span>
       </button>
-      <button class="bnav-item bnav-me" @click="goProfile">
+      <button class="bnav-item" @click="showHealingPanel = true">
         <div class="icon-wrap">
-          <!-- 像素风人物图标 (16x16 网格) -->
-          <svg class="icon-outline" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" shape-rendering="crispEdges">
-            <!-- 头部 -->
-            <rect x="6" y="1" width="4" height="4"/>
-            <!-- 身体 -->
-            <rect x="4" y="6" width="8" height="1"/>
-            <rect x="5" y="7" width="6" height="1"/>
-            <rect x="5" y="8" width="6" height="1"/>
-            <rect x="6" y="9" width="4" height="1"/>
-            <!-- 腿 -->
-            <rect x="6" y="10" width="1" height="2"/>
-            <rect x="9" y="10" width="1" height="2"/>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
           </svg>
-          <svg class="icon-fill" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges">
-            <!-- 头部 -->
-            <rect x="6" y="1" width="4" height="4"/>
-            <!-- 身体 -->
-            <rect x="4" y="6" width="8" height="1"/>
-            <rect x="5" y="7" width="6" height="1"/>
-            <rect x="5" y="8" width="6" height="1"/>
-            <rect x="6" y="9" width="4" height="1"/>
-            <!-- 腿 -->
-            <rect x="6" y="10" width="1" height="2"/>
-            <rect x="9" y="10" width="1" height="2"/>
+        </div>
+        <span class="bnav-label">治愈</span>
+      </button>
+      <button class="bnav-item" @click="showTreeHolePanel = true">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+            <line x1="9" y1="9" x2="9.01" y2="9"/>
+            <line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+        </div>
+        <span class="bnav-label">树洞</span>
+      </button>
+      <button class="bnav-item" @click="showReportPanel = true">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <span class="bnav-label">报告</span>
+      </button>
+      <button class="bnav-item" @click="goProfile">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
           </svg>
         </div>
         <span class="bnav-label">我的</span>
@@ -341,7 +330,7 @@
       <div v-if="showXianPanel" class="xian-fullscreen">
         <!-- 全屏西安场景图 -->
         <div class="xian-bg-wrap">
-          <img src="/images/西安.png" alt="西安古城" class="xian-bg-img" />
+          <img src="/images/xian.png" alt="西安古城" class="xian-bg-img" />
           <div class="xian-bg-vignette"></div>
         </div>
 
@@ -502,7 +491,7 @@
       <div v-if="showLuoyangPanel" class="xian-fullscreen luoyang-fullscreen">
         <!-- 全屏洛阳场景图 -->
         <div class="xian-bg-wrap">
-          <img src="/images/洛阳.png" alt="洛阳古城" class="xian-bg-img" />
+          <img src="/images/luoyang.png" alt="洛阳古城" class="xian-bg-img" />
           <div class="xian-bg-vignette"></div>
         </div>
 
@@ -653,7 +642,14 @@
 
           <!-- 标题 -->
           <div class="trend-header">
-            <h2>🎵 今日音乐推荐</h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+              <h2>🎵 今日音乐推荐</h2>
+              <button class="music-toggle-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
+                <svg v-if="musicOn" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 3v12.26A3 3 0 107.5 18c0-.17.02-.34.04-.5H7.5a.5.5 0 01-.5-.5V7H17v7.26A3 3 0 1015.5 17c0-.17.02-.34.04-.5H15.5a.5.5 0 01-.5-.5V3H9z"/></svg>
+                <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3v12.26A3 3 0 107.5 18H7.5V7H17v5M3 3l18 18"/></svg>
+                {{ musicOn ? '关音乐' : '开音乐' }}
+              </button>
+            </div>
             <p v-if="primaryEmotion">
               你今天的<span class="emotion-badge">{{ getEmoji(primaryEmotion) }} {{ primaryEmotion }}</span>占了{{ primaryEmotionPct }}%，为你定制了以下歌单
             </p>
@@ -1028,6 +1024,157 @@
     </Transition>
 
     <!-- 隐藏音频元素 -->
+
+    <!-- ══ 治愈面板 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showHealingPanel" class="profile-overlay" @click="showHealingPanel = false">
+        <div class="profile-panel healing-panel" @click.stop>
+          <div class="panel-close" @click="showHealingPanel = false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+          <div class="trend-header">
+            <h2>🧘 治愈空间</h2>
+            <p>放慢脚步，给自己一点温柔</p>
+          </div>
+
+          <!-- 呼吸练习 -->
+          <div class="card healing-card" @click="startBreathing">
+            <div class="hc-icon">{{ breathingActive ? '🌬️' : '💨' }}</div>
+            <div class="hc-info">
+              <div class="hc-title">呼吸练习</div>
+              <div class="hc-desc">{{ breathingActive ? '正在引导呼吸...' : '4-7-8 呼吸法，放松身心' }}</div>
+            </div>
+            <div class="hc-arrow">›</div>
+          </div>
+
+          <!-- 正念冥想 -->
+          <div class="card healing-card" @click="startMeditation('body')">
+            <div class="hc-icon">🧘</div>
+            <div class="hc-info">
+              <div class="hc-title">身体扫描</div>
+              <div class="hc-desc">从头到脚感受身体的每个部分</div>
+            </div>
+            <div class="hc-arrow">›</div>
+          </div>
+
+          <div class="card healing-card" @click="startMeditation('gratitude')">
+            <div class="hc-icon">🙏</div>
+            <div class="hc-info">
+              <div class="hc-title">感恩冥想</div>
+              <div class="hc-desc">回想今天值得感恩的三件事</div>
+            </div>
+            <div class="hc-arrow">›</div>
+          </div>
+
+          <!-- 呼吸动画区域 -->
+          <Transition name="popup-scale">
+            <div v-if="breathingActive" class="breathing-circle-wrap">
+              <div class="breathing-circle" :class="'breath-' + breathPhase">
+                <span class="breath-text">{{ breathLabel }}</span>
+              </div>
+              <button class="pp-btn-ghost" @click="stopBreathing" style="margin-top:16px">结束练习</button>
+            </div>
+          </Transition>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ══ 树洞面板 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showTreeHolePanel" class="profile-overlay" @click="showTreeHolePanel = false">
+        <div class="profile-panel treehole-panel" @click.stop>
+          <div class="panel-close" @click="showTreeHolePanel = false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+          <div class="trend-header">
+            <h2>🌳 树洞</h2>
+            <p>匿名倾诉，有人与你共鸣</p>
+          </div>
+
+          <!-- 发布留言 -->
+          <div class="th-post-wrap">
+            <textarea v-model="treeHoleInput" placeholder="说点什么吧...匿名发布，放心倾诉" rows="3" class="th-textarea"></textarea>
+            <button class="th-post-btn" @click="postTreeHoleMsg" :disabled="!treeHoleInput.trim()">发布</button>
+          </div>
+
+          <!-- 留言列表 -->
+          <div class="th-list" ref="treeHoleListEl">
+            <div v-if="treeHoleLoading" class="empty-state">
+              <div class="empty-icon">🍃</div>
+              <p>加载中...</p>
+            </div>
+            <div v-else-if="!treeHoleMsgs.length" class="empty-state">
+              <div class="empty-icon">🌳</div>
+              <p>树洞还是空的，来做第一个倾诉的人吧</p>
+            </div>
+            <div v-for="msg in treeHoleMsgs" :key="msg.id" class="th-msg">
+              <div class="th-msg-content">{{ msg.content }}</div>
+              <div class="th-msg-footer">
+                <span class="th-msg-time">{{ formatTreeHoleTime(msg.created_at) }}</span>
+                <button class="th-resonate-btn" :class="{ resonated: msg.my_resonate }" @click="resonateMsg(msg)">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                  <span>我也一样</span>
+                  <span v-if="msg.resonate_count" class="th-res-count">{{ msg.resonate_count }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ══ 报告面板 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showReportPanel" class="profile-overlay" @click="showReportPanel = false">
+        <div class="profile-panel report-panel" @click.stop>
+          <div class="panel-close" @click="showReportPanel = false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+          <div class="trend-header">
+            <h2>📊 情绪报告</h2>
+            <p>了解你的心理健康状态</p>
+          </div>
+
+          <!-- 生成报告按钮 -->
+          <button v-if="!reportData" class="inline-gen-btn" @click="generateReport" :disabled="reportLoading">
+            {{ reportLoading ? '正在生成...' : '✨ 生成我的情绪报告' }}
+          </button>
+
+          <!-- 报告加载 -->
+          <div v-if="reportLoading" class="empty-state">
+            <div class="empty-icon">📊</div>
+            <p>正在分析你的情绪数据...</p>
+          </div>
+
+          <!-- 报告内容 -->
+          <div v-if="reportData" class="report-content">
+            <div class="report-section">
+              <h3>🎯 情绪总览</h3>
+              <p class="report-summary">{{ reportData.summary }}</p>
+            </div>
+            <div class="report-section" v-if="reportData.suggestions?.length">
+              <h3>💡 建议与关怀</h3>
+              <ul class="report-suggestions">
+                <li v-for="(s, i) in reportData.suggestions" :key="i">{{ s }}</li>
+              </ul>
+            </div>
+            <div class="report-section" v-if="reportData.positive_affirmation">
+              <h3>🌈 每日寄语</h3>
+              <p class="report-affirmation">「{{ reportData.positive_affirmation }}」</p>
+            </div>
+          </div>
+
+          <!-- 空状态 -->
+          <div v-if="!reportData && !reportLoading" class="empty-state">
+            <div class="empty-icon">📝</div>
+            <p>还没有情绪数据，先去倾诉一下吧</p>
+            <button class="go-chat-btn" @click="showReportPanel = false; goToChat()">去倾诉 →</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 隐藏音频元素2 -->
     <audio ref="audioEl" src="/audio/bgm.mp3" loop preload="auto" />
 
     <!-- ICP备案号 -->
@@ -1051,9 +1198,186 @@ const userStore = useUserStore()
 // ═══ 个人中心面板 ═══
 const showProfilePanel = ref(false)
 const showChatPanel = ref(false)
+const showHealingPanel = ref(false)
+const showTreeHolePanel = ref(false)
+const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
+
+// ═══ 治愈空间 ═══
+const breathingActive = ref(false)
+const breathPhase = ref('inhale') // inhale, hold, exhale
+const breathLabel = computed(() => {
+  if (breathPhase.value === 'inhale') return '吸气...'
+  if (breathPhase.value === 'hold') return '屏住...'
+  return '呼气...'
+})
+let breathTimer = null
+
+function startBreathing() {
+  breathingActive.value = true
+  breathPhase.value = 'inhale'
+  runBreathCycle()
+}
+function runBreathCycle() {
+  // 4秒吸气 → 7秒屏住 → 8秒呼气
+  breathPhase.value = 'inhale'
+  breathTimer = setTimeout(() => {
+    breathPhase.value = 'hold'
+    breathTimer = setTimeout(() => {
+      breathPhase.value = 'exhale'
+      breathTimer = setTimeout(() => {
+        if (breathingActive.value) runBreathCycle()
+      }, 8000)
+    }, 7000)
+  }, 4000)
+}
+function stopBreathing() {
+  breathingActive.value = false
+  if (breathTimer) { clearTimeout(breathTimer); breathTimer = null }
+}
+function startMeditation(type) {
+  const msgs = {
+    body: '请闭上眼睛，从头顶开始，慢慢感受你的额头、眉毛、眼睛...逐渐向下，感受每个部分的温度和感觉。',
+    gratitude: '请闭上眼睛，回想今天发生的三件让你感恩的事，不论大小，都值得被记住。'
+  }
+  alert(msgs[type] || msgs.body)
+}
+
+// ═══ 树洞 ═══
+const treeHoleInput = ref('')
+const treeHoleMsgs = ref([])
+const treeHoleLoading = ref(false)
+const treeHoleListEl = ref(null)
+
+// 从 localStorage 加载树洞数据（简单实现，无后端）
+const TREEHOLE_KEY = 'shengyu_treehole_msgs'
+const RESONATE_KEY = 'shengyu_resonated_ids'
+
+function loadTreeHoleMsgs() {
+  treeHoleLoading.value = true
+  try {
+    const saved = localStorage.getItem(TREEHOLE_KEY)
+    if (saved) treeHoleMsgs.value = JSON.parse(saved)
+  } catch {}
+  treeHoleLoading.value = false
+}
+
+function saveTreeHoleMsgs() {
+  localStorage.setItem(TREEHOLE_KEY, JSON.stringify(treeHoleMsgs.value))
+}
+
+function getResonatedIds() {
+  try {
+    return JSON.parse(localStorage.getItem(RESONATE_KEY) || '[]')
+  } catch { return [] }
+}
+
+function markResonated(msgId) {
+  const ids = getResonatedIds()
+  if (!ids.includes(msgId)) ids.push(msgId)
+  localStorage.setItem(RESONATE_KEY, JSON.stringify(ids))
+}
+
+function postTreeHoleMsg() {
+  if (!treeHoleInput.value.trim()) return
+  const msg = {
+    id: Date.now(),
+    content: treeHoleInput.value.trim(),
+    created_at: new Date().toISOString(),
+    resonate_count: 0,
+    my_resonate: false
+  }
+  treeHoleMsgs.value.unshift(msg)
+  saveTreeHoleMsgs()
+  treeHoleInput.value = ''
+}
+
+function resonateMsg(msg) {
+  if (msg.my_resonate) return // 已共鸣过
+  msg.my_resonate = true
+  msg.resonate_count = (msg.resonate_count || 0) + 1
+  markResonated(msg.id)
+  saveTreeHoleMsgs()
+}
+
+function formatTreeHoleTime(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// 加载时恢复共鸣状态
+watch(showTreeHolePanel, (v) => {
+  if (v) {
+    loadTreeHoleMsgs()
+    // 恢复当前用户的共鸣状态
+    const ids = getResonatedIds()
+    treeHoleMsgs.value.forEach(m => {
+      m.my_resonate = ids.includes(m.id)
+    })
+  }
+})
+
+// ═══ 报告 ═══
+const reportData = ref(null)
+const reportLoading = ref(false)
+
+async function generateReport() {
+  reportLoading.value = true
+  try {
+    // 使用已有的情绪数据生成报告
+    const res = await getMoodStats({ period: 30 })
+    const distribution = res.distribution || {}
+    const avgScore = res.avg_score || 0
+    const count = res.count || 0
+
+    const topMood = Object.entries(distribution).sort((a, b) => b[1] - a[1])[0]
+    const topMoodLabel = topMood ? topMood[0] : '平静'
+    const topMoodPct = topMood ? Math.round(topMood[1] / count * 100) : 0
+
+    const suggestions = []
+    if (avgScore < 4) {
+      suggestions.push('建议多进行户外活动，适当运动有助于改善情绪')
+      suggestions.push('可以尝试与亲近的人聊聊最近的感受')
+    } else if (avgScore < 7) {
+      suggestions.push('保持当前的生活节奏，注意劳逸结合')
+      suggestions.push('每天给自己留一点独处放松的时间')
+    } else {
+      suggestions.push('你目前的状态很不错，继续保持积极的心态')
+    }
+    if (topMoodLabel === '焦虑' || topMoodLabel === '紧张') {
+      suggestions.push('试试治愈空间的呼吸练习，对缓解焦虑很有效')
+    }
+    if (topMoodLabel === '悲伤' || topMoodLabel === '低落') {
+      suggestions.push('可以去树洞倾诉，有人会与你共鸣')
+    }
+
+    const affirmations = [
+      '你已经做得很好了，不必对自己太苛刻',
+      '每一天都是新的开始，你值得被温柔以待',
+      '感到疲惫也没关系，休息也是前进的一种方式',
+      '你的存在本身就有意义',
+      '慢慢来，比较快'
+    ]
+
+    reportData.value = {
+      summary: `近30天共记录 ${count} 次情绪，平均情绪分 ${avgScore.toFixed(1)}。主要情绪为「${topMoodLabel}」占比 ${topMoodPct}%。${avgScore >= 7 ? '整体状态良好，继续保持！' : avgScore >= 4 ? '情绪起伏属于正常范围，关注自我关怀。' : '近期情绪偏低落，建议多关照自己。'}`,
+      suggestions,
+      positive_affirmation: affirmations[Math.floor(Math.random() * affirmations.length)]
+    }
+  } catch (e) {
+    console.error('生成报告失败:', e)
+    reportData.value = {
+      summary: '暂无足够的情绪数据来生成报告，请先多倾诉几次吧。',
+      suggestions: ['去和咕哝聊聊天，记录你的情绪'],
+      positive_affirmation: '每一步都算数，你正在路上。'
+    }
+  }
+  reportLoading.value = false
+}
 
 // ═══ 出去看看 — 交通工具 & 城市 ═══
 const showTransportPanel = ref(false)
@@ -2261,26 +2585,15 @@ onUnmounted(() => {
 }
 .weather-float:hover { transform: scale(1.05); }
 
-/* ═══════════ 音乐按钮 ═══════════ */
-.music-btn {
-  position: fixed; bottom: 64px; right: 18px; z-index: 200;
-  width: 34px; height: 34px; border-radius: 50%;
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(255,255,255,0.6);
-  transition: color 0.2s, background 0.2s, transform 0.2s;
+/* ═══════════ 音乐按钮（已移至热区） ═══════════ */
+.music-toggle-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,0.08); border: none;
+  color: rgba(232,226,216,0.6); border-radius: 10px;
+  padding: 4px 10px; font-size: 11px; cursor: pointer;
+  transition: all 0.2s;
 }
-.music-btn:hover {
-  color: rgba(255,255,255,0.95);
-  background: rgba(255,255,255,0.2);
-  transform: scale(1.08);
-}
-.music-btn:active { transform: scale(0.9); }
-.night .music-btn { color: rgba(160,185,210,0.6); }
-.night .music-btn:hover { color: rgba(200,220,240,0.95); }
+.music-toggle-btn:hover { background: rgba(255,255,255,0.15); color: #E8E2D8; }
 
 /* ═══════════ 交互热区 ═══════════ */
 .hot-zone {
@@ -2314,6 +2627,11 @@ onUnmounted(() => {
 .zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }
 .zone-bed     { bottom: 20%; left: 8%; width: 26%; height: 20%; transform: rotate(-38deg); }
 .zone-window  { top: 14%; left: 12%; width: 30%; height: 33%; transform: rotate(-15deg); }
+.zone-speaker { width: 10%; height: 16%; border-radius: 50%; }
+.zone-speaker-left { top: 52%; left: 4%; }
+.zone-speaker-right { top: 52%; right: 4%; }
+.zone-speaker .hover-tip { font-size: 10px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+.zone-speaker:hover .hover-tip { opacity: 1; }
 
 .hover-tip {
   position: absolute; bottom: -8px; left: 50%;
@@ -2388,12 +2706,12 @@ onUnmounted(() => {
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: center;
-  gap: 16px; padding: 0 0 16px; z-index: 100;
+  gap: 10px; padding: 0 0 16px; z-index: 100;
   background: transparent; pointer-events: none;
 }
 .bottom-nav::before {
-  content: ''; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-  width: 200px; height: 56px; border-radius: 28px;
+  content: ''; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  width: 350px; height: 60px; border-radius: 30px;
   background: rgba(0,0,0,0.25);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
@@ -2402,16 +2720,16 @@ onUnmounted(() => {
 }
 .bnav-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px;
+  gap: 3px;
   background: none; border: none; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   position: relative; z-index: 1;
-  width: 68px; height: 52px; border-radius: 16px;
+  width: 58px; height: 50px; border-radius: 14px;
   color: rgba(255,255,255,0.7); transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
   pointer-events: auto;
 }
 .bnav-item .icon-wrap {
-  width: 28px; height: 28px;
+  width: 24px; height: 24px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px;
   background: transparent; border: none;
@@ -2432,11 +2750,7 @@ onUnmounted(() => {
   box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .bnav-item.active .icon-wrap { background: transparent; border: none; animation: none; }
-.bnav-item svg { width: 22px; height: 22px; image-rendering: pixelated; shape-rendering: crispEdges; }
-.bnav-item .icon-outline { display: block; }
-.bnav-item .icon-fill    { display: none; }
-.bnav-item.active .icon-outline { display: block; }
-.bnav-item.active .icon-fill    { display: none; }
+.bnav-item svg { width: 20px; height: 20px; }
 .bnav-item .bnav-label {
   font-size: 10px; font-weight: 500;
   opacity: 0.7; letter-spacing: 0.5px;
@@ -2464,6 +2778,141 @@ onUnmounted(() => {
 .night .bnav-item         { color: rgba(255,255,255,0.7); }
 .night .bnav-item:hover   { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .night .bnav-item.active  { color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12); }
+
+/* ═══════════ 治愈面板 ═══════════ */
+.healing-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
+.healing-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; margin-bottom: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; cursor: pointer;
+  transition: background 0.2s;
+}
+.healing-card:hover { background: rgba(255,255,255,0.08); }
+.hc-icon { font-size: 28px; flex-shrink: 0; }
+.hc-info { flex: 1; }
+.hc-title { font-size: 14px; font-weight: 600; color: #E8E2D8; }
+.hc-desc { font-size: 12px; color: rgba(232,226,216,0.5); margin-top: 2px; }
+.hc-arrow { font-size: 18px; color: rgba(232,226,216,0.3); }
+
+/* 呼吸动画 */
+.breathing-circle-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-top: 20px; padding: 20px;
+}
+.breathing-circle {
+  width: 120px; height: 120px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(127,179,166,0.15);
+  border: 2px solid rgba(127,179,166,0.4);
+  transition: all 1s ease;
+}
+.breathing-circle.breath-inhale {
+  transform: scale(1.3);
+  background: rgba(127,179,166,0.25);
+  border-color: rgba(127,179,166,0.6);
+}
+.breathing-circle.breath-hold {
+  transform: scale(1.3);
+  background: rgba(232,196,104,0.2);
+  border-color: rgba(232,196,104,0.5);
+}
+.breathing-circle.breath-exhale {
+  transform: scale(1);
+  background: rgba(212,119,106,0.15);
+  border-color: rgba(212,119,106,0.4);
+}
+.breath-text { font-size: 14px; color: #E8E2D8; font-weight: 500; }
+
+/* ═══════════ 树洞面板 ═══════════ */
+.treehole-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
+.th-post-wrap {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.th-textarea {
+  flex: 1; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 10px 12px;
+  color: #E8E2D8; font-size: 13px; resize: none;
+  outline: none;
+  font-family: inherit;
+}
+.th-textarea:focus { border-color: rgba(127,179,166,0.5); }
+.th-post-btn {
+  align-self: flex-end; padding: 8px 16px;
+  background: rgba(127,179,166,0.3); color: #7FB3A6;
+  border: none; border-radius: 10px; cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  transition: all 0.2s;
+}
+.th-post-btn:disabled { opacity: 0.4; cursor: default; }
+.th-post-btn:not(:disabled):hover { background: rgba(127,179,166,0.5); }
+
+.th-list { display: flex; flex-direction: column; gap: 10px; }
+.th-msg {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; padding: 12px 14px;
+}
+.th-msg-content { font-size: 14px; color: #E8E2D8; line-height: 1.6; }
+.th-msg-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px;
+}
+.th-msg-time { font-size: 11px; color: rgba(232,226,216,0.35); }
+.th-resonate-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(232,226,216,0.4); font-size: 12px;
+  padding: 4px 8px; border-radius: 8px;
+  transition: all 0.2s;
+}
+.th-resonate-btn:hover { background: rgba(255,255,255,0.06); color: rgba(232,226,216,0.7); }
+.th-resonate-btn.resonated {
+  color: #D4776A; cursor: default;
+}
+.th-resonate-btn.resonated:hover { background: transparent; }
+.th-res-count {
+  background: rgba(212,119,106,0.2); color: #D4776A;
+  padding: 0 6px; border-radius: 8px; font-size: 11px;
+}
+
+/* ═══════════ 报告面板 ═══════════ */
+.report-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
+.inline-gen-btn {
+  display: block; width: 100%; padding: 14px;
+  background: linear-gradient(135deg, rgba(127,179,166,0.3), rgba(212,119,106,0.3));
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px; color: #E8E2D8;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  margin-bottom: 16px; transition: all 0.2s;
+}
+.inline-gen-btn:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(127,179,166,0.15); }
+.inline-gen-btn:disabled { opacity: 0.5; cursor: wait; }
+.report-content { display: flex; flex-direction: column; gap: 16px; }
+.report-section {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; padding: 14px 16px;
+}
+.report-section h3 { font-size: 14px; color: #E8E2D8; margin-bottom: 8px; }
+.report-summary { font-size: 13px; color: rgba(232,226,216,0.7); line-height: 1.7; }
+.report-suggestions {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.report-suggestions li {
+  font-size: 13px; color: rgba(232,226,216,0.7);
+  padding-left: 16px; position: relative; line-height: 1.6;
+}
+.report-suggestions li::before {
+  content: '•'; position: absolute; left: 0; color: #7FB3A6;
+}
+.report-affirmation {
+  font-size: 14px; color: #E8C468; font-style: italic;
+  text-align: center; line-height: 1.8;
+}
 
 /* ═══════════ 个人中心面板 ═══════════ */
 /* 背景遮罩 */
