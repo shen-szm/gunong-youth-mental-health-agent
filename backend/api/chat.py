@@ -10,6 +10,7 @@ from models import ChatMessage, MoodRecord
 from xunfei.spark_api import ask_spark
 from xunfei.asr_api import speech_to_text
 from xunfei.tts_api import text_to_speech
+from datetime import datetime
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -28,8 +29,9 @@ class ChatResponse(BaseModel):
 @router.post("/send", response_model=ChatResponse)
 async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
     """发送消息并获取AI回复"""
-    # 保存用户消息
-    user_msg = ChatMessage(user_id=req.user_id, role="user", content=req.message)
+    # 保存用户消息（显式记录当前时间，确保时区正确）
+    now = datetime.now()
+    user_msg = ChatMessage(user_id=req.user_id, role="user", content=req.message, created_at=now)
     db.add(user_msg)
     db.commit()
 
@@ -54,8 +56,8 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
     # 简单情绪识别（关键词匹配，后期可接入讯飞情绪分析）
     emotion = _detect_emotion(req.message)
 
-    # 保存AI回复
-    ai_msg = ChatMessage(user_id=req.user_id, role="assistant", content=reply, emotion=emotion)
+    # 保存AI回复（显式记录当前时间）
+    ai_msg = ChatMessage(user_id=req.user_id, role="assistant", content=reply, emotion=emotion, created_at=datetime.now())
     db.add(ai_msg)
 
     # 记录情绪
@@ -69,7 +71,8 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
         mood_score=mood_score,
         mood_label=emotion,
         content=req.message[:200],
-        input_type=req.input_type
+        input_type=req.input_type,
+        created_at=datetime.now()
     )
     db.add(mood_record)
     db.commit()

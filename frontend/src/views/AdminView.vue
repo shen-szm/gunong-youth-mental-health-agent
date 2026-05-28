@@ -180,21 +180,61 @@
       </div>
 
       <!-- ==================== 对话监控 ==================== -->
-      <div v-if="tab==='chats'">
-        <table class="data-table">
-          <thead><tr><th>ID</th><th>用户ID</th><th>角色</th><th>内容</th><th>情绪</th><th>时间</th></tr></thead>
-          <tbody>
-            <tr v-for="c in chats" :key="c.id">
-              <td>{{ c.id }}</td>
-              <td>{{ c.user_id }}</td>
-              <td><span :class="'role ' + c.role">{{ c.role === 'user' ? '用户' : 'AI' }}</span></td>
-              <td class="content-cell">{{ c.content }}</td>
-              <td>{{ c.emotion || '-' }}</td>
-              <td>{{ c.created_at }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="chats.length === 0" class="empty">暂无对话</p>
+      <div v-if="tab==='chats'" class="chat-monitor">
+        <!-- 用户筛选栏 -->
+        <div class="chat-user-bar">
+          <button
+            :class="['chat-user-btn', { active: chatFilterUser === null }]"
+            @click="chatFilterUser = null"
+          >全部</button>
+          <button
+            v-for="u in chatUsers" :key="u.id"
+            :class="['chat-user-btn', { active: chatFilterUser === u.id }]"
+            @click="chatFilterUser = u.id"
+          >
+            {{ u.nickname || u.username }}
+            <span class="chat-user-count">{{ u.msgCount }}</span>
+          </button>
+        </div>
+
+        <!-- 聊天对话区域 -->
+        <div class="chat-dialog" ref="chatDialogRef">
+          <div
+            v-for="(group, gi) in chatGroups" :key="gi"
+            class="chat-session"
+          >
+            <!-- 用户标识头（按用户分组时显示） -->
+            <div v-if="chatFilterUser === null" class="chat-session-header">
+              <div class="chat-session-avatar">{{ group.userName[0] }}</div>
+              <span class="chat-session-name">{{ group.userName }}</span>
+              <span class="chat-session-time">{{ group.timeRange }}</span>
+            </div>
+
+            <!-- 消息列表 -->
+            <div class="chat-bubbles">
+              <div
+                v-for="msg in group.messages" :key="msg.id"
+                :class="['chat-bubble-row', msg.role === 'user' ? 'user' : 'ai']"
+              >
+                <div class="chat-bubble-avatar">
+                  {{ msg.role === 'user' ? group.userName[0] : 'AI' }}
+                </div>
+                <div class="chat-bubble-body">
+                  <div class="chat-bubble-meta">
+                    <span class="chat-bubble-role">{{ msg.role === 'user' ? group.userName : '咕哝AI' }}</span>
+                    <span class="chat-bubble-time">{{ formatChatTime(msg.created_at) }}</span>
+                  </div>
+                  <div :class="['chat-bubble-content', msg.role]">
+                    {{ msg.content }}
+                    <span v-if="msg.emotion" class="chat-bubble-emotion">{{ getEmoji(msg.emotion) }} {{ msg.emotion }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p v-if="filteredChats.length === 0" class="empty">暂无对话</p>
+        </div>
       </div>
     </template>
   </div>
@@ -217,6 +257,102 @@ const page = ref(1)
 const totalPages = ref(1)
 const error = ref("")
 const statCards = ref([])
+
+// 对话监控
+const chatFilterUser = ref(null)
+const chatDialogRef = ref(null)
+
+// 参与对话的用户列表（去重 + 计数）
+const chatUsers = computed(() => {
+  const map = new Map()
+  for (const c of chats.value) {
+    if (!map.has(c.user_id)) {
+      map.set(c.user_id, { id: c.user_id, msgCount: 0 })
+    }
+    map.get(c.user_id).msgCount++
+  }
+  // 补充用户信息
+  const result = []
+  for (const [uid, info] of map) {
+    const user = users.value.find(u => u.id === uid)
+    result.push({
+      id: uid,
+      username: user?.username || `用户${uid}`,
+      nickname: user?.nickname || '',
+      msgCount: info.msgCount,
+    })
+  }
+  return result.sort((a, b) => b.msgCount - a.msgCount)
+})
+
+// 过滤后的消息
+const filteredChats = computed(() => {
+  if (!chatFilterUser.value) return chats.value
+  return chats.value.filter(c => c.user_id === chatFilterUser.value)
+})
+
+// 按会话分组（按用户 + 时间接近的消息聚合成一组）
+const chatGroups = computed(() => {
+  const msgs = filteredChats.value.filter(m => m.created_at)
+  if (!msgs.length) return []
+  // 按时间升序排列（最早的在前）
+  const sorted = [...msgs].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  // 按用户分组
+  const groups = []
+  let current = { userId: sorted[0].user_id, messages: [] }
+  for (const msg of sorted) {
+    if (msg.user_id !== current.userId) {
+      groups.push(current)
+      current = { userId: msg.user_id, messages: [] }
+    }
+    current.messages.push(msg)
+  }
+  groups.push(current)
+  // 组装展示数据
+  return groups.map(g => {
+    const user = users.value.find(u => u.id === g.userId)
+    const userName = user?.nickname || user?.username || `用户${g.userId}`
+    const times = g.messages.map(m => new Date(m.created_at)).filter(d => !isNaN(d.getTime()))
+    if (!times.length) {
+      return { userId: g.userId, userName, messages: g.messages, timeRange: '' }
+    }
+    const minT = new Date(Math.min(...times))
+    const maxT = new Date(Math.max(...times))
+    return {
+      userId: g.userId,
+      userName,
+      messages: g.messages,
+      timeRange: formatTimeRange(minT, maxT),
+    }
+  })
+})
+
+function formatChatTime(ts) {
+  if (!ts) return '--'
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return String(ts).slice(0, 19)
+  const MM = String(d.getMonth() + 1).padStart(2, '0')
+  const DD = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${MM}-${DD} ${hh}:${mm}:${ss}`
+}
+
+function formatTimeRange(t1, t2) {
+  if (!t1 || !t2 || isNaN(t1.getTime()) || isNaN(t2.getTime())) return ''
+  const sameDay = t1.toDateString() === t2.toDateString()
+  const h1 = String(t1.getHours()).padStart(2, '0')
+  const m1 = String(t1.getMinutes()).padStart(2, '0')
+  const h2 = String(t2.getHours()).padStart(2, '0')
+  const m2 = String(t2.getMinutes()).padStart(2, '0')
+  if (sameDay) return `${h1}:${m1} ~ ${h2}:${m2}`
+  const MM1 = String(t1.getMonth() + 1).padStart(2, '0')
+  const DD1 = String(t1.getDate()).padStart(2, '0')
+  const MM2 = String(t2.getMonth() + 1).padStart(2, '0')
+  const DD2 = String(t2.getDate()).padStart(2, '0')
+  return `${MM1}-${DD1} ${h1}:${m1} ~ ${MM2}-${DD2} ${h2}:${m2}`
+}
 
 // 用户详情
 const selectedUser = ref(null)
@@ -287,6 +423,12 @@ async function loadChats() {
       params: { user_id: userStore.userId },
     })
     chats.value = r.data
+    // 加载完成后滚动到底部
+    nextTick(() => {
+      if (chatDialogRef.value) {
+        chatDialogRef.value.scrollTop = chatDialogRef.value.scrollHeight
+      }
+    })
   } catch { error.value = "加载对话失败" }
 }
 
@@ -656,7 +798,100 @@ onMounted(() => {
 .slide-enter-from { opacity: 0; transform: translateX(20px); }
 .slide-leave-to { opacity: 0; transform: translateX(-10px); }
 
-/* 对话监控表格 */
+/* ═══════════ 对话监控 — 聊天界面 ═══════════ */
+.chat-monitor { display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 400px; }
+
+/* 用户筛选栏 */
+.chat-user-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; background: var(--card); border-radius: 14px 14px 0 0;
+  border-bottom: 1px solid var(--border); overflow-x: auto;
+}
+.chat-user-btn {
+  padding: 6px 14px; border-radius: 18px; font-size: 13px; white-space: nowrap;
+  background: var(--hover); transition: all 0.2s; border: 2px solid transparent;
+}
+.chat-user-btn:hover { background: #D8E4DB; }
+.chat-user-btn.active { background: var(--primary); color: white; }
+.chat-user-count {
+  display: inline-block; margin-left: 4px; padding: 1px 6px;
+  background: rgba(255,255,255,0.25); border-radius: 8px; font-size: 11px;
+}
+
+/* 聊天对话区 */
+.chat-dialog {
+  flex: 1; overflow-y: auto; padding: 16px; background: var(--bg);
+  border-radius: 0 0 14px 14px; scroll-behavior: smooth;
+}
+
+/* 会话分组 */
+.chat-session { margin-bottom: 24px; }
+.chat-session:last-child { margin-bottom: 0; }
+.chat-session-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding: 8px 12px; background: var(--card); border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.chat-session-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #7FB3A6, #3D6B5E);
+  color: white; font-size: 12px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-session-name { font-size: 14px; font-weight: 600; }
+.chat-session-time { font-size: 11px; color: #aaa; margin-left: auto; }
+
+/* 消息气泡 */
+.chat-bubbles { display: flex; flex-direction: column; gap: 14px; }
+.chat-bubble-row {
+  display: flex; gap: 10px; max-width: 85%;
+}
+.chat-bubble-row.user { align-self: flex-end; flex-direction: row-reverse; }
+.chat-bubble-row.ai { align-self: flex-start; }
+
+.chat-bubble-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  font-size: 11px; font-weight: bold; color: white;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-bubble-row.user .chat-bubble-avatar {
+  background: linear-gradient(135deg, #7FB3A6, #5B8C7E);
+}
+.chat-bubble-row.ai .chat-bubble-avatar {
+  background: linear-gradient(135deg, #E8C468, #D4A843);
+  color: #4A3B15;
+}
+
+.chat-bubble-body { display: flex; flex-direction: column; gap: 2px; }
+.chat-bubble-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.chat-bubble-row.user .chat-bubble-meta { justify-content: flex-end; }
+.chat-bubble-role { font-weight: 600; color: var(--text-secondary); }
+.chat-bubble-time { color: #bbb; }
+
+.chat-bubble-content {
+  padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6;
+  word-break: break-word; position: relative; max-width: 100%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.chat-bubble-content.user {
+  background: #6DB58B; color: white;
+  border-bottom-right-radius: 4px;
+}
+.chat-bubble-content.ai {
+  background: white; color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.chat-bubble-emotion {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  background: rgba(255,255,255,0.25); border-radius: 8px;
+  font-size: 11px; vertical-align: middle;
+}
+.chat-bubble-content.ai .chat-bubble-emotion {
+  background: rgba(109,181,139,0.12); color: #3D6B5E;
+}
+
+/* 旧表格样式（保留备用） */
 .data-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--card); border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
 .data-table th { background: #F0F4F1; padding: 10px 6px; text-align: left; font-weight: 600; }
 .data-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); }
@@ -673,6 +908,10 @@ onMounted(() => {
   .detail-stats { grid-template-columns: repeat(2, 1fr); }
   .data-table { font-size: 11px; }
   .content-cell { max-width: 120px; }
+  .chat-monitor { height: calc(100vh - 180px); }
+  .chat-bubble-row { max-width: 92%; }
+  .chat-bubble-content { font-size: 13px; padding: 8px 12px; }
+  .chat-user-btn { padding: 5px 10px; font-size: 12px; }
 }
 
 /* 超小屏幕 */

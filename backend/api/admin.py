@@ -77,7 +77,7 @@ def delete_user(target_user_id: int, user_id: int, db: Session = Depends(get_db)
     return {"msg": f"已删除用户 {target.username}"}
 
 @router.get("/chats")
-def get_chats(user_id: int, limit: int = 50, db: Session = Depends(get_db)):
+def get_chats(user_id: int, limit: int = 500, db: Session = Depends(get_db)):
     verify_admin(user_id, db)
     chats = db.query(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(limit).all()
     return [
@@ -87,7 +87,7 @@ def get_chats(user_id: int, limit: int = 50, db: Session = Depends(get_db)):
             "role": c.role,
             "content": c.content,
             "emotion": c.emotion,
-            "created_at": str(c.created_at),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
         }
         for c in chats
     ]

@@ -6,7 +6,7 @@
       <div v-if="showSplash" class="splash" @click="enterApp">
         <div class="splash-logo">
           <span>咕哝</span>
-          <span class="splash-version">V3</span>
+          <span class="splash-version">V3.1</span>
         </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>
@@ -65,6 +65,22 @@
     <!-- 交互热区 — 音响2（音乐推荐） -->
     <div class="hot-zone zone-speaker zone-speaker-right" @click="openMusicPanel">
       <div class="speaker-label">音乐</div>
+    </div>
+
+    <!-- 小工具热区 — 桌面物品（治愈+娱乐） -->
+    <div class="mini-tools-bar">
+      <div class="mini-tool-item" @click="openMiniApp('air')">
+        <span class="mini-tool-emoji">❄️</span>
+        <span class="mini-tool-name">小空调</span>
+      </div>
+      <div class="mini-tool-item" @click="openMiniApp('itv')">
+        <span class="mini-tool-emoji">📺</span>
+        <span class="mini-tool-name">小电视</span>
+      </div>
+      <div class="mini-tool-item" @click="openMiniApp('ikk')">
+        <span class="mini-tool-emoji">📟</span>
+        <span class="mini-tool-name">小掌机</span>
+      </div>
     </div>
 
     <!-- 底部导航 -->
@@ -395,7 +411,8 @@
         <!-- 顶部导航栏 -->
         <div class="xian-top-bar">
           <button class="xian-back-btn" @click="showXianPanel = false; showCityPanel = true">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <span class="back-home-text">回家</span>
           </button>
           <span class="xian-top-label">西安 · 皮影制作</span>
           <div class="xian-top-spacer"></div>
@@ -589,7 +606,8 @@
         <!-- 顶部返回栏 -->
         <div class="xian-top-bar">
           <button class="xian-back-btn" @click="closeLuoyangPanel">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+            <span class="back-home-text">回家</span>
           </button>
           <span class="xian-top-label">洛阳 · 非遗拓印</span>
           <div class="xian-top-spacer"></div>
@@ -1239,6 +1257,24 @@
       </div>
     </Transition>
 
+    <!-- ══ 小工具 iframe 全屏弹窗 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showMiniApp" class="mini-app-overlay" @click.self="closeMiniApp">
+        <div class="mini-app-container">
+          <div class="mini-app-header">
+            <button class="mini-app-back" @click="closeMiniApp">← 回家</button>
+            <span class="mini-app-title">{{ miniAppTitle }}</span>
+            <div class="mini-app-spacer"></div>
+          </div>
+          <div class="mini-app-body">
+            <iframe :src="miniAppUrl" class="mini-app-iframe" frameborder="0" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; microphone; camera; midi; geolocation; gyroscope; accelerometer; magnetometer; speaker-selection"></iframe>
+            <div v-if="miniAppHideBottom" class="mini-app-bottom-mask"></div>
+            <div v-if="miniAppKey === 'ikk'" class="ikk-bottom-mask"></div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 隐藏音频元素2 -->
     <audio ref="audioEl" src="/audio/bgm.mp3" loop preload="auto" />
 
@@ -1271,6 +1307,41 @@ const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
+
+// ═══ 小工具（iframe弹窗） ═══
+const showMiniApp = ref(false)
+const miniAppUrl = ref('')
+const miniAppTitle = ref('')
+const miniAppKey = ref('')
+const miniAppMap = {
+  air: { url: 'https://giao.me/air', title: '❄️ 小空调' },
+  itv: { url: 'https://giao.me/itv', title: '📺 小电视' },
+  ikk: { url: 'https://giao.me/ikk', title: '📟 小掌机' },
+}
+function openMiniApp(key) {
+  const app = miniAppMap[key]
+  if (!app) return
+  miniAppKey.value = key
+  miniAppUrl.value = app.url
+  miniAppTitle.value = app.title
+  showMiniApp.value = true
+  // 暂停背景音乐，让小组件声音独立播放
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.pause()
+  }
+}
+function closeMiniApp() {
+  showMiniApp.value = false
+  miniAppUrl.value = ''
+  miniAppKey.value = ''
+  // 恢复背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
+}
+// 小空调和小电视需要隐藏底部外部链接，小掌机底部有功能按钮不能遮
+const miniAppHideBottom = computed(() => ['air', 'itv'].includes(miniAppKey.value))
+
 
 // ═══ 修改密码 ═══
 const showPwdModal = ref(false)
@@ -4000,20 +4071,7 @@ onUnmounted(() => {
   padding-top: max(12px, env(safe-area-inset-top));
   background: linear-gradient(to bottom, rgba(0,0,0,0.55), transparent);
 }
-.xian-back-btn {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(8px);
-  border: none;
-  color: #FFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.xian-back-btn:hover { background: rgba(255,255,255,0.22); }
+/* .xian-back-btn moved to bottom with back-home-text */
 .xian-top-label {
   flex: 1;
   text-align: center;
@@ -4600,4 +4658,155 @@ onUnmounted(() => {
 .transition-fade-enter-active { transition: opacity 0.3s ease; }
 .transition-fade-leave-active { transition: opacity 0.6s ease; }
 .transition-fade-enter-from, .transition-fade-leave-to { opacity: 0; }
+
+/* ═══════════ 小工具条 ═══════════ */
+.mini-tools-bar {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 18px;
+  z-index: 12;
+}
+.mini-tool-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  opacity: 0.85;
+}
+.mini-tool-item:hover {
+  transform: translateY(-4px) scale(1.1);
+  opacity: 1;
+}
+.mini-tool-emoji {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: background 0.2s;
+}
+.mini-tool-item:hover .mini-tool-emoji {
+  background: rgba(255, 255, 255, 0.32);
+}
+.mini-tool-name {
+  font-size: 11px;
+  color: rgba(255,255,255,0.8);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  white-space: nowrap;
+}
+
+/* ═══════════ 小工具 iframe 弹窗 ═══════════ */
+.mini-app-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-app-container {
+  width: 94vw;
+  max-width: 520px;
+  height: 85vh;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+.mini-app-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1a1a2e, #2a2a4e);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.mini-app-back {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #FFF;
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.mini-app-back:hover { background: rgba(255,255,255,0.22); }
+.mini-app-title {
+  flex: 1;
+  text-align: center;
+  color: #FFF;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.mini-app-spacer { width: 70px; }
+.mini-app-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.mini-app-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+/* 底部遮罩：仅在小空调/小电视时隐藏外部链接文字 */
+.mini-app-bottom-mask {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 80px;
+  background: rgba(255,255,255,1);
+  pointer-events: none;
+  z-index: 2;
+}
+/* 小掌机专用底部遮罩（独立调整） */
+.ikk-bottom-mask {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 30px;
+  background: rgba(0, 0, 0, 1);  /* 掌机页面背景偏暗，用黑色 */
+  pointer-events: none;
+  z-index: 2;
+}
+/* ═══════════ 返回按钮加"回家"文字 ═══════════ */
+.xian-back-btn {
+  width: auto;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(8px);
+  border: none;
+  color: #FFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 13px;
+}
+.xian-back-btn:hover { background: rgba(255,255,255,0.22); }
+.back-home-text {
+  font-size: 13px;
+  color: #FFF;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
 </style>
