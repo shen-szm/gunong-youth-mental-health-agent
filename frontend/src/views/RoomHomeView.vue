@@ -6,7 +6,7 @@
       <div v-if="showSplash" class="splash" @click="enterApp">
         <div class="splash-logo">
           <span>咕哝</span>
-          <span class="splash-version">V3.1</span>
+          <span class="splash-version">V3.2</span>
         </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>
@@ -410,7 +410,7 @@
 
         <!-- 顶部导航栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="showXianPanel = false; showCityPanel = true">
+          <button class="xian-back-btn" @click="closeXianPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -605,7 +605,7 @@
 
         <!-- 顶部返回栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="closeLuoyangPanel">
+          <button class="xian-back-btn" @click="closeLuoyangPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -1276,7 +1276,7 @@
     </Transition>
 
     <!-- 隐藏音频元素2 -->
-    <audio ref="audioEl" src="/audio/bgm.mp3" loop preload="auto" />
+    <audio ref="audioEl" src="/audio/bgm.mp3" preload="auto" />
 
     <!-- ICP备案号 -->
     <footer class="icp-footer">
@@ -1466,10 +1466,69 @@ const showXianPanel = ref(false)
 const showXianTransition = ref(false)
 const xianPhase = ref(0)
 
+// 地铁转场音乐
+const metroAudioEl = ref(null)
+
+// 西安城市音乐播放列表
+const xianPlaylist = [
+  '/audio/xian-song1.mp3',
+  '/audio/xian-song2.mp3',
+  '/audio/xian-song3.mp3',
+]
+const xianMusicEl = ref(null)
+const xianMusicIndex = ref(0)
+
+function playXianCityMusic() {
+  if (!xianMusicEl.value) {
+    xianMusicEl.value = new Audio()
+    xianMusicEl.value.volume = 0.5
+    xianMusicEl.value.addEventListener('ended', () => {
+      xianMusicIndex.value = (xianMusicIndex.value + 1) % xianPlaylist.length
+      xianMusicEl.value.src = xianPlaylist[xianMusicIndex.value]
+      xianMusicEl.value.play().catch(() => {})
+    })
+  }
+  xianMusicIndex.value = 0
+  xianMusicEl.value.src = xianPlaylist[0]
+  xianMusicEl.value.play().catch(() => {})
+}
+
+function stopXianCityMusic() {
+  if (xianMusicEl.value) {
+    xianMusicEl.value.pause()
+    xianMusicEl.value.currentTime = 0
+  }
+}
+
+function playMetroAudio(src) {
+  // 暂停背景音乐
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.pause()
+  }
+  // 创建并播放地铁音乐
+  if (!metroAudioEl.value) {
+    metroAudioEl.value = new Audio()
+  }
+  metroAudioEl.value.src = src
+  metroAudioEl.value.loop = false
+  metroAudioEl.value.volume = 0.6
+  metroAudioEl.value.play().catch(() => {})
+}
+
+function stopMetroAudio() {
+  if (metroAudioEl.value) {
+    metroAudioEl.value.pause()
+    metroAudioEl.value.currentTime = 0
+  }
+}
+
 function startXianTransition() {
   showCityPanel.value = false
   showXianTransition.value = true
   xianPhase.value = 0
+
+  // 播放西安地铁音乐
+  playMetroAudio('/audio/xian-metro.mp3')
 
   setTimeout(() => { xianPhase.value = 1 }, 1500)
   setTimeout(() => { xianPhase.value = 2 }, 3200)
@@ -1478,6 +1537,9 @@ function startXianTransition() {
     showXianTransition.value = false
     showXianPanel.value = true
     xianPhase.value = 0
+    // 转场结束，停止地铁音乐，开始播放西安城市音乐
+    stopMetroAudio()
+    playXianCityMusic()
   }, 6200)
 }
 
@@ -1566,6 +1628,11 @@ function closeXianPanel() {
   showXianPanel.value = false
   showPuppetPopup.value = false
   shadowPuppetStep.value = 0
+  // 停止西安城市音乐，恢复背景音乐
+  stopXianCityMusic()
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
 }
 
 function startPuppetMaking() {
@@ -1585,6 +1652,10 @@ function openVideoPlayer() {
   if (audioEl.value && musicOn.value) {
     audioEl.value.pause()
   }
+  // 暂停西安城市音乐
+  if (xianMusicEl.value) {
+    xianMusicEl.value.pause()
+  }
 }
 function closeVideoPlayer() {
   showVideoPlayer.value = false
@@ -1592,14 +1663,18 @@ function closeVideoPlayer() {
     videoRef.value.pause()
     videoRef.value.currentTime = 0
   }
-  // 恢复背景音乐
-  if (audioEl.value && musicOn.value) {
+  // 如果在西安面板内，恢复城市音乐而非BGM
+  if (showXianPanel.value && xianMusicEl.value) {
+    xianMusicEl.value.play().catch(() => {})
+  } else if (audioEl.value && musicOn.value) {
     audioEl.value.play().catch(() => {})
   }
 }
 function onVideoEnded() {
-  // 视频播放结束，恢复背景音乐
-  if (audioEl.value && musicOn.value) {
+  // 视频播放结束，恢复音乐
+  if (showXianPanel.value && xianMusicEl.value) {
+    xianMusicEl.value.play().catch(() => {})
+  } else if (audioEl.value && musicOn.value) {
     audioEl.value.play().catch(() => {})
   }
 }
@@ -1626,10 +1701,44 @@ const showLuoyangVideoPlayer = ref(false)
 const luoyangVideoRef = ref(null)
 const luoyangVideoSrc = ref('/videos/luoyang-rubbing.mp4')
 
+// 洛阳城市音乐播放列表
+const luoyangPlaylist = [
+  '/audio/luoyang-song1.mp3',
+  '/audio/luoyang-song2.mp3',
+  '/audio/luoyang-song3.mp3',
+]
+const luoyangMusicEl = ref(null)
+const luoyangMusicIndex = ref(0)
+
+function playLuoyangCityMusic() {
+  if (!luoyangMusicEl.value) {
+    luoyangMusicEl.value = new Audio()
+    luoyangMusicEl.value.volume = 0.5
+    luoyangMusicEl.value.addEventListener('ended', () => {
+      luoyangMusicIndex.value = (luoyangMusicIndex.value + 1) % luoyangPlaylist.length
+      luoyangMusicEl.value.src = luoyangPlaylist[luoyangMusicIndex.value]
+      luoyangMusicEl.value.play().catch(() => {})
+    })
+  }
+  luoyangMusicIndex.value = 0
+  luoyangMusicEl.value.src = luoyangPlaylist[0]
+  luoyangMusicEl.value.play().catch(() => {})
+}
+
+function stopLuoyangCityMusic() {
+  if (luoyangMusicEl.value) {
+    luoyangMusicEl.value.pause()
+    luoyangMusicEl.value.currentTime = 0
+  }
+}
+
 function startLuoyangTransition() {
   showCityPanel.value = false
   showLuoyangTransition.value = true
   luoyangPhase.value = 0
+
+  // 播放洛阳地铁音乐
+  playMetroAudio('/audio/luoyang-metro.mp3')
 
   // 转场时间线
   setTimeout(() => { luoyangPhase.value = 1 }, 1500)   // 启动运动感
@@ -1639,6 +1748,9 @@ function startLuoyangTransition() {
     showLuoyangTransition.value = false
     showLuoyangPanel.value = true
     luoyangPhase.value = 0
+    // 转场结束，停止地铁音乐，播放洛阳城市音乐
+    stopMetroAudio()
+    playLuoyangCityMusic()
   }, 6200)                                              // 显示洛阳
 }
 
@@ -1650,6 +1762,11 @@ function closeLuoyangPanel() {
   showLuoyangPanel.value = false
   closeLuoyangVideoPlayer()
   closeRubbingPopup()
+  // 停止洛阳城市音乐，恢复背景音乐
+  stopLuoyangCityMusic()
+  if (audioEl.value && musicOn.value) {
+    audioEl.value.play().catch(() => {})
+  }
 }
 function startRubbing() {
   showRubbingPopup.value = true
@@ -1679,6 +1796,10 @@ function openLuoyangVideoPlayer() {
   if (audioEl.value && musicOn.value) {
     audioEl.value.pause()
   }
+  // 暂停洛阳城市音乐
+  if (luoyangMusicEl.value) {
+    luoyangMusicEl.value.pause()
+  }
 }
 function closeLuoyangVideoPlayer() {
   showLuoyangVideoPlayer.value = false
@@ -1686,13 +1807,17 @@ function closeLuoyangVideoPlayer() {
     luoyangVideoRef.value.pause()
     luoyangVideoRef.value.currentTime = 0
   }
-  // 恢复背景音乐
-  if (audioEl.value && musicOn.value) {
+  // 如果在洛阳面板内，恢复城市音乐而非BGM
+  if (showLuoyangPanel.value && luoyangMusicEl.value) {
+    luoyangMusicEl.value.play().catch(() => {})
+  } else if (audioEl.value && musicOn.value) {
     audioEl.value.play().catch(() => {})
   }
 }
 function onLuoyangVideoEnded() {
-  if (audioEl.value && musicOn.value) {
+  if (showLuoyangPanel.value && luoyangMusicEl.value) {
+    luoyangMusicEl.value.play().catch(() => {})
+  } else if (audioEl.value && musicOn.value) {
     audioEl.value.play().catch(() => {})
   }
 }
@@ -2315,11 +2440,31 @@ const showSplash = ref(true)
 const audioEl = ref(null)
 const musicOn = ref(true)
 
+// BGM播放列表
+const bgmPlaylist = [
+  '/audio/bgm.mp3',
+  '/audio/bgm-song2.mp3',
+  '/audio/bgm-song3.mp3',
+]
+const bgmIndex = ref(0)
+
+function initBgmPlaylist() {
+  if (!audioEl.value) return
+  audioEl.value.addEventListener('ended', () => {
+    bgmIndex.value = (bgmIndex.value + 1) % bgmPlaylist.length
+    audioEl.value.src = bgmPlaylist[bgmIndex.value]
+    if (musicOn.value) {
+      audioEl.value.play().catch(() => {})
+    }
+  })
+}
+
 function enterApp() {
   showSplash.value = false
   // 用户触发点击，绕过浏览器自动播放限制
   if (audioEl.value) {
-    audioEl.value.loop = true
+    bgmIndex.value = 0
+    audioEl.value.src = bgmPlaylist[0]
     audioEl.value.volume = 0
     audioEl.value.play().then(() => {
       // 渐入音量
@@ -2330,6 +2475,7 @@ function enterApp() {
         if (vol >= 0.45) clearInterval(fade)
       }, 80)
     }).catch(() => {})
+    initBgmPlaylist()
   }
 }
 
@@ -2345,7 +2491,6 @@ function toggleMusic() {
     }, 50)
   } else {
     // 恢复播放并渐入
-    audioEl.value.loop = true
     audioEl.value.play().then(() => {
       let vol = 0
       const fade = setInterval(() => {
