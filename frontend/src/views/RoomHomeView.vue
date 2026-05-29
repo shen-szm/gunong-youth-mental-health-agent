@@ -1278,8 +1278,13 @@
     <!-- 隐藏音频元素2 -->
     <audio ref="audioEl" src="/audio/bgm.mp3" preload="auto" />
 
-    <!-- ICP备案号 -->
-    <footer class="icp-footer">
+    <!-- 备案信息 -->
+    <footer class="beian-footer">
+      <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
+        <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
+        <span>粤公网安备44011202003950号</span>
+      </a>
+      <span class="beian-divider">|</span>
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
     </footer>
   </div>
@@ -4155,20 +4160,31 @@ onUnmounted(() => {
 .hint-fade-enter-active, .hint-fade-leave-active { transition: opacity 0.3s; }
 .hint-fade-enter-from, .hint-fade-leave-to { opacity: 0; }
 
-/* ═══════════ ICP备案号 ═══════════ */
-.icp-footer {
+/* ═══════════ 备案信息 ═══════════ */
+.beian-footer {
   position: absolute; bottom: 8px; left: 0; right: 0; z-index: 30;
   text-align: center; padding: 6px 0;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
-.icp-footer a {
+.beian-footer a {
   font-size: 11px;
   color: rgba(255,255,255,0.4);
   text-decoration: none;
   transition: color 0.2s;
   letter-spacing: 0.5px;
 }
-.icp-footer a:hover {
+.beian-footer a:hover {
   color: rgba(255,255,255,0.7);
+}
+.beian-link {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.beian-icon {
+  width: 16px; height: 16px; display: inline-block;
+}
+.beian-divider {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
 }
 
 /* ══════════ 西安全屏 + 弹窗交互 ══════════ */

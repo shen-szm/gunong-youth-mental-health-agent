@@ -61,7 +61,12 @@
       </div>
     </div>
 
-    <footer class="icp-footer">
+    <footer class="beian-footer">
+      <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
+        <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
+        <span>粤公网安备44011202003950号</span>
+      </a>
+      <span class="beian-divider">|</span>
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
     </footer>
   </div>
@@ -238,21 +243,33 @@ onMounted(async () => {
 .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 备案号 */
-.icp-footer {
+.beian-footer {
   text-align: center;
   padding: 20px 0 12px;
   margin-top: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
-.icp-footer a {
+.beian-footer a {
   font-size: 12px;
   color: var(--text-secondary);
   text-decoration: none;
   opacity: 0.6;
   transition: opacity 0.2s;
 }
-.icp-footer a:hover {
+.beian-footer a:hover {
   opacity: 1;
   color: var(--primary);
+}
+.beian-link {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.beian-icon {
+  width: 16px; height: 16px; display: inline-block;
+}
+.beian-divider {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.3;
 }
 
 /* 响应式 */
