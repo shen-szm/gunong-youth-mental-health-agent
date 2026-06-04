@@ -59,12 +59,24 @@
 
     <!-- 交互热区 — 音响1（音乐推荐） -->
     <div class="hot-zone zone-speaker zone-speaker-left" @click="openMusicPanel">
-      <div class="speaker-label">音乐</div>
+      <div class="speaker-notes">
+        <span class="note n1">🎵</span>
+        <span class="note n2">🎶</span>
+        <span class="note n3">♪</span>
+        <span class="note n4">🎵</span>
+        <span class="note n5">♫</span>
+      </div>
     </div>
 
     <!-- 交互热区 — 音响2（音乐推荐） -->
     <div class="hot-zone zone-speaker zone-speaker-right" @click="openMusicPanel">
-      <div class="speaker-label">音乐</div>
+      <div class="speaker-notes">
+        <span class="note n1">🎶</span>
+        <span class="note n2">♫</span>
+        <span class="note n3">🎵</span>
+        <span class="note n4">♪</span>
+        <span class="note n5">🎶</span>
+      </div>
     </div>
 
     <!-- 小工具热区 — 桌面物品（治愈+娱乐） -->
@@ -2931,11 +2943,26 @@ onUnmounted(() => {
 .zone-speaker .hover-tip { font-size: 10px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
 .zone-speaker:hover .hover-tip { opacity: 1; }
 
-.speaker-label {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 13px; color: #fff; font-weight: 600;
-  white-space: nowrap; pointer-events: none;
+/* ── 音响热区 — 音符飘浮动画 ── */
+.zone-speaker { overflow: visible; }
+.zone-speaker .speaker-notes { display: none; }
+.zone-speaker:hover .speaker-notes { display: block; }
+.zone-speaker .speaker-notes .note {
+  position: absolute; pointer-events: none;
+  font-size: 16px; opacity: 0; filter: drop-shadow(0 0 6px rgba(255,215,0,0.7));
+  animation: note-float-up 1.4s ease-out infinite;
+}
+.zone-speaker .speaker-notes .note.n1 { animation-delay: 0s;   left: -16px; top: 60%; }
+.zone-speaker .speaker-notes .note.n2 { animation-delay: 0.25s; left: 14px;  top: 50%; }
+.zone-speaker .speaker-notes .note.n3 { animation-delay: 0.5s;  left: -8px;  top: 40%; }
+.zone-speaker .speaker-notes .note.n4 { animation-delay: 0.75s; left: 16px;  top: 30%; }
+.zone-speaker .speaker-notes .note.n5 { animation-delay: 1.0s;  left: 0px;   top: 20%; }
+
+@keyframes note-float-up {
+  0%   { opacity: 0; transform: translateY(0) scale(0.6) rotate(0deg); }
+  15%  { opacity: 1; }
+  70%  { opacity: 0.7; }
+  100% { opacity: 0; transform: translateY(-36px) scale(1.4) rotate(15deg); }
 }
 
 .hover-tip {
@@ -3055,11 +3082,12 @@ onUnmounted(() => {
   box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .bnav-item.active .icon-wrap { background: transparent; border: none; animation: none; }
-.bnav-item svg { width: 20px; height: 20px; }
+.bnav-item svg { width: 24px; height: 24px; }
 .bnav-item .bnav-label {
-  font-size: 10px; font-weight: 500;
-  opacity: 0.7; letter-spacing: 0.5px;
+  font-size: 13px; font-weight: 600;
+  opacity: 1; letter-spacing: 0.5px;
   transition: opacity 0.2s;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.18);
 }
 .bnav-item.active .bnav-label { opacity: 1; font-weight: 600; }
 @keyframes tab-bounce {
@@ -3069,10 +3097,10 @@ onUnmounted(() => {
 }
 
 /* 白天 */
-.day .bottom-nav::before { background: rgba(255,255,255,0.35); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border-color: rgba(255,255,255,0.4); box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6); }
-.day .bnav-item           { color: rgba(50,55,60,0.65); }
-.day .bnav-item:hover     { color: rgba(20,25,30,0.85); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.day .bnav-item.active    { color: rgba(20,25,30,0.95); background: rgba(255,255,255,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.5); }
+.day .bottom-nav::before { background: rgba(255,255,255,0.55); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border-color: rgba(255,255,255,0.5); box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.7); }
+.day .bnav-item           { color: rgba(30,35,40,0.90); }
+.day .bnav-item:hover     { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.day .bnav-item.active    { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.5); }
 /* 傍晚 */
 .evening .bottom-nav::before { background: rgba(40,30,20,0.3); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); border-color: rgba(255,255,255,0.15); box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
 .evening .bnav-item       { color: rgba(255,255,255,0.7); }
@@ -4861,9 +4889,10 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.32);
 }
 .mini-tool-name {
-  font-size: 11px;
-  color: rgba(255,255,255,0.8);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.4);
   white-space: nowrap;
 }
 
