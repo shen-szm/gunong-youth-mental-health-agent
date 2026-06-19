@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 def verify_admin(user_id: int, db: Session):
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_admin:
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+        raise HTTPException(status_code=403, detail="需要教师权限")
     return user
 
 @router.get("/stats")
@@ -58,7 +58,7 @@ def set_admin(target_user_id: int, user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="用户不存在")
     target.is_admin = 1 if not target.is_admin else 0
     db.commit()
-    action = "设为管理员" if target.is_admin else "取消管理员"
+    action = "设为教师" if target.is_admin else "取消教师"
     return {"msg": f"已将 {target.username} {action}"}
 
 @router.delete("/users/{target_user_id}")
@@ -243,7 +243,7 @@ async def get_user_analysis(target_user_id: int, user_id: int, db: Session = Dep
 请从以下几个方面进行分析（共300字以内）：
 1. 心理状态总结：用户的整体心理状态如何？主要情绪特征是什么？
 2. 关键发现：有什么需要特别关注的问题或趋势？
-3. 专业建议：作为心理咨询师，给管理者的建议（如何更好地帮助该用户）"""
+3. 专业建议：作为心理咨询师，给教师的建议（如何更好地帮助该用户）"""
     }]
 
     try:

@@ -9,7 +9,7 @@
         </div>
         <h3>{{ userStore.nickname || '未设置昵称' }}</h3>
         <p class="uid">ID {{ userStore.userId }}</p>
-        <span v-if="userStore.isAdmin" class="admin-badge">管理员</span>
+        <span v-if="userStore.isAdmin" class="admin-badge">教师</span>
       </div>
     </div>
 
@@ -105,7 +105,7 @@
       <div class="menu-card">
         <div class="menu-row" @click="router.push('/admin')">
           <span class="setting-icon">⚙️</span>
-          <span>管理后台</span>
+          <span>教师端</span>
           <span class="arrow">›</span>
         </div>
       </div>

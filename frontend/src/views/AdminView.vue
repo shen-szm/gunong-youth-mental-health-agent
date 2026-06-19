@@ -2,7 +2,7 @@
   <div class="admin-page">
     <header class="admin-header">
       <button class="back-btn" @click="handleBack">← 返回</button>
-      <h2>管理后台</h2>
+      <h2>教师端</h2>
       <button class="logout-btn" @click="handleLogout">退出</button>
     </header>
 
@@ -43,13 +43,13 @@
             <div class="user-info">
               <span class="user-name">{{ u.nickname || u.username }}</span>
               <span class="user-meta">
-                ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }}
+                ID: {{ u.id }} · {{ u.is_admin ? '教师' : '普通用户' }}
                 <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
               </span>
             </div>
             <div class="user-actions">
               <button class="btn-sm warn" @click.stop="resetUserPwd(u)">重置密码</button>
-              <button class="btn-sm" @click.stop="toggleAdmin(u)">{{ u.is_admin ? '取消管理' : '设管理' }}</button>
+              <button class="btn-sm" @click.stop="toggleAdmin(u)">{{ u.is_admin ? '取消教师' : '设为教师' }}</button>
               <button class="btn-sm danger" @click.stop="deleteUser(u)">删除</button>
             </div>
           </div>
@@ -69,7 +69,7 @@
             <div class="user-info">
               <span class="user-name">{{ u.nickname || u.username }}</span>
               <span class="user-meta">
-                ID: {{ u.id }} · {{ u.is_admin ? '管理员' : '普通用户' }} · {{ u.created_at?.slice(0, 10) }}
+                ID: {{ u.id }} · {{ u.is_admin ? '教师' : '普通用户' }} · {{ u.created_at?.slice(0, 10) }}
                 <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
               </span>
             </div>
@@ -434,7 +434,7 @@ async function loadChats() {
 
 // ─── 管理员操作 ───
 async function toggleAdmin(u) {
-  if (!confirm(`确认${u.is_admin ? '取消' : '设置'}管理员【${u.username}】？`)) return
+  if (!confirm(`确认${u.is_admin ? '取消' : '设置'}教师【${u.username}】？`)) return
   try {
     await axios.post(`/api/admin/set-admin/${u.id}`, null, {
       params: { user_id: userStore.userId },
@@ -644,7 +644,7 @@ watch(() => detail.value.word_cloud, () => {
 
 onMounted(() => {
   if (!userStore.isAdmin) {
-    error.value = "请用管理员账号登录"
+    error.value = "请用教师账号登录"
     return
   }
   loadStats()

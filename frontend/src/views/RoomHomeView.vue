@@ -163,7 +163,7 @@
             <div class="panel-avatar">{{ (userStore.nickname || '你')[0] }}</div>
             <div class="panel-name">{{ userStore.nickname || '未设置昵称' }}</div>
             <div class="panel-uid">ID {{ userStore.userId }}</div>
-            <span v-if="userStore.isAdmin" class="panel-badge">管理员</span>
+            <span v-if="userStore.isAdmin" class="panel-badge">教师</span>
             <!-- 状态 -->
             <button class="status-tag" @click.stop="showStatusPicker = true">
               <span v-if="userStatus">{{ userStatus.emoji }} {{ userStatus.text }}</span>
@@ -275,7 +275,7 @@
             <div class="panel-sec-title">系统</div>
             <div class="panel-menu">
               <div class="panel-menu-row" @click="router.push('/admin'); showProfilePanel = false">
-                ⚙️ 管理后台 <span class="arrow">›</span>
+                ⚙️ 教师端 <span class="arrow">›</span>
               </div>
             </div>
           </div>

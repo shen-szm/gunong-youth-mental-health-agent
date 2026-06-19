@@ -63,7 +63,7 @@ async def recover_password(username: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="用户名不存在")
     if not user.plain_password:
-        raise HTTPException(status_code=400, detail="该账号密码无法找回，请联系管理员重置")
+        raise HTTPException(status_code=400, detail="该账号密码无法找回，请联系教师重置")
     return {"username": user.username, "password": user.plain_password}
 
 
@@ -73,7 +73,7 @@ async def reset_password(user_id: int, admin_id: int, new_password: str = "12345
     from models import User as UserModel
     admin = db.query(UserModel).filter(UserModel.id == admin_id).first()
     if not admin or not admin.is_admin:
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+        raise HTTPException(status_code=403, detail="需要教师权限")
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
