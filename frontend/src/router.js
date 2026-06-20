@@ -11,7 +11,8 @@ import { useUserStore } from "./stores/user";
 const routes = [
   { path: "/", name: "Home", component: RoomHomeView },
   { path: "/home", name: "OldHome", component: HomeView },
-  { path: "/login", name: "Login", component: LoginView },
+  { path: "/login", redirect: "/" },
+  { path: "/teacher-login", name: "Login", component: LoginView },
   { path: "/chat", name: "Chat", component: ChatView },
   { path: "/trend", name: "Trend", component: TrendView },
   { path: "/profile", name: "Profile", component: ProfileView },
@@ -23,16 +24,16 @@ const router = createRouter({
   routes,
 });
 
-// 普通页面自动绑定演示用户；/login 保留为教师隐藏入口
+// 普通页面自动绑定演示用户；/teacher-login 保留为教师隐藏入口
 router.beforeEach(async (to) => {
   const userStore = useUserStore();
-  if (to.path === "/login") return true;
+  if (to.path === "/teacher-login") return true;
 
   if (!userStore.isLoggedIn) {
     try {
       await userStore.ensureDemoSession();
     } catch {
-      return "/login";
+      return "/teacher-login";
     }
   }
 

@@ -1,8 +1,8 @@
 <template>
-  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/login' }">
+  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login' }">
     <router-view class="page-content" />
     <!-- 房间主页和管理后台不显示底部导航 -->
-    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/login'">
+    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/teacher-login'">
       <router-link to="/" :class="{ active: route.path === '/' }" @click="router.push('/')">
         <span class="nav-icon">🏠</span>
         <span class="nav-label">首页</span>

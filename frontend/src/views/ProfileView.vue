@@ -175,13 +175,13 @@ async function handleLogout() {
   const wasTeacher = userStore.isAdmin
   userStore.logout()
   if (wasTeacher) {
-    router.push('/login')
+    router.push('/teacher-login')
     return
   }
   try {
     await userStore.ensureDemoSession()
   } catch {
-    router.push('/login')
+    router.push('/teacher-login')
   }
 }
 

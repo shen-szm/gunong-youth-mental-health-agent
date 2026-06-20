@@ -89,10 +89,6 @@
         <span class="mini-tool-emoji">📺</span>
         <span class="mini-tool-name">小电视</span>
       </div>
-      <div class="mini-tool-item" @click="openMiniApp('ikk')">
-        <span class="mini-tool-emoji">📟</span>
-        <span class="mini-tool-name">小掌机</span>
-      </div>
     </div>
 
     <!-- 底部导航 -->
@@ -1281,7 +1277,6 @@
           <div class="mini-app-body">
             <iframe :src="miniAppUrl" class="mini-app-iframe" frameborder="0" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; microphone; camera; midi; geolocation; gyroscope; accelerometer; magnetometer; speaker-selection"></iframe>
             <div v-if="miniAppHideBottom" class="mini-app-bottom-mask"></div>
-            <div v-if="miniAppKey === 'ikk'" class="ikk-bottom-mask"></div>
           </div>
         </div>
       </div>
@@ -1333,7 +1328,6 @@ const miniAppKey = ref('')
 const miniAppMap = {
   air: { url: 'https://giao.me/air', title: '❄️ 小空调' },
   itv: { url: 'https://giao.me/itv', title: '📺 小电视' },
-  ikk: { url: 'https://giao.me/ikk', title: '📟 小掌机' },
 }
 function openMiniApp(key) {
   const app = miniAppMap[key]
@@ -1356,7 +1350,7 @@ function closeMiniApp() {
     audioEl.value.play().catch(() => {})
   }
 }
-// 小空调和小电视需要隐藏底部外部链接，小掌机底部有功能按钮不能遮
+// 小空调和小电视需要隐藏底部外部链接
 const miniAppHideBottom = computed(() => ['air', 'itv'].includes(miniAppKey.value))
 
 
@@ -2448,13 +2442,13 @@ async function handleLogout() {
   userStore.logout()
   showProfilePanel.value = false
   if (wasTeacher) {
-    router.push('/login')
+    router.push('/teacher-login')
     return
   }
   try {
     await userStore.ensureDemoSession()
   } catch {
-    router.push('/login')
+    router.push('/teacher-login')
   }
 }
 
@@ -4202,29 +4196,47 @@ onUnmounted(() => {
 
 /* ═══════════ 备案信息 ═══════════ */
 .beian-footer {
-  position: absolute; bottom: 8px; left: 0; right: 0; z-index: 30;
-  text-align: center; padding: 6px 0;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(18, 24, 32, 0.72);
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 .beian-footer a {
-  font-size: 11px;
-  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  color: #fff;
+  font-weight: 700;
   text-decoration: none;
-  transition: color 0.2s;
-  letter-spacing: 0.5px;
+  transition: color 0.2s, opacity 0.2s;
+  letter-spacing: 0.4px;
+  line-height: 1;
 }
 .beian-footer a:hover {
-  color: rgba(255,255,255,0.7);
+  color: #fff;
+  opacity: 0.86;
 }
 .beian-link {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .beian-icon {
   width: 16px; height: 16px; display: inline-block;
 }
 .beian-divider {
-  font-size: 11px;
-  color: rgba(255,255,255,0.25);
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+  font-weight: 700;
 }
 
 /* ══════════ 西安全屏 + 弹窗交互 ══════════ */
@@ -4974,15 +4986,6 @@ onUnmounted(() => {
   bottom: 0; left: 0; right: 0;
   height: 80px;
   background: rgba(255,255,255,1);
-  pointer-events: none;
-  z-index: 2;
-}
-/* 小掌机专用底部遮罩（独立调整） */
-.ikk-bottom-mask {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 30px;
-  background: rgba(0, 0, 0, 1);  /* 掌机页面背景偏暗，用黑色 */
   pointer-events: none;
   z-index: 2;
 }

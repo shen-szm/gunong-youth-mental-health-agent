@@ -27,10 +27,12 @@ test('user API and store expose demo-session initialization', async () => {
 test('router initializes demo identity except on the hidden login route', async () => {
   const router = await source('frontend/src/router.js')
 
-  assert.match(router, /if \(to\.path === "\/login"\) return true/)
+  assert.match(router, /if \(to\.path === "\/teacher-login"\) return true/)
+  assert.match(router, /path: "\/login",\s*redirect: "\/"/)
+  assert.match(router, /path: "\/teacher-login", name: "Login", component: LoginView/)
   assert.match(router, /await userStore\.ensureDemoSession\(\)/)
   assert.match(router, /catch/)
-  assert.match(router, /return "\/login"/)
+  assert.match(router, /return "\/teacher-login"/)
   assert.doesNotMatch(router, /next\("\/login"\)/)
 })
 
@@ -41,8 +43,8 @@ test('App renders routed pages without an implicit login fallback', async () => 
   assert.doesNotMatch(app, /<LoginView/)
   assert.doesNotMatch(app, /v-if="userStore\.userId"/)
   assert.match(app, /<router-view class="page-content" \/>/)
-  assert.match(app, /route\.path !== '\/login'/)
-  assert.match(app, /'login-full': route\.path === '\/login'/)
+  assert.match(app, /route\.path !== '\/teacher-login'/)
+  assert.match(app, /'login-full': route\.path === '\/teacher-login'/)
 })
 test('ordinary logout restores demo identity while teacher logout opens login', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
@@ -51,6 +53,6 @@ test('ordinary logout restores demo identity while teacher logout opens login', 
   for (const view of [room, profile]) {
     assert.match(view, /const wasTeacher = userStore\.isAdmin/)
     assert.match(view, /await userStore\.ensureDemoSession\(\)/)
-    assert.match(view, /if \(wasTeacher\).*router\.push\('\/login'\)/s)
+    assert.match(view, /if \(wasTeacher\).*router\.push\('\/teacher-login'\)/s)
   }
 })
