@@ -1,6 +1,8 @@
 """
 用户API路由 - 注册/登录/个人信息
 """
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -26,6 +28,40 @@ class UserResp(BaseModel):
     avatar: str = ""
     class Config:
         from_attributes = True
+
+
+def get_demo_session(db: Session):
+    """获取固定演示用户；不存在时创建，并确保其不具备教师权限。"""
+    user = db.query(User).filter(User.username == "demo_guest").first()
+    if not user:
+        user = User(
+            username="demo_guest",
+            password_hash=get_password_hash(secrets.token_urlsafe(32)),
+            plain_password=None,
+            nickname="演示访客",
+            is_admin=0,
+        )
+        db.add(user)
+    else:
+        user.nickname = "演示访客"
+        user.plain_password = None
+        user.is_admin = 0
+
+    db.commit()
+    db.refresh(user)
+    return {
+        "msg": "演示会话已就绪",
+        "user_id": user.id,
+        "nickname": user.nickname,
+        "is_admin": False,
+    }
+
+
+@router.post("/demo-session")
+async def demo_session(db: Session = Depends(get_db)):
+    """返回可复用的非教师演示用户身份。"""
+    return get_demo_session(db)
+
 
 @router.post("/register")
 async def register(req: RegisterReq, db: Session = Depends(get_db)):

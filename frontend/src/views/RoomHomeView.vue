@@ -2442,8 +2442,20 @@ async function saveNickname() {
   } catch { alert('保存失败') }
 }
 
-function handleLogout() {
-  if (confirm('确定要退出登录吗？')) { userStore.logout(); showProfilePanel.value = false }
+async function handleLogout() {
+  if (!confirm('确定要退出登录吗？')) return
+  const wasTeacher = userStore.isAdmin
+  userStore.logout()
+  showProfilePanel.value = false
+  if (wasTeacher) {
+    router.push('/login')
+    return
+  }
+  try {
+    await userStore.ensureDemoSession()
+  } catch {
+    router.push('/login')
+  }
 }
 
 function openProfile() {

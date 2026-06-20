@@ -8,6 +8,9 @@ export function register(username, password, nickname) {
 export function login(username, password) {
   return instance.post("/login", { username, password });
 }
+export function createDemoSession() {
+  return instance.post("/demo-session");
+}
 export function getProfile(userId) {
   return instance.get(`/${userId}`);
 }

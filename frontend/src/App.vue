@@ -1,8 +1,8 @@
 <template>
-  <div class="app-container" v-if="userStore.userId" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat' }">
+  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/login' }">
     <router-view class="page-content" />
     <!-- 房间主页和管理后台不显示底部导航 -->
-    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/'">
+    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/login'">
       <router-link to="/" :class="{ active: route.path === '/' }" @click="router.push('/')">
         <span class="nav-icon">🏠</span>
         <span class="nav-label">首页</span>
@@ -21,17 +21,13 @@
       </router-link>
     </nav>
   </div>
-  <LoginView v-else />
 </template>
 
 <script setup>
 import { useRoute, useRouter } from "vue-router";
-import { useUserStore } from "./stores/user";
-import LoginView from "./views/LoginView.vue";
 
 const route = useRoute();
 const router = useRouter();
-const userStore = useUserStore();
 </script>
 
 <style scoped>
@@ -67,6 +63,14 @@ const userStore = useUserStore();
 .admin-full {
   max-width: 100% !important;
   box-shadow: none !important;
+}
+.login-full {
+  max-width: 100% !important;
+  padding-bottom: 0;
+  box-shadow: none !important;
+}
+.login-full .page-content {
+  padding: 0;
 }
 /* 房间主页全屏无内边距 */
 .room-full .page-content {

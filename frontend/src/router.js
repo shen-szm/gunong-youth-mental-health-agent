@@ -23,15 +23,20 @@ const router = createRouter({
   routes,
 });
 
-// 全局路由守卫：未登录跳转登录页
-router.beforeEach((to, from, next) => {
+// 普通页面自动绑定演示用户；/login 保留为教师隐藏入口
+router.beforeEach(async (to) => {
   const userStore = useUserStore();
-  const needAuth = to.path !== "/login";
-  if (needAuth && !userStore.isLoggedIn) {
-    next("/login");
-  } else {
-    next();
+  if (to.path === "/login") return true;
+
+  if (!userStore.isLoggedIn) {
+    try {
+      await userStore.ensureDemoSession();
+    } catch {
+      return "/login";
+    }
   }
+
+  return true;
 });
 
 export default router;

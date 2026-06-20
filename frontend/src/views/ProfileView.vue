@@ -170,8 +170,19 @@ async function saveNickname() {
   } catch { alert('保存失败') }
 }
 
-function handleLogout() {
-  if (confirm('确定要退出登录吗？')) { userStore.logout(); router.push('/login') }
+async function handleLogout() {
+  if (!confirm('确定要退出登录吗？')) return
+  const wasTeacher = userStore.isAdmin
+  userStore.logout()
+  if (wasTeacher) {
+    router.push('/login')
+    return
+  }
+  try {
+    await userStore.ensureDemoSession()
+  } catch {
+    router.push('/login')
+  }
 }
 
 // 修改密码
