@@ -4239,6 +4239,23 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
+@media (max-width: 520px) {
+  .beian-footer {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    padding: 7px 10px;
+  }
+  .beian-footer a {
+    font-size: 11px;
+    letter-spacing: 0.2px;
+  }
+  .beian-divider {
+    font-size: 11px;
+  }
+}
+
 /* ══════════ 西安全屏 + 弹窗交互 ══════════ */
 
 /* 全屏容器 & 渐入动画 */

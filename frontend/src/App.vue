@@ -1,6 +1,7 @@
 <template>
   <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login' }">
     <router-view class="page-content" />
+    <div class="build-badge" :title="buildTitle">v{{ appVersion }}</div>
     <!-- 房间主页和管理后台不显示底部导航 -->
     <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/teacher-login'">
       <router-link to="/" :class="{ active: route.path === '/' }" @click="router.push('/')">
@@ -28,6 +29,11 @@ import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
 const router = useRouter();
+const appVersion = import.meta.env.VITE_APP_VERSION || "local";
+const buildTime = import.meta.env.VITE_BUILD_TIME || "dev";
+const buildTitle = `咕哝 build ${appVersion} / ${buildTime}`;
+
+console.info('[咕哝] build', { version: appVersion, time: buildTime });
 </script>
 
 <style scoped>
@@ -131,5 +137,22 @@ const router = useRouter();
 .nav-icon {
   font-size: 22px;
   margin-bottom: 2px;
+}
+.build-badge {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 120;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(18, 24, 32, 0.42);
+  color: rgba(255,255,255,0.74);
+  font-size: 10px;
+  line-height: 1.2;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.room-full .build-badge {
+  bottom: 8px;
 }
 </style>
