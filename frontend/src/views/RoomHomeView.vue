@@ -24,7 +24,28 @@
       <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
+    <!-- 复访引导：每日仪式 + 首次使用提示 -->
+    <div class="engagement-stack" v-if="!showSplash">
+      <section class="daily-ritual-card">
+        <div class="ritual-kicker">今日咕哝</div>
+        <div class="ritual-title">{{ dailyRitual.title }}</div>
+        <p class="ritual-copy">{{ dailyRitual.copy }}</p>
+        <button class="ritual-action" @click="openDailyRitualAction">
+          {{ dailyRitual.actionText }}
+        </button>
+      </section>
 
+      <section class="first-run-guide" v-if="showFirstRunGuide">
+        <button class="guide-close" @click="dismissFirstRunGuide" aria-label="关闭新手引导">×</button>
+        <div class="guide-title">第一次来这里，可以这样开始</div>
+        <ol class="guide-steps">
+          <li>点电脑，说一句今天的感受</li>
+          <li>看报告，了解最近的情绪变化</li>
+          <li>进树洞，看看有没有人和你一样</li>
+        </ol>
+        <button class="guide-primary" @click="goToChat()">先说一句 →</button>
+      </section>
+    </div>
     <!-- 全局音乐开关 -->
     <button class="global-music-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
       <span v-if="musicOn">🔊</span>
@@ -1317,6 +1338,55 @@ const showHealingPanel = ref(false)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
+
+// ═══ 复访引导：每日仪式 + 首次使用提示 ═══
+const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_dismissed'
+const DAILY_RITUAL_SEEN_KEY = 'shengyu_daily_ritual_seen'
+const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== '1')
+const dailyRitualSeed = new Date().toISOString().slice(0, 10)
+const dailyRituals = [
+  {
+    title: '先不用变好，先把今天说出来',
+    copy: '给自己三分钟，只描述感受，不评价自己。',
+    actionText: '开始倾诉',
+    action: 'chat',
+  },
+  {
+    title: '看看有没有人也这样想',
+    copy: '有些心情被别人说出来以后，会轻一点。',
+    actionText: '去树洞看看',
+    action: 'treehole',
+  },
+  {
+    title: '今天只做一个很小的照顾',
+    copy: '喝水、伸展、听一首歌，都算认真对待自己。',
+    actionText: '打开治愈角',
+    action: 'healing',
+  },
+]
+const dailyRitual = computed(() => {
+  const sum = [...dailyRitualSeed].reduce((total, char) => total + char.charCodeAt(0), 0)
+  return dailyRituals[sum % dailyRituals.length]
+})
+function markDailyRitualSeen() {
+  localStorage.setItem('shengyu_daily_ritual_seen', dailyRitualSeed)
+}
+function openDailyRitualAction() {
+  markDailyRitualSeen()
+  if (dailyRitual.value.action === 'treehole') {
+    showTreeHolePanel.value = true
+    return
+  }
+  if (dailyRitual.value.action === 'healing') {
+    showHealingPanel.value = true
+    return
+  }
+  goToChat()
+}
+function dismissFirstRunGuide() {
+  showFirstRunGuide.value = false
+  localStorage.setItem(FIRST_RUN_GUIDE_KEY, '1')
+}
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
 
@@ -2812,6 +2882,121 @@ onUnmounted(() => {
 .room {
   width: 100%; height: 100vh; position: relative; overflow: hidden;
   font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+}
+
+
+/* ═══════════ 复访引导：每日仪式 + 首次提示 ═══════════ */
+.engagement-stack {
+  position: absolute;
+  top: 112px;
+  left: 22px;
+  z-index: 32;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(300px, calc(100vw - 44px));
+  pointer-events: none;
+}
+.daily-ritual-card,
+.first-run-guide {
+  pointer-events: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(18, 24, 32, 0.58);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.24);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.daily-ritual-card {
+  padding: 14px 15px 15px;
+}
+.ritual-kicker {
+  font-size: 12px;
+  color: rgba(255,255,255,0.68);
+  margin-bottom: 5px;
+}
+.ritual-title {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 700;
+  text-wrap: pretty;
+}
+.ritual-copy {
+  margin: 7px 0 12px;
+  color: rgba(255,255,255,0.78);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.ritual-action,
+.guide-primary {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: rgba(255, 230, 178, 0.92);
+  color: #2f2114;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.ritual-action:hover,
+.guide-primary:hover {
+  transform: translateY(-1px);
+  background: #fff0c6;
+}
+.first-run-guide {
+  position: relative;
+  padding: 14px 15px 15px;
+}
+.guide-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.58);
+  font-size: 18px;
+  cursor: pointer;
+}
+.guide-title {
+  padding-right: 24px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.guide-steps {
+  margin: 10px 0 12px;
+  padding-left: 18px;
+  color: rgba(255,255,255,0.78);
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 520px) {
+  .engagement-stack {
+    top: 96px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+  .first-run-guide {
+    display: none;
+  }
+  .daily-ritual-card {
+    padding: 12px 13px;
+  }
+  .ritual-title {
+    font-size: 15px;
+  }
+  .ritual-copy {
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ritual-action,
+  .guide-primary {
+    transition: none;
+  }
 }
 
 /* ═══════════ 欢迎遮罩 ═══════════ */
