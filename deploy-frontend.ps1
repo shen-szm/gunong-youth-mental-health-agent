@@ -10,7 +10,10 @@ if (-not (Test-Path -LiteralPath $FrontendDir)) {
 
 Push-Location $FrontendDir
 try {
-  $env:VITE_APP_VERSION = (git -C $PSScriptRoot rev-parse --short HEAD).Trim()
+  $pkg = Get-Content -Raw (Join-Path $FrontendDir "package.json") | ConvertFrom-Json
+  $pkgVersion = $pkg.version
+  $gitSha = (git -C $PSScriptRoot rev-parse --short HEAD).Trim()
+  $env:VITE_APP_VERSION = "$pkgVersion+$gitSha"
   $env:VITE_BUILD_TIME = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 
   npm.cmd install

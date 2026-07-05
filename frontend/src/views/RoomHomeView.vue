@@ -27,23 +27,46 @@
     <!-- 复访引导：每日仪式 + 首次使用提示 -->
     <div class="engagement-stack" v-if="!showSplash">
       <section class="daily-ritual-card">
-        <div class="ritual-kicker">今日咕哝</div>
+        <div class="ritual-glow"></div>
+        <div class="ritual-meta-row">
+          <div class="ritual-orb">{{ dailyRitual.emoji }}</div>
+          <div>
+            <div class="ritual-kicker">今日咕哝</div>
+            <div class="ritual-date">每天给自己一个很小的入口</div>
+          </div>
+        </div>
         <div class="ritual-title">{{ dailyRitual.title }}</div>
         <p class="ritual-copy">{{ dailyRitual.copy }}</p>
+        <div class="ritual-chip-row">
+          <span class="ritual-chip">倾诉</span>
+          <span class="ritual-chip">共鸣</span>
+          <span class="ritual-chip">治愈</span>
+        </div>
         <button class="ritual-action" @click="openDailyRitualAction">
           {{ dailyRitual.actionText }}
         </button>
       </section>
 
       <section class="first-run-guide" v-if="showFirstRunGuide">
-        <button class="guide-close" @click="dismissFirstRunGuide" aria-label="关闭新手引导">×</button>
-        <div class="guide-title">第一次来这里，可以这样开始</div>
-        <ol class="guide-steps">
-          <li>点电脑，说一句今天的感受</li>
-          <li>看报告，了解最近的情绪变化</li>
-          <li>进树洞，看看有没有人和你一样</li>
-        </ol>
-        <button class="guide-primary" @click="goToChat()">先说一句 →</button>
+        <div class="guide-title">先完成一个小动作，再开始探索</div>
+        <p class="guide-copy">不用注册，不用组织好语言。选一个入口，咕哝会陪你把第一句话说出来。</p>
+        <div class="guide-option-grid">
+          <button class="guide-option is-primary" @click="completeFirstRunGuide('chat')">
+            <span class="guide-option-icon">💬</span>
+            <span>
+              <strong>先说一句</strong>
+              <em>点电脑，说一句今天的感受</em>
+            </span>
+          </button>
+          <button class="guide-option" @click="completeFirstRunGuide('treehole')">
+            <span class="guide-option-icon">🌙</span>
+            <span>
+              <strong>看看共鸣</strong>
+              <em>进树洞，看看有没有人和你一样</em>
+            </span>
+          </button>
+        </div>
+        <button class="guide-secondary" @click="dismissFirstRunGuide">稍后再说</button>
       </section>
     </div>
     <!-- 全局音乐开关 -->
@@ -73,9 +96,9 @@
       <div class="bed-label">回顾近期的情绪</div>
     </div>
 
-    <!-- 交互热区 — 窗户（出去看看） -->
+    <!-- 交互热区 — 窗户（城市探索） -->
     <div class="hot-zone zone-window" @click="showTransportPanel = true">
-      <div class="window-label">出去看看</div>
+      <div class="window-label">窗外有新风景</div>
     </div>
 
     <!-- 交互热区 — 音响1（音乐推荐） -->
@@ -1346,18 +1369,21 @@ const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== '1')
 const dailyRitualSeed = new Date().toISOString().slice(0, 10)
 const dailyRituals = [
   {
+    emoji: '🌿',
     title: '先不用变好，先把今天说出来',
     copy: '给自己三分钟，只描述感受，不评价自己。',
     actionText: '开始倾诉',
     action: 'chat',
   },
   {
+    emoji: '🌙',
     title: '看看有没有人也这样想',
     copy: '有些心情被别人说出来以后，会轻一点。',
     actionText: '去树洞看看',
     action: 'treehole',
   },
   {
+    emoji: '✨',
     title: '今天只做一个很小的照顾',
     copy: '喝水、伸展、听一首歌，都算认真对待自己。',
     actionText: '打开治愈角',
@@ -1379,6 +1405,15 @@ function openDailyRitualAction() {
   }
   if (dailyRitual.value.action === 'healing') {
     showHealingPanel.value = true
+    return
+  }
+  goToChat()
+}
+function completeFirstRunGuide(action) {
+  showFirstRunGuide.value = false
+  localStorage.setItem(FIRST_RUN_GUIDE_KEY, '1')
+  if (action === 'treehole') {
+    showTreeHolePanel.value = true
     return
   }
   goToChat()
@@ -2885,116 +2920,223 @@ onUnmounted(() => {
 }
 
 
+
 /* ═══════════ 复访引导：每日仪式 + 首次提示 ═══════════ */
 .engagement-stack {
   position: absolute;
-  top: 112px;
+  top: 108px;
   left: 22px;
   z-index: 32;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(300px, calc(100vw - 44px));
+  width: min(326px, calc(100vw - 44px));
   pointer-events: none;
 }
 .daily-ritual-card,
 .first-run-guide {
+  position: relative;
+  overflow: hidden;
   pointer-events: auto;
-  border-radius: 18px;
+  border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(18, 24, 32, 0.58);
+  background: linear-gradient(145deg, rgba(18,24,32,0.72), rgba(48,45,61,0.58));
   color: #fff;
-  box-shadow: 0 10px 26px rgba(0,0,0,0.24);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 .daily-ritual-card {
-  padding: 14px 15px 15px;
+  padding: 15px;
+}
+.ritual-glow {
+  position: absolute;
+  right: -34px;
+  top: -42px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,220,156,0.42), rgba(255,220,156,0));
+  pointer-events: none;
+}
+.ritual-meta-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ritual-orb {
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 22px;
 }
 .ritual-kicker {
   font-size: 12px;
-  color: rgba(255,255,255,0.68);
-  margin-bottom: 5px;
+  color: rgba(255,255,255,0.88);
+  font-weight: 700;
+}
+.ritual-date {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.58);
 }
 .ritual-title {
-  font-size: 16px;
+  position: relative;
+  font-size: 17px;
   line-height: 1.35;
-  font-weight: 700;
+  font-weight: 800;
   text-wrap: pretty;
 }
 .ritual-copy {
+  position: relative;
   margin: 7px 0 12px;
   color: rgba(255,255,255,0.78);
   font-size: 13px;
   line-height: 1.55;
 }
-.ritual-action,
-.guide-primary {
-  border: none;
+.ritual-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.ritual-chip {
+  padding: 4px 8px;
   border-radius: 999px;
-  padding: 8px 13px;
-  background: rgba(255, 230, 178, 0.92);
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.76);
+  font-size: 11px;
+}
+.ritual-action,
+.guide-option,
+.guide-secondary {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ritual-action {
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 230, 178, 0.94);
   color: #2f2114;
   font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
+  font-weight: 800;
   transition: transform 0.18s ease, background 0.18s ease;
 }
-.ritual-action:hover,
-.guide-primary:hover {
+.ritual-action:hover {
   transform: translateY(-1px);
   background: #fff0c6;
 }
 .first-run-guide {
-  position: relative;
-  padding: 14px 15px 15px;
-}
-.guide-close {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  border: none;
-  background: transparent;
-  color: rgba(255,255,255,0.58);
-  font-size: 18px;
-  cursor: pointer;
+  padding: 15px;
+  background: linear-gradient(145deg, rgba(28,31,42,0.82), rgba(70,54,66,0.68));
 }
 .guide-title {
-  padding-right: 24px;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.guide-copy {
+  margin: 7px 0 12px;
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.guide-option-grid {
+  display: grid;
+  gap: 8px;
+}
+.guide-option {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.09);
+  color: #fff;
+  text-align: left;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.guide-option.is-primary {
+  background: rgba(255,230,178,0.18);
+  outline: 1px solid rgba(255,230,178,0.3);
+}
+.guide-option:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.14);
+}
+.guide-option-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.guide-option strong,
+.guide-option em {
+  display: block;
+  font-style: normal;
+}
+.guide-option strong {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.guide-option em {
+  color: rgba(255,255,255,0.66);
+  font-size: 11px;
   line-height: 1.4;
 }
-.guide-steps {
-  margin: 10px 0 12px;
-  padding-left: 18px;
-  color: rgba(255,255,255,0.78);
+.guide-secondary {
+  display: block;
+  margin: 10px auto 0;
+  padding: 4px 8px;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
   font-size: 12px;
-  line-height: 1.7;
+}
+.guide-secondary:hover {
+  color: rgba(255,255,255,0.8);
 }
 @media (max-width: 520px) {
   .engagement-stack {
-    top: 96px;
+    top: auto;
     left: 12px;
     right: 12px;
+    bottom: 96px;
     width: auto;
-  }
-  .first-run-guide {
-    display: none;
   }
   .daily-ritual-card {
     padding: 12px 13px;
   }
-  .ritual-title {
+  .first-run-guide {
+    padding: 13px;
+  }
+  .ritual-title,
+  .guide-title {
     font-size: 15px;
   }
-  .ritual-copy {
+  .ritual-copy,
+  .guide-copy {
     font-size: 12px;
+  }
+  .ritual-chip-row {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .ritual-action,
-  .guide-primary {
+  .guide-option {
     transition: none;
   }
 }

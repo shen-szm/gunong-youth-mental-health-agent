@@ -14,10 +14,10 @@ test('room home offers first-run guidance for new visitors', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.match(room, /first-run-guide/)
-  assert.match(room, /第一次来这里，可以这样开始/)
+  assert.match(room, /先完成一个小动作，再开始探索/)
   assert.match(room, /点电脑，说一句今天的感受/)
-  assert.match(room, /goToChat\(\)/)
-  assert.match(room, /dismissFirstRunGuide/)
+  assert.match(room, /completeFirstRunGuide\('chat'\)/)
+  assert.match(room, /completeFirstRunGuide/)
   assert.match(room, /shengyu_first_run_guide_dismissed/)
 })
 
