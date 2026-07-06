@@ -81,3 +81,18 @@ test('teacher login returns teachers to requested portal path', async () => {
   assert.match(login, /const redirect = route.query.redirect/)
   assert.match(login, /router\.push\(data\.is_admin \? \(redirect \|\| '\/admin'\) : '\/'\)/)
 })
+
+test('teacher portal prioritizes student emotion status dashboard', async () => {
+  const portal = await source('frontend/src/views/AdminView.vue')
+
+  assert.match(portal, /student-emotion-board/)
+  assert.match(portal, /学生情绪状态/)
+  assert.match(portal, /点击学生查看情绪趋势、分布与AI分析/)
+  assert.match(portal, /student-mood-summary/)
+  assert.match(portal, /detail\.stats\.avg_score/)
+
+  const adminApi = await source('backend/api/admin.py')
+  assert.match(adminApi, /latest_mood_label/)
+  assert.match(adminApi, /avg_mood_score/)
+  assert.match(adminApi, /mood_count/)
+})

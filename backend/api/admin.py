@@ -35,18 +35,27 @@ def get_users(user_id: int, page: int = 1, size: int = 20, db: Session = Depends
     verify_admin(user_id, db)
     total = db.query(User).count()
     users = db.query(User).order_by(User.id.desc()).offset((page - 1) * size).limit(size).all()
+    enriched_users = []
+    for u in users:
+        mood_records = db.query(MoodRecord).filter(MoodRecord.user_id == u.id).all()
+        latest_mood = db.query(MoodRecord).filter(MoodRecord.user_id == u.id).order_by(MoodRecord.created_at.desc()).first()
+        mood_count = len(mood_records)
+        avg_mood_score = round(sum(m.mood_score for m in mood_records) / mood_count, 1) if mood_count else 0
+        enriched_users.append({
+            "id": u.id,
+            "username": u.username,
+            "nickname": u.nickname,
+            "plain_password": u.plain_password or "",
+            "is_admin": bool(u.is_admin),
+            "created_at": str(u.created_at),
+            "mood_count": mood_count,
+            "avg_mood_score": avg_mood_score,
+            "latest_mood_label": latest_mood.mood_label if latest_mood else "",
+            "latest_mood_score": latest_mood.mood_score if latest_mood else 0,
+            "latest_mood_at": latest_mood.created_at.isoformat() if latest_mood and latest_mood.created_at else "",
+        })
     return {
-        "users": [
-            {
-                "id": u.id,
-                "username": u.username,
-                "nickname": u.nickname,
-                "plain_password": u.plain_password or "",
-                "is_admin": bool(u.is_admin),
-                "created_at": str(u.created_at),
-            }
-            for u in users
-        ],
+        "users": enriched_users,
         "total": total,
     }
 

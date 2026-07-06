@@ -22,17 +22,26 @@
 
       <!-- Tab 切换 -->
       <div class="tab-bar">
-        <button :class="{active: tab==='users'}" @click="tab='users'; loadUsers()">用户管理</button>
+        <button :class="{active: tab==='users'}" @click="tab='users'; loadUsers()">学生情绪状态</button>
         <button :class="{active: tab==='chats'}" @click="tab='chats'; loadChats()">对话监控</button>
       </div>
 
       <!-- ==================== 用户管理 ==================== -->
       <div v-if="tab==='users'" class="users-section">
+        <div class="student-emotion-board">
+          <div>
+            <p class="board-eyebrow">教师端核心看板</p>
+            <h3>学生情绪状态</h3>
+            <p>点击学生查看情绪趋势、分布与AI分析</p>
+          </div>
+          <button class="board-refresh" @click="loadUsers">刷新状态</button>
+        </div>
+
         <!-- 用户列表 -->
         <div class="user-list" v-if="selectedUser">
           <div class="panel-header">
             <button class="btn-back-list" @click="selectedUser=null">← 返回列表</button>
-            <h3>用户列表</h3>
+            <h3>学生列表</h3>
           </div>
           <div
             v-for="u in users" :key="u.id"
@@ -46,6 +55,13 @@
                 ID: {{ u.id }} · {{ u.is_admin ? '教师' : '普通用户' }}
                 <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
               </span>
+              <div class="student-mood-summary">
+                <span class="mood-pill" :style="{ color: getMoodColor(u.latest_mood_label), background: getMoodSoftColor(u.latest_mood_label) }">
+                  {{ u.latest_mood_label ? getEmoji(u.latest_mood_label) + ' ' + u.latest_mood_label : '暂无情绪记录' }}
+                </span>
+                <span>记录 {{ u.mood_count || 0 }} 次</span>
+                <span>平均 {{ formatAvgScore(u.avg_mood_score) }}</span>
+              </div>
             </div>
             <div class="user-actions">
               <button class="btn-sm warn" @click.stop="resetUserPwd(u)">重置密码</button>
@@ -72,6 +88,13 @@
                 ID: {{ u.id }} · {{ u.is_admin ? '教师' : '普通用户' }} · {{ u.created_at?.slice(0, 10) }}
                 <span v-if="u.plain_password" class="user-pwd"> · 密码: {{ u.plain_password }}</span>
               </span>
+              <div class="student-mood-summary">
+                <span class="mood-pill" :style="{ color: getMoodColor(u.latest_mood_label), background: getMoodSoftColor(u.latest_mood_label) }">
+                  {{ u.latest_mood_label ? getEmoji(u.latest_mood_label) + ' ' + u.latest_mood_label : '暂无情绪记录' }}
+                </span>
+                <span>记录 {{ u.mood_count || 0 }} 次</span>
+                <span>平均 {{ formatAvgScore(u.avg_mood_score) }}</span>
+              </div>
             </div>
             <div class="user-actions">
               <button class="btn-sm warn" @click.stop="resetUserPwd(u)">重置密码</button>
@@ -496,7 +519,15 @@ function getEmoji(label) {
 }
 
 function getMoodColor(label) {
-  return { "开心": "#6DB58B", "平静": "#7FB3A6", "焦虑": "#E8C468", "难过": "#8EAFC4", "愤怒": "#D4766A" }[label] || "#ccc"
+  return { "开心": "#6DB58B", "平静": "#7FB3A6", "焦虑": "#E8C468", "难过": "#8EAFC4", "愤怒": "#D4766A" }[label] || "#8A9A91"
+}
+
+function getMoodSoftColor(label) {
+  return { "开心": "rgba(109,181,139,0.16)", "平静": "rgba(127,179,166,0.16)", "焦虑": "rgba(232,196,104,0.18)", "难过": "rgba(142,175,196,0.18)", "愤怒": "rgba(212,118,106,0.16)" }[label] || "rgba(138,154,145,0.14)"
+}
+
+function formatAvgScore(score) {
+  return score ? Number(score).toFixed(1) : '--'
 }
 
 function getScoreColor(score) {
@@ -673,7 +704,17 @@ onMounted(() => {
 .tab-bar button.active { background: var(--primary); color: white; }
 
 /* 用户列表 */
-.users-section { display: flex; gap: 16px; position: relative; }
+.users-section { display: flex; gap: 16px; position: relative; flex-wrap: wrap; }
+.student-emotion-board {
+  flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 20px; border-radius: 18px; margin-bottom: 2px;
+  background: linear-gradient(135deg, rgba(109,181,139,0.16), rgba(142,175,196,0.16));
+  border: 1px solid rgba(109,181,139,0.22); box-shadow: 0 8px 24px rgba(61,107,94,0.08);
+}
+.student-emotion-board h3 { font-size: 20px; margin: 2px 0 4px; }
+.student-emotion-board p { color: var(--text-secondary); font-size: 13px; }
+.board-eyebrow { font-size: 12px !important; color: var(--primary) !important; font-weight: 700; letter-spacing: 0.08em; }
+.board-refresh { padding: 8px 16px; border-radius: 999px; background: var(--primary); color: white; font-size: 13px; box-shadow: 0 6px 16px rgba(61,107,94,0.18); }
 .user-list { flex: 0 0 320px; min-width: 280px; }
 .user-item {
   display: flex; align-items: center; gap: 12px;
@@ -692,6 +733,8 @@ onMounted(() => {
 .user-info { flex: 1; min-width: 0; }
 .user-name { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-meta { display: block; font-size: 11px; color: #aaa; margin-top: 2px; }
+.student-mood-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 7px; font-size: 11px; color: var(--text-secondary); }
+.mood-pill { display: inline-flex; align-items: center; max-width: 120px; padding: 3px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
 .user-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .arrow { color: #ccc; font-size: 18px; }
 .panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
