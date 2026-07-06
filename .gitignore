@@ -7,3 +7,5 @@ __pycache__/
 .vite/
 .DS_Store
 Thumbs.db
+
+.worktrees/
