@@ -27,31 +27,30 @@
     <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
       <section class="first-run-guide" v-if="showFirstRunGuide">
-        <div class="guide-title">跟着做两步，就知道怎么用咕哝</div>
-        <p class="guide-copy">先说一句，再看看共鸣。完成后这张教学卡就不会再打扰你。</p>
+        <div class="guide-title">跟着提示点两下，马上会用咕哝</div>
+        <p class="guide-copy">不用自己找入口。按提示点击被高亮的位置，完成后这张教学卡就不会再出现。</p>
         <div class="guide-progress-row">
           <span :class="['guide-progress-dot', { active: onboardingStep === 'chat', done: onboardingStep !== 'chat' }]">1</span>
           <span class="guide-progress-line"></span>
           <span :class="['guide-progress-dot', { active: onboardingStep === 'treehole' }]">2</span>
         </div>
-        <div class="guide-option-grid" v-if="onboardingStep === 'chat'">
-          <button class="guide-option is-primary" @click="advanceFirstRunGuide('chat')">
-            <span class="guide-option-icon">💬</span>
-            <span>
-              <strong>第一步：先说一句</strong>
-              <em>点开倾诉，把今天的感受随便说一句。</em>
-            </span>
-          </button>
+        <div class="guide-target-hint" v-if="onboardingStep === 'chat'">
+          <span class="guide-target-kicker">现在请点击</span>
+          <strong>请点击房间里的电脑</strong>
+          <em>电脑位置会发光，点它就能开始倾诉。</em>
         </div>
-        <div class="guide-option-grid" v-else>
-          <button class="guide-option is-primary" @click="finishFirstRunGuide('treehole')">
-            <span class="guide-option-icon">🌙</span>
-            <span>
-              <strong>第二步：看看共鸣</strong>
-              <em>进树洞看看，可能有人也有类似的心情。</em>
-            </span>
-          </button>
+        <div class="guide-target-hint" v-else>
+          <span class="guide-target-kicker">下一步请点击</span>
+          <strong>请点击底部导航的树洞</strong>
+          <em>底部“树洞”按钮会发光，点它就能看看共鸣。</em>
         </div>
+        <button class="guide-option is-primary" @click="focusGuideTarget">
+          <span class="guide-option-icon">👆</span>
+          <span>
+            <strong>我知道了，带我去点</strong>
+            <em>{{ onboardingStep === 'chat' ? '看房间里的电脑高亮' : '看底部树洞按钮高亮' }}</em>
+          </span>
+        </button>
         <button class="guide-secondary" @click="skipFirstRunGuide">跳过教学</button>
       </section>
 
@@ -94,8 +93,9 @@
     <!-- 音乐切换按钮（隐藏，功能移至面板内） -->
 
     <!-- 交互热区 — 电脑（倾诉） -->
-    <div class="hot-zone zone-monitor" @click="goToChat">
+    <div :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && onboardingStep === 'chat' }]" @click="handleGuideChatTarget">
       <div class="hover-tip">💬 倾诉</div>
+      <div v-if="showFirstRunGuide && onboardingStep === 'chat'" class="guide-target-badge">点这里：倾诉</div>
     </div>
 
     <!-- 交互热区 — 床（情绪回顾） -->
@@ -130,19 +130,7 @@
       </div>
     </div>
 
-    <!-- 小工具热区 — 桌面物品（治愈+娱乐） -->
-    <div class="mini-tools-bar">
-      <div class="mini-tool-item" @click="openMiniApp('air')">
-        <span class="mini-tool-emoji">❄️</span>
-        <span class="mini-tool-name">小空调</span>
-      </div>
-      <div class="mini-tool-item" @click="openMiniApp('itv')">
-        <span class="mini-tool-emoji">📺</span>
-        <span class="mini-tool-name">小电视</span>
-      </div>
-    </div>
 
-    <!-- 底部导航 -->
     <nav class="bottom-nav">
       <button class="bnav-item" @click="goToChat">
         <div class="icon-wrap">
@@ -160,7 +148,8 @@
         </div>
         <span class="bnav-label">治愈</span>
       </button>
-      <button class="bnav-item" @click="showTreeHolePanel = true">
+      <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && onboardingStep === 'treehole' }]" @click="handleGuideTreeholeTarget">
+        <div v-if="showFirstRunGuide && onboardingStep === 'treehole'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -1316,22 +1305,6 @@
       </div>
     </Transition>
 
-    <!-- ══ 小工具 iframe 全屏弹窗 ══ -->
-    <Transition name="panel-slide">
-      <div v-if="showMiniApp" class="mini-app-overlay" @click.self="closeMiniApp">
-        <div class="mini-app-container">
-          <div class="mini-app-header">
-            <button class="mini-app-back" @click="closeMiniApp">← 回家</button>
-            <span class="mini-app-title">{{ miniAppTitle }}</span>
-            <div class="mini-app-spacer"></div>
-          </div>
-          <div class="mini-app-body">
-            <iframe :src="miniAppUrl" class="mini-app-iframe" frameborder="0" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; microphone; camera; midi; geolocation; gyroscope; accelerometer; magnetometer; speaker-selection"></iframe>
-            <div v-if="miniAppHideBottom" class="mini-app-bottom-mask"></div>
-          </div>
-        </div>
-      </div>
-    </Transition>
 
     <!-- 隐藏音频元素2 -->
     <audio ref="audioEl" src="/audio/bgm.mp3" preload="auto" />
@@ -1372,7 +1345,7 @@ const showStatusPicker = ref(false)
 
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
 const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
-const FIRST_RUN_GUIDE_VERSION = '4.2.3'
+const FIRST_RUN_GUIDE_VERSION = '4.2.5'
 const DAILY_RITUAL_SEEN_KEY = 'shengyu_daily_ritual_seen'
 const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
 const onboardingStep = ref('chat')
@@ -1419,18 +1392,22 @@ function openDailyRitualAction() {
   }
   goToChat()
 }
-function advanceFirstRunGuide(action) {
-  if (action === 'chat') {
-    goToChat()
+function focusGuideTarget() {
+  const selector = onboardingStep.value === 'chat' ? '.zone-monitor' : '.bnav-treehole'
+  document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+}
+function handleGuideChatTarget() {
+  goToChat()
+  if (showFirstRunGuide.value && onboardingStep.value === 'chat') {
     onboardingStep.value = 'treehole'
   }
 }
-function finishFirstRunGuide(action) {
-  if (action === 'treehole') {
-    showTreeHolePanel.value = true
+function handleGuideTreeholeTarget() {
+  showTreeHolePanel.value = true
+  if (showFirstRunGuide.value && onboardingStep.value === 'treehole') {
+    showFirstRunGuide.value = false
+    localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
   }
-  showFirstRunGuide.value = false
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
 }
 function skipFirstRunGuide() {
   showFirstRunGuide.value = false
@@ -1439,41 +1416,6 @@ function skipFirstRunGuide() {
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
 
-// ═══ 小工具（iframe弹窗） ═══
-const showMiniApp = ref(false)
-const miniAppUrl = ref('')
-const miniAppTitle = ref('')
-const miniAppKey = ref('')
-const miniAppMap = {
-  air: { url: 'https://giao.me/air', title: '❄️ 小空调' },
-  itv: { url: 'https://giao.me/itv', title: '📺 小电视' },
-}
-function openMiniApp(key) {
-  const app = miniAppMap[key]
-  if (!app) return
-  miniAppKey.value = key
-  miniAppUrl.value = app.url
-  miniAppTitle.value = app.title
-  showMiniApp.value = true
-  // 暂停背景音乐，让小组件声音独立播放
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
-}
-function closeMiniApp() {
-  showMiniApp.value = false
-  miniAppUrl.value = ''
-  miniAppKey.value = ''
-  // 恢复背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
-  }
-}
-// 小空调和小电视需要隐藏底部外部链接
-const miniAppHideBottom = computed(() => ['air', 'itv'].includes(miniAppKey.value))
-
-
-// ═══ 修改密码 ═══
 const showPwdModal = ref(false)
 const oldPwd = ref('')
 const newPwd1 = ref('')
@@ -3150,6 +3092,14 @@ onUnmounted(() => {
 .guide-secondary:hover {
   color: rgba(255,255,255,0.8);
 }
+.guide-target-hint { position: relative; display: grid; gap: 4px; margin: 10px 0 12px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 239, 202, 0.16); border: 1px solid rgba(255, 226, 170, 0.26); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
+.guide-target-kicker { font-size: 11px; color: rgba(255,255,255,0.66); }
+.guide-target-hint strong { font-size: 15px; color: rgba(255,255,255,0.96); }
+.guide-target-hint em { font-size: 12px; color: rgba(255,255,255,0.72); font-style: normal; line-height: 1.5; }
+.is-guide-target { z-index: 31 !important; outline: 3px solid rgba(255, 230, 150, 0.95); outline-offset: 7px; box-shadow: 0 0 0 10px rgba(255, 209, 102, 0.2), 0 0 28px rgba(255, 219, 130, 0.78) !important; animation: guide-target-pulse 1.25s ease-in-out infinite; }
+.guide-target-badge { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); padding: 7px 12px; border-radius: 999px; background: rgba(35, 25, 14, 0.86); color: #fff4cc; font-size: 13px; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.nav-guide-badge { top: -36px; }
+@keyframes guide-target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
 @media (max-width: 520px) {
   .engagement-stack {
     top: auto;
@@ -5260,124 +5210,6 @@ onUnmounted(() => {
 .transition-fade-leave-active { transition: opacity 0.6s ease; }
 .transition-fade-enter-from, .transition-fade-leave-to { opacity: 0; }
 
-/* ═══════════ 小工具条 ═══════════ */
-.mini-tools-bar {
-  position: absolute;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 18px;
-  z-index: 12;
-}
-.mini-tool-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-  opacity: 0.85;
-}
-.mini-tool-item:hover {
-  transform: translateY(-4px) scale(1.1);
-  opacity: 1;
-}
-.mini-tool-emoji {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255,255,255,0.25);
-  transition: background 0.2s;
-}
-.mini-tool-item:hover .mini-tool-emoji {
-  background: rgba(255, 255, 255, 0.32);
-}
-.mini-tool-name {
-  font-size: 14px;
-  color: #fff;
-  font-weight: 600;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.4);
-  white-space: nowrap;
-}
-
-/* ═══════════ 小工具 iframe 弹窗 ═══════════ */
-.mini-app-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mini-app-container {
-  width: 94vw;
-  max-width: 520px;
-  height: 85vh;
-  border-radius: 20px;
-  overflow: hidden;
-  background: #1a1a2e;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
-}
-.mini-app-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #1a1a2e, #2a2a4e);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-.mini-app-back {
-  background: rgba(255,255,255,0.12);
-  border: none;
-  color: #FFF;
-  font-size: 14px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.mini-app-back:hover { background: rgba(255,255,255,0.22); }
-.mini-app-title {
-  flex: 1;
-  text-align: center;
-  color: #FFF;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 1px;
-}
-.mini-app-spacer { width: 70px; }
-.mini-app-body {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-.mini-app-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #fff;
-}
-/* 底部遮罩：仅在小空调/小电视时隐藏外部链接文字 */
-.mini-app-bottom-mask {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 80px;
-  background: rgba(255,255,255,1);
-  pointer-events: none;
-  z-index: 2;
-}
-/* ═══════════ 返回按钮加"回家"文字 ═══════════ */
 .xian-back-btn {
   width: auto;
   min-width: 36px;

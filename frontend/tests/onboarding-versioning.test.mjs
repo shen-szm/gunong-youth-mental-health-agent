@@ -14,9 +14,9 @@ test('first-run guide requires a two-step teaching flow before completion', asyn
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.match(room, /onboardingStep = ref\('chat'\)/)
-  assert.match(room, /advanceFirstRunGuide\('chat'\)/)
+  assert.match(room, /handleGuideChatTarget/)
   assert.match(room, /onboardingStep\.value = 'treehole'/)
-  assert.match(room, /finishFirstRunGuide\('treehole'\)/)
+  assert.match(room, /handleGuideTreeholeTarget/)
   assert.match(room, /跳过教学/)
   assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
 })
@@ -43,7 +43,7 @@ test('window hotspot label is hidden until hover and uses subtle copy', async ()
   assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
 })
 
-test('small release continues from latest 4.2.3 baseline and records changelog', async () => {
+test('small release continues from latest 4.2.4 baseline and records changelog', async () => {
   const pkg = JSON.parse(await source('frontend/package.json'))
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelogPath = join(root, 'CHANGELOG.md')
@@ -51,12 +51,12 @@ test('small release continues from latest 4.2.3 baseline and records changelog',
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '4.2.4')
-  assert.equal(lock.version, '4.2.4')
-  assert.equal(lock.packages[''].version, '4.2.4')
-  assert.match(changelog, /## \[4\.2\.4\] - 2026-07-06/)
+  assert.equal(pkg.version, '4.2.5')
+  assert.equal(lock.version, '4.2.5')
+  assert.equal(lock.packages[''].version, '4.2.5')
+  assert.match(changelog, /## \[4\.2\.5\] - 2026-07-06/)
   assert.match(changelog, /小更新/)
-  assert.match(changelog, /4\.2\.3 -> 4\.2\.4/)
+  assert.match(changelog, /4\.2\.4 -> 4\.2\.5/)
 })
 
 test('deploy script publishes semantic version plus git commit for visible build badge', async () => {
