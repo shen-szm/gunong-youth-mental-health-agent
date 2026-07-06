@@ -27,31 +27,53 @@
     <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
       <section class="first-run-guide" v-if="showFirstRunGuide">
-        <div class="guide-title">跟着提示点两下，马上会用咕哝</div>
-        <p class="guide-copy">不用自己找入口。按提示点击被高亮的位置，完成后这张教学卡就不会再出现。</p>
-        <div class="guide-progress-row">
-          <span :class="['guide-progress-dot', { active: onboardingStep === 'chat', done: onboardingStep !== 'chat' }]">1</span>
-          <span class="guide-progress-line"></span>
-          <span :class="['guide-progress-dot', { active: onboardingStep === 'treehole' }]">2</span>
-        </div>
-        <div class="guide-target-hint" v-if="onboardingStep === 'chat'">
-          <span class="guide-target-kicker">现在请点击</span>
-          <strong>请点击房间里的电脑</strong>
-          <em>电脑位置会发光，点它就能开始倾诉。</em>
-        </div>
-        <div class="guide-target-hint" v-else>
-          <span class="guide-target-kicker">下一步请点击</span>
-          <strong>请点击底部导航的树洞</strong>
-          <em>底部“树洞”按钮会发光，点它就能看看共鸣。</em>
-        </div>
-        <button class="guide-option is-primary" @click="focusGuideTarget">
-          <span class="guide-option-icon">👆</span>
-          <span>
-            <strong>我知道了，带我去点</strong>
-            <em>{{ onboardingStep === 'chat' ? '看房间里的电脑高亮' : '看底部树洞按钮高亮' }}</em>
-          </span>
-        </button>
-        <button class="guide-secondary" @click="skipFirstRunGuide">跳过教学</button>
+        <template v-if="guideStage !== 'mood-card'">
+          <div class="guide-title">先完成一次小倾诉，马上会用咕哝</div>
+          <p class="guide-copy">跟着提示点两下，马上会用咕哝。跟着三步走：先点电脑，再发出一句话，最后去树洞看看今日心情卡。</p>
+          <div class="guide-progress-row">
+            <span :class="['guide-progress-dot', { active: guideStage === 'computer', done: guideStage !== 'computer' }]">1</span>
+            <span class="guide-progress-line"></span>
+            <span :class="['guide-progress-dot', { active: guideStage === 'confession', done: guideStage === 'mood-card' }]">2</span>
+            <span class="guide-progress-line"></span>
+            <span :class="['guide-progress-dot', { active: guideStage === 'mood-card' }]">3</span>
+          </div>
+          <div class="guide-target-hint" v-if="guideStage === 'computer'">
+            <span class="guide-target-kicker">现在请点击</span>
+            <strong>请点击房间里的电脑</strong>
+            <em>电脑位置会发光，点它就能打开倾诉窗口。</em>
+          </div>
+          <div class="guide-target-hint" v-else>
+            <span class="guide-target-kicker">下一步</span>
+            <strong>在倾诉窗口发出一句话</strong>
+            <em>把今天最想说的一句话丢给我，收到回复后会生成今日心情卡。</em>
+          </div>
+          <button class="guide-option is-primary" @click="focusGuideTarget">
+            <span class="guide-option-icon">👆</span>
+            <span>
+              <strong>{{ guideStage === 'computer' ? '带我去点电脑' : '带我去输入一句话' }}</strong>
+              <em>{{ guideStage === 'computer' ? '看房间里的电脑高亮' : '倾诉输入框已经准备好' }}</em>
+            </span>
+          </button>
+          <button class="guide-secondary" @click="skipFirstRunGuide">跳过教学</button>
+        </template>
+        <template v-else>
+          <div class="guide-mood-card">
+            <div class="guide-mood-meta">
+              <span>{{ firstRunMoodCard.emoji }}</span>
+              <small>今日心情卡</small>
+              <strong>{{ firstRunMoodCard.emotion || '被认真听见' }}</strong>
+            </div>
+            <p class="guide-copy">{{ firstRunMoodCard.summary }}</p>
+            <p class="guide-mood-suggestion">{{ firstRunMoodCard.suggestion }}</p>
+            <button class="guide-option is-primary" @click="openTreeHoleFromMoodCard">
+              <span class="guide-option-icon">🌳</span>
+              <span>
+                <strong>去树洞看看</strong>
+                <em>请点击底部导航的树洞，看看有没有人也在经历类似的心情。</em>
+              </span>
+            </button>
+          </div>
+        </template>
       </section>
 
       <section class="daily-ritual-card" v-else>
@@ -91,11 +113,10 @@
     <!-- 已改为热区形式，见下方 zone-speaker -->
 
     <!-- 音乐切换按钮（隐藏，功能移至面板内） -->
-
     <!-- 交互热区 — 电脑（倾诉） -->
-    <div :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && onboardingStep === 'chat' }]" @click="handleGuideChatTarget">
+    <div :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && guideStage === 'computer' }]" @click="handleGuideChatTarget">
       <div class="hover-tip">💬 倾诉</div>
-      <div v-if="showFirstRunGuide && onboardingStep === 'chat'" class="guide-target-badge">点这里：倾诉</div>
+      <div v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</div>
     </div>
 
     <!-- 交互热区 — 床（情绪回顾） -->
@@ -148,8 +169,8 @@
         </div>
         <span class="bnav-label">治愈</span>
       </button>
-      <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && onboardingStep === 'treehole' }]" @click="handleGuideTreeholeTarget">
-        <div v-if="showFirstRunGuide && onboardingStep === 'treehole'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
+      <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && guideStage === 'mood-card' }]" @click="handleGuideTreeholeTarget">
+        <div v-if="showFirstRunGuide && guideStage === 'mood-card'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -1171,7 +1192,7 @@
               <span v-else class="rec-wave"></span>
             </button>
             <div class="input-wrap">
-              <input v-model="chatInput" placeholder="说说你的感受..." @keyup.enter="sendChatMsg()" :disabled="chatLoading" ref="inputEl"/>
+              <input v-model="chatInput" :placeholder="chatInputPlaceholder" @keyup.enter="sendChatMsg()" :disabled="chatLoading" ref="inputEl"/>
             </div>
             <button class="send-btn" @click="sendChatMsg()" :disabled="chatLoading || !chatInput.trim()">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -1345,10 +1366,13 @@ const showStatusPicker = ref(false)
 
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
 const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
-const FIRST_RUN_GUIDE_VERSION = '4.2.5'
+const FIRST_RUN_GUIDE_VERSION = '4.3.0'
+const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RITUAL_SEEN_KEY = 'shengyu_daily_ritual_seen'
 const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
-const onboardingStep = ref('chat')
+const guideStage = ref('computer')
+const firstRunMoodCard = ref(loadFirstRunMoodCard())
+const isFirstRunChatPending = computed(() => showFirstRunGuide.value && guideStage.value === 'confession')
 const dailyRitualSeed = new Date().toISOString().slice(0, 10)
 const dailyRituals = [
   {
@@ -1392,21 +1416,56 @@ function openDailyRitualAction() {
   }
   goToChat()
 }
+function loadFirstRunMoodCard() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FIRST_RUN_MOOD_CARD_KEY) || 'null')
+    if (saved?.summary && saved?.suggestion) return saved
+    if (saved?.title || saved?.copy) {
+      return buildFirstRunMoodCard(saved.copy || saved.title || '', saved)
+    }
+  } catch {}
+  return buildFirstRunMoodCard()
+}
+function buildFirstRunMoodCard(message = '', reply = {}) {
+  const emotion = reply?.emotion || '被认真听见'
+  const summary = message ? `你刚刚说的是：“${message.slice(0, 18)}${message.length > 18 ? '…' : ''}”。这份心情已经被好好接住。` : '你已经完成了第一次小倾诉，这份心情已经被好好接住。'
+  return {
+    emoji: emotion.includes('开') ? '🌤️' : emotion.includes('难') ? '🌧️' : '🌱',
+    title: '今日心情卡',
+    copy: summary,
+    emotion,
+    summary,
+    suggestion: '去树洞看看，也许会遇到相似的回声。',
+  }
+}
+function completeFirstRunAfterChat(message, reply) {
+  if (!showFirstRunGuide.value || guideStage.value !== 'confession' || !reply?.reply) return
+  firstRunMoodCard.value = buildFirstRunMoodCard(message, reply)
+  localStorage.setItem(FIRST_RUN_MOOD_CARD_KEY, JSON.stringify(firstRunMoodCard.value))
+  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+  guideStage.value = 'mood-card'
+}
 function focusGuideTarget() {
-  const selector = onboardingStep.value === 'chat' ? '.zone-monitor' : '.bnav-treehole'
-  document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+  const selector = guideStage.value === 'confession' ? '.chat-panel .input-wrap input' : '.zone-monitor'
+  const target = document.querySelector(selector)
+  target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+  if (guideStage.value === 'confession') inputEl.value?.focus()
 }
 function handleGuideChatTarget() {
   goToChat()
-  if (showFirstRunGuide.value && onboardingStep.value === 'chat') {
-    onboardingStep.value = 'treehole'
+  if (showFirstRunGuide.value && guideStage.value === 'computer') {
+    guideStage.value = 'confession'
+    nextTick(() => inputEl.value?.focus())
   }
+}
+function openTreeHoleFromMoodCard() {
+  showFirstRunGuide.value = false
+  showTreeHolePanel.value = true
 }
 function handleGuideTreeholeTarget() {
   showTreeHolePanel.value = true
-  if (showFirstRunGuide.value && onboardingStep.value === 'treehole') {
+  if (showFirstRunGuide.value && guideStage.value === 'mood-card') {
     showFirstRunGuide.value = false
-    localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
   }
 }
 function skipFirstRunGuide() {
@@ -2680,6 +2739,7 @@ function goProfile() { openProfile() }
 const chatInput = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
+const chatInputPlaceholder = computed(() => isFirstRunChatPending.value ? '把今天最想说的一句话丢给我' : '说说你的感受...')
 const recording = ref(false)
 const msgBox = ref(null)
 const inputEl = ref(null)
@@ -2755,6 +2815,7 @@ async function sendChatMsg(text) {
     await nextTick()
     if (res.data?.reply) {
       chatMessages.value.push({ role: 'assistant', content: res.data.reply, emotion: res.data.emotion })
+      completeFirstRunAfterChat(msg, res.data)
     } else {
       chatMessages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试...' })
     }
@@ -3091,6 +3152,41 @@ onUnmounted(() => {
 }
 .guide-secondary:hover {
   color: rgba(255,255,255,0.8);
+}
+.guide-mood-card {
+  display: grid;
+  gap: 10px;
+}
+.guide-mood-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  font-weight: 700;
+}
+.guide-mood-meta strong {
+  color: rgba(255,255,255,0.94);
+  font-size: 13px;
+}
+.guide-mood-suggestion {
+  margin: 0 0 2px;
+  padding: 9px 11px;
+  border-radius: 14px;
+  background: rgba(255, 230, 178, 0.12);
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.guide-mood-meta span {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.12);
+  font-size: 18px;
 }
 .guide-target-hint { position: relative; display: grid; gap: 4px; margin: 10px 0 12px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 239, 202, 0.16); border: 1px solid rgba(255, 226, 170, 0.26); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
 .guide-target-kicker { font-size: 11px; color: rgba(255,255,255,0.66); }
