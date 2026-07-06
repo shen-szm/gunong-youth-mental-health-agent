@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="teacher-page">
     <header class="teacher-hero">
       <div>
@@ -153,9 +153,32 @@
               <span>最近活跃 <b>{{ studentProfile.last_active || selectedStudent.last_active || '--' }}</b></span>
             </div>
           </article>
+
+          <section class="emotion-detail-panel" v-if="selectedStudent" data-guide="emotion-detail">
+            <div class="panel-title compact">
+              <div>
+                <h3>学生情绪细节</h3>
+                <p>恢复原教师端细致视图：趋势、分布、高频词与 AI 心理分析。</p>
+              </div>
+              <button class="ghost-btn" :disabled="analysisLoading" @click="loadAnalysis">{{ analysisLoading ? '分析中...' : '重新 AI 分析' }}</button>
+            </div>
+            <div class="detail-stats">
+              <div class="detail-stat"><p class="ds-value">{{ detail.stats.total_moods ?? 0 }}</p><p class="ds-label">情绪记录</p></div>
+              <div class="detail-stat"><p class="ds-value">{{ detail.stats.total_chats ?? 0 }}</p><p class="ds-label">对话次数</p></div>
+              <div class="detail-stat"><p class="ds-value">{{ detail.stats.use_days ?? 0 }}</p><p class="ds-label">使用天数</p></div>
+              <div class="detail-stat"><p class="ds-value" :style="{ color: getScoreColor(detail.stats.avg_score) }">{{ formatScore(detail.stats.avg_score) }}</p><p class="ds-label">平均情绪分</p></div>
+            </div>
+            <div class="emotion-sections">
+              <div class="chart-section"><h4>📈 心情趋势（近30天）</h4><div class="trend-chart" v-if="detail.trend?.length"><div class="trend-area"><div class="trend-grid" style="top:25%"></div><div class="trend-grid" style="top:50%"></div><div class="trend-grid" style="top:75%"></div><div v-for="d in detail.trend" :key="d.date" class="trend-col"><span class="trend-val">{{ d.avg }}</span><div class="trend-track"><div class="trend-bar" :style="{ height: Math.max(4, Number(d.avg || 0) * 10) + '%', background: getScoreColor(d.avg) }"></div></div><span class="trend-date">{{ String(d.date).slice(5) }}</span></div></div></div><p v-else class="empty-state">暂无趋势数据</p></div>
+              <div class="chart-section"><h4>🎯 情绪分布</h4><div class="dist-bars" v-if="detail.distribution && Object.keys(detail.distribution).length"><div v-for="(count, label) in sortedDist" :key="label" class="dist-row"><span class="dist-emoji">{{ getEmoji(label) }}</span><span class="dist-label">{{ label }}</span><div class="dist-track"><div class="dist-fill" :style="{ width: getDistPct(count) + '%', background: getMoodColor(label) }"></div></div><span class="dist-count">{{ count }}次</span></div></div><p v-else class="empty-state">暂无分布数据</p></div>
+              <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="detail.word_cloud?.length"><canvas ref="wordCloudCanvas" class="word-cloud-canvas"></canvas></div><p v-else class="empty-state">暂无词云数据</p></div>
+              <div class="chart-section"><h4>🤖 AI 心理分析</h4><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><p v-else>{{ analysis || '选择学生后会自动生成心理分析建议。' }}</p></div></div>
+            </div>
+          </section>
         </section>
 
-        <section v-if="tab === 'lesson'" class="panel lesson-panel" data-guide="lesson-plan">
+        <section v-if="tab === 'lesson'"
+ class="panel lesson-panel" data-guide="lesson-plan">
           <div class="panel-title">
             <div>
               <h3>AI 班会生成</h3>
@@ -222,9 +245,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import axios from 'axios'
 import {
   getTeacherOverview,
   getTeacherStudents,
@@ -251,6 +275,10 @@ const warningList = ref([])
 const selectedWarning = ref(null)
 const selectedStudent = ref(null)
 const studentProfile = ref({})
+const detail = ref({ stats: {}, trend: [], distribution: {}, word_cloud: [] })
+const analysis = ref('')
+const analysisLoading = ref(false)
+const wordCloudCanvas = ref(null)
 const templates = ref([])
 const accounts = ref([])
 const handleNote = ref('')
@@ -341,13 +369,43 @@ async function selectWarning(item) {
 
 async function selectStudent(student) {
   selectedStudent.value = student
+  analysis.value = ''
+  detail.value = { stats: {}, trend: [], distribution: {}, word_cloud: [] }
   try {
     const r = await getStudentProfile(student.id || student.student_id, userStore.userId)
     studentProfile.value = normalizeObject(r.data, {})
   } catch {
     studentProfile.value = {}
   }
+  await loadEmotionDetail(student)
+  loadAnalysis()
 }
+
+async function loadEmotionDetail(student = selectedStudent.value) {
+  if (!student) return
+  const studentId = student.id || student.student_id
+  try {
+    const r = await axios.get(`/api/admin/user-detail/${studentId}`, { params: { user_id: userStore.userId, days: 30 } })
+    detail.value = r.data || { stats: {}, trend: [], distribution: {}, word_cloud: [] }
+  } catch {
+    detail.value = { stats: {}, trend: [], distribution: {}, word_cloud: [] }
+  }
+}
+
+async function loadAnalysis() {
+  if (!selectedStudent.value) return
+  const studentId = selectedStudent.value.id || selectedStudent.value.student_id
+  analysisLoading.value = true
+  try {
+    const r = await axios.get(`/api/admin/user-analysis/${studentId}`, { params: { user_id: userStore.userId } })
+    analysis.value = r.data?.analysis || '暂无 AI 分析结果。'
+  } catch {
+    analysis.value = 'AI 分析暂时不可用，请稍后重试。'
+  } finally {
+    analysisLoading.value = false
+  }
+}
+
 
 async function handleWarning() {
   if (!selectedWarning.value) return
@@ -433,10 +491,70 @@ function firstChar(text = '') {
   return String(text || '?').slice(0, 1).toUpperCase()
 }
 
+const sortedDist = computed(() => {
+  const d = detail.value.distribution || {}
+  return Object.fromEntries(Object.entries(d).sort((a, b) => b[1] - a[1]))
+})
+
+function getDistPct(count) {
+  const total = Object.values(detail.value.distribution || {}).reduce((a, b) => a + Number(b || 0), 0)
+  return total ? (Number(count || 0) / total) * 100 : 0
+}
+
 function formatScore(score) {
   if (score === undefined || score === null || score === '') return '--'
-  return Number(score).toFixed(1)
+  const n = Number(score)
+  return Number.isFinite(n) ? n.toFixed(1) : '--'
 }
+
+function getEmoji(label) {
+  return { 开心: '😊', 平静: '😌', 焦虑: '😟', 难过: '😢', 愤怒: '😠' }[label] || '🙂'
+}
+
+function getMoodColor(label) {
+  return { 开心: '#5f9f75', 平静: '#6d9f93', 焦虑: '#d3a13f', 难过: '#769fbd', 愤怒: '#c76558' }[label] || '#7b9088'
+}
+
+function getScoreColor(score) {
+  const n = Number(score || 0)
+  if (n >= 7) return '#5f9f75'
+  if (n >= 5) return '#6d9f93'
+  if (n >= 3) return '#d3a13f'
+  return '#c76558'
+}
+
+function renderWordCloud() {
+  const canvas = wordCloudCanvas.value
+  if (!canvas || !detail.value.word_cloud?.length) return
+  const dpr = window.devicePixelRatio || 1
+  const rect = canvas.parentElement.getBoundingClientRect()
+  const W = Math.max(280, rect.width - 24)
+  const H = 260
+  canvas.width = W * dpr
+  canvas.height = H * dpr
+  canvas.style.width = W + 'px'
+  canvas.style.height = H + 'px'
+  const ctx = canvas.getContext('2d')
+  ctx.scale(dpr, dpr)
+  ctx.clearRect(0, 0, W, H)
+  const words = detail.value.word_cloud.slice(0, 28)
+  const max = Math.max(...words.map((w) => Number(w.count || 1)))
+  words.forEach((w, i) => {
+    const size = 13 + (Number(w.count || 1) / max) * 22
+    const angle = i * 2.399
+    const radius = 10 + i * 6
+    const x = W / 2 + Math.cos(angle) * radius
+    const y = H / 2 + Math.sin(angle) * radius * 0.72
+    ctx.font = `${i < 4 ? 700 : 500} ${size}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+    ctx.fillStyle = ['#4f7d70', '#6d9f93', '#d3a13f', '#769fbd', '#9b7aa5'][i % 5]
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(w.word || w.text || String(w), Math.max(42, Math.min(W - 42, x)), Math.max(24, Math.min(H - 24, y)))
+  })
+}
+
+watch(() => detail.value.word_cloud, () => nextTick(renderWordCloud), { flush: 'post' })
+
 
 function formatChange(value) {
   const n = Number(value || 0)
@@ -517,6 +635,38 @@ textarea { min-height: 96px; resize: vertical; }
 .profile-card { margin-top: 16px; display: grid; gap: 14px; }
 .profile-metrics { display: flex; gap: 10px; flex-wrap: wrap; }
 .profile-metrics span { padding: 8px 10px; border-radius: 10px; background: white; color: #60716b; }
+.emotion-detail-panel { margin-top: 16px; padding: 18px; border-radius: 16px; background: #fbfdfc; border: 1px solid #e1e9e5; }
+.panel-title.compact { margin-bottom: 14px; }
+.detail-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.detail-stat { background: white; border-radius: 12px; padding: 13px 10px; text-align: center; border: 1px solid #e5ede8; }
+.ds-value { font-size: 22px; font-weight: 800; color: #4f7d70; }
+.ds-label { font-size: 12px; color: #75857f; margin-top: 4px; }
+.emotion-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.chart-section { padding: 14px; border-radius: 14px; background: white; border: 1px solid #e5ede8; }
+.chart-section h4 { margin-bottom: 10px; font-size: 15px; }
+.trend-chart { background: #f7faf8; border-radius: 12px; padding: 12px 8px; }
+.trend-area { display: flex; align-items: flex-end; gap: 4px; position: relative; height: 130px; }
+.trend-grid { position: absolute; left: 0; right: 0; height: 1px; background: #dfe8e3; }
+.trend-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1; height: 100%; }
+.trend-track { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.trend-bar { width: 60%; max-width: 24px; min-height: 4px; border-radius: 5px 5px 0 0; }
+.trend-val, .trend-date { font-size: 10px; color: #75857f; white-space: nowrap; }
+.dist-bars { display: grid; gap: 8px; }
+.dist-row { display: flex; align-items: center; gap: 8px; }
+.dist-emoji { width: 24px; text-align: center; }
+.dist-label { width: 42px; font-size: 13px; }
+.dist-track { flex: 1; height: 8px; border-radius: 999px; background: #edf3f0; overflow: hidden; }
+.dist-fill { height: 100%; border-radius: 999px; }
+.dist-count { width: 42px; text-align: right; color: #75857f; font-size: 12px; }
+.word-cloud-wrap { min-height: 260px; display: grid; place-items: center; background: #f7faf8; border-radius: 12px; }
+.word-cloud-canvas { width: 100%; display: block; }
+.analysis-card { min-height: 120px; padding: 14px; border-radius: 12px; background: #f7faf8; color: #52645e; line-height: 1.8; }
+.analysis-loading { display: flex; gap: 6px; padding: 10px 0; }
+.analysis-loading .dot { width: 9px; height: 9px; border-radius: 50%; background: #4f7d70; animation: bounce 1.2s infinite both; }
+.analysis-loading .dot:nth-child(2) { animation-delay: .2s; }
+.analysis-loading .dot:nth-child(3) { animation-delay: .4s; }
+@keyframes bounce { 0%,100% { opacity:.35; transform: translateY(0); } 50% { opacity:1; transform: translateY(-4px); } }
+
 .template-list button { display: grid; }
 .lesson-compose { display: grid; gap: 14px; align-content: start; }
 .lesson-result { margin-top: 16px; }
@@ -525,7 +675,7 @@ textarea { min-height: 96px; resize: vertical; }
 .account-row div { flex: 1; display: grid; gap: 3px; }
 .empty-state { padding: 18px; text-align: center; color: #81908b; background: #f8fbf9; border-radius: 14px; }
 .empty-state.tall { min-height: 260px; display: grid; place-items: center; }
-@media (max-width: 900px) { .teacher-page { padding: 14px; } .teacher-hero, .panel-title { flex-direction: column; } .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .split-layout, .lesson-layout { grid-template-columns: 1fr; } .teacher-tabs { overflow-x: auto; } }
-@media (max-width: 560px) { .overview-grid { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } }
+@media (max-width: 900px) { .teacher-page { padding: 14px; } .teacher-hero, .panel-title { flex-direction: column; } .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .split-layout, .lesson-layout, .emotion-sections { grid-template-columns: 1fr; } .teacher-tabs { overflow-x: auto; } }
+@media (max-width: 560px) { .overview-grid, .detail-stats { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>

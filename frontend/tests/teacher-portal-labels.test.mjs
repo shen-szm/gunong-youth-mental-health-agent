@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict'
+import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -46,6 +46,23 @@ test('teacher portal restores warning handling and lesson-plan workflow', async 
   assert.match(api, /\/warning\/\$\{warningId\}\/handle/)
   assert.match(api, /\/lesson-plan\/generate/)
   assert.match(api, /\/students\/\$\{studentId\}\/profile/)
+})
+
+test('teacher portal keeps detailed student emotion analytics', async () => {
+  const portal = await source('frontend/src/views/AdminView.vue')
+
+  assert.match(portal, /emotion-detail-panel/)
+  assert.match(portal, /detail-stats/)
+  assert.match(portal, /trend-chart/)
+  assert.match(portal, /dist-bars/)
+  assert.match(portal, /word-cloud-wrap/)
+  assert.match(portal, /analysis-card/)
+  assert.match(portal, /\/api\/admin\/user-detail/)
+  assert.match(portal, /\/api\/admin\/user-analysis/)
+  assert.match(portal, /detail\.stats\.total_moods/)
+  assert.match(portal, /detail\.trend/)
+  assert.match(portal, /detail\.distribution/)
+  assert.match(portal, /detail\.word_cloud/)
 })
 
 test('teacher onboarding is replayable and guides the core workflow', async () => {
