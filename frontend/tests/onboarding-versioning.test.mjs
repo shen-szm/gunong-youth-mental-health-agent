@@ -10,15 +10,15 @@ async function source(path) {
   return readFile(join(root, path), 'utf8')
 }
 
-test('first-run guide nudges visitors to complete an action before disappearing', async () => {
+test('first-run guide requires a two-step teaching flow before completion', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /completeFirstRunGuide\('chat'\)/)
-  assert.match(room, /completeFirstRunGuide\('treehole'\)/)
-  assert.match(room, /稍后再说/)
-  assert.match(room, /guide-secondary/)
-  assert.match(room, /guide-option-grid/)
-  assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, '1'\)/)
+  assert.match(room, /onboardingStep = ref\('chat'\)/)
+  assert.match(room, /advanceFirstRunGuide\('chat'\)/)
+  assert.match(room, /onboardingStep\.value = 'treehole'/)
+  assert.match(room, /finishFirstRunGuide\('treehole'\)/)
+  assert.match(room, /跳过教学/)
+  assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
 })
 
 test('daily ritual card has richer visual hierarchy and action categories', async () => {
@@ -32,14 +32,18 @@ test('daily ritual card has richer visual hierarchy and action categories', asyn
   assert.match(room, /治愈/)
 })
 
-test('window hotspot copy is softened instead of showing blunt outing text', async () => {
+test('window hotspot label is hidden until hover and uses subtle copy', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.doesNotMatch(room, />出去看看</)
-  assert.match(room, /窗外有新风景/)
+  assert.doesNotMatch(room, /<h2>[^<]*出去看看<\/h2>/)
+  assert.doesNotMatch(room, />窗外有新风景</)
+  assert.match(room, />看看窗外</)
+  assert.match(room, /\.window-label \{[\s\S]*?opacity:\s*0/)
+  assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
 })
 
-test('small release increments patch version and records changelog', async () => {
+test('small release continues from latest 4.2.2 baseline and records changelog', async () => {
   const pkg = JSON.parse(await source('frontend/package.json'))
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelogPath = join(root, 'CHANGELOG.md')
@@ -47,11 +51,12 @@ test('small release increments patch version and records changelog', async () =>
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '3.2.1')
-  assert.equal(lock.version, '3.2.1')
-  assert.equal(lock.packages[''].version, '3.2.1')
-  assert.match(changelog, /## \[3\.2\.1\] - 2026-07-06/)
+  assert.equal(pkg.version, '4.2.3')
+  assert.equal(lock.version, '4.2.3')
+  assert.equal(lock.packages[''].version, '4.2.3')
+  assert.match(changelog, /## \[4\.2\.3\] - 2026-07-06/)
   assert.match(changelog, /小更新/)
+  assert.match(changelog, /4\.2\.2 -> 4\.2\.3/)
 })
 
 test('deploy script publishes semantic version plus git commit for visible build badge', async () => {

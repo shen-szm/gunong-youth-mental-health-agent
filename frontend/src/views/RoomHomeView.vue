@@ -6,7 +6,7 @@
       <div v-if="showSplash" class="splash" @click="enterApp">
         <div class="splash-logo">
           <span>咕哝</span>
-          <span class="splash-version">V3.2</span>
+          <span class="splash-version">V4.2.3</span>
         </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>
@@ -24,9 +24,38 @@
       <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
-    <!-- 复访引导：每日仪式 + 首次使用提示 -->
+    <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
-      <section class="daily-ritual-card">
+      <section class="first-run-guide" v-if="showFirstRunGuide">
+        <div class="guide-title">跟着做两步，就知道怎么用咕哝</div>
+        <p class="guide-copy">先说一句，再看看共鸣。完成后这张教学卡就不会再打扰你。</p>
+        <div class="guide-progress-row">
+          <span :class="['guide-progress-dot', { active: onboardingStep === 'chat', done: onboardingStep !== 'chat' }]">1</span>
+          <span class="guide-progress-line"></span>
+          <span :class="['guide-progress-dot', { active: onboardingStep === 'treehole' }]">2</span>
+        </div>
+        <div class="guide-option-grid" v-if="onboardingStep === 'chat'">
+          <button class="guide-option is-primary" @click="advanceFirstRunGuide('chat')">
+            <span class="guide-option-icon">💬</span>
+            <span>
+              <strong>第一步：先说一句</strong>
+              <em>点开倾诉，把今天的感受随便说一句。</em>
+            </span>
+          </button>
+        </div>
+        <div class="guide-option-grid" v-else>
+          <button class="guide-option is-primary" @click="finishFirstRunGuide('treehole')">
+            <span class="guide-option-icon">🌙</span>
+            <span>
+              <strong>第二步：看看共鸣</strong>
+              <em>进树洞看看，可能有人也有类似的心情。</em>
+            </span>
+          </button>
+        </div>
+        <button class="guide-secondary" @click="skipFirstRunGuide">跳过教学</button>
+      </section>
+
+      <section class="daily-ritual-card" v-else>
         <div class="ritual-glow"></div>
         <div class="ritual-meta-row">
           <div class="ritual-orb">{{ dailyRitual.emoji }}</div>
@@ -45,28 +74,6 @@
         <button class="ritual-action" @click="openDailyRitualAction">
           {{ dailyRitual.actionText }}
         </button>
-      </section>
-
-      <section class="first-run-guide" v-if="showFirstRunGuide">
-        <div class="guide-title">先完成一个小动作，再开始探索</div>
-        <p class="guide-copy">不用注册，不用组织好语言。选一个入口，咕哝会陪你把第一句话说出来。</p>
-        <div class="guide-option-grid">
-          <button class="guide-option is-primary" @click="completeFirstRunGuide('chat')">
-            <span class="guide-option-icon">💬</span>
-            <span>
-              <strong>先说一句</strong>
-              <em>点电脑，说一句今天的感受</em>
-            </span>
-          </button>
-          <button class="guide-option" @click="completeFirstRunGuide('treehole')">
-            <span class="guide-option-icon">🌙</span>
-            <span>
-              <strong>看看共鸣</strong>
-              <em>进树洞，看看有没有人和你一样</em>
-            </span>
-          </button>
-        </div>
-        <button class="guide-secondary" @click="dismissFirstRunGuide">稍后再说</button>
       </section>
     </div>
     <!-- 全局音乐开关 -->
@@ -96,9 +103,9 @@
       <div class="bed-label">回顾近期的情绪</div>
     </div>
 
-    <!-- 交互热区 — 窗户（城市探索） -->
+    <!-- 交互热区 — 窗户（悬浮提示） -->
     <div class="hot-zone zone-window" @click="showTransportPanel = true">
-      <div class="window-label">窗外有新风景</div>
+      <div class="window-label">看看窗外</div>
     </div>
 
     <!-- 交互热区 — 音响1（音乐推荐） -->
@@ -384,7 +391,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </div>
           <div class="trend-header">
-            <h2>🚪 出去看看</h2>
+            <h2>🚪 选择出发方式</h2>
             <p>请选择你的交通工具</p>
           </div>
           <div class="transport-list">
@@ -1362,10 +1369,12 @@ const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
 
-// ═══ 复访引导：每日仪式 + 首次使用提示 ═══
-const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_dismissed'
+// ═══ 复访引导：每日仪式 + 首次教学 ═══
+const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
+const FIRST_RUN_GUIDE_VERSION = '4.2.3'
 const DAILY_RITUAL_SEEN_KEY = 'shengyu_daily_ritual_seen'
-const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== '1')
+const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
+const onboardingStep = ref('chat')
 const dailyRitualSeed = new Date().toISOString().slice(0, 10)
 const dailyRituals = [
   {
@@ -1409,18 +1418,22 @@ function openDailyRitualAction() {
   }
   goToChat()
 }
-function completeFirstRunGuide(action) {
-  showFirstRunGuide.value = false
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, '1')
+function advanceFirstRunGuide(action) {
+  if (action === 'chat') {
+    goToChat()
+    onboardingStep.value = 'treehole'
+  }
+}
+function finishFirstRunGuide(action) {
   if (action === 'treehole') {
     showTreeHolePanel.value = true
-    return
   }
-  goToChat()
-}
-function dismissFirstRunGuide() {
   showFirstRunGuide.value = false
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, '1')
+  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+}
+function skipFirstRunGuide() {
+  showFirstRunGuide.value = false
+  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
 }
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
@@ -3049,6 +3062,34 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.55;
 }
+.guide-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.guide-progress-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.64);
+  font-size: 12px;
+  font-weight: 800;
+}
+.guide-progress-dot.active,
+.guide-progress-dot.done {
+  background: rgba(255, 230, 178, 0.9);
+  color: #2f2114;
+}
+.guide-progress-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.18);
+}
 .guide-option-grid {
   display: grid;
   gap: 8px;
@@ -3250,21 +3291,23 @@ onUnmounted(() => {
 .window-label {
   position: absolute;
   top: 50%; left: 50%;
-  transform: translate(-50%, -50%) rotate(15deg) scale(1);
-  font-size: 24px; font-weight: 900;
-  color: #FFFFFF;
-  text-shadow: 2px 2px 0 rgba(0,0,0,0.7);
-  white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(15deg) scale(0.96);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(18, 24, 32, 0.48);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.6);
+  opacity: 0;
   pointer-events: none;
-  letter-spacing: 6px;
-  opacity: 1;
-  font-family: 'Press Start 2P', 'Courier New', monospace;
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: unset;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .zone-window:hover .window-label {
-  transform: translate(-50%, -50%) rotate(15deg) scale(1.15);
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(15deg) scale(1.04);
 }
 
 .zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }

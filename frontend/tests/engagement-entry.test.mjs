@@ -10,21 +10,20 @@ async function source(path) {
   return readFile(join(root, path), 'utf8')
 }
 
-test('room home offers first-run guidance for new visitors', async () => {
+test('room home offers first-run teaching for new visitors', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.match(room, /first-run-guide/)
-  assert.match(room, /先完成一个小动作，再开始探索/)
-  assert.match(room, /点电脑，说一句今天的感受/)
-  assert.match(room, /completeFirstRunGuide\('chat'\)/)
-  assert.match(room, /completeFirstRunGuide/)
-  assert.match(room, /shengyu_first_run_guide_dismissed/)
+  assert.match(room, /跟着做两步，就知道怎么用咕哝/)
+  assert.match(room, /advanceFirstRunGuide\('chat'\)/)
+  assert.match(room, /finishFirstRunGuide\('treehole'\)/)
+  assert.match(room, /shengyu_first_run_guide_completed_version/)
 })
 
-test('room home provides a daily emotional ritual card with return reasons', async () => {
+test('room home provides a daily emotional ritual card after onboarding', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /daily-ritual-card/)
+  assert.match(room, /daily-ritual-card" v-else/)
   assert.match(room, /今日咕哝/)
   assert.match(room, /dailyRitual/)
   assert.match(room, /dailyRitualSeed/)
