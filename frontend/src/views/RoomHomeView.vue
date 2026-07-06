@@ -6,7 +6,7 @@
       <div v-if="showSplash" class="splash" @click="enterApp">
         <div class="splash-logo">
           <span>咕哝</span>
-          <span class="splash-version">V4.2.3</span>
+          <span class="splash-version">V{{ splashVersion }}</span>
         </div>
         <div class="splash-sub">轻触，开始今天的倾诉</div>
         <div class="splash-hint">点击任意位置进入</div>
@@ -1360,6 +1360,7 @@ import TreeHoleView from './TreeHoleView.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+const splashVersion = (import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || 'local').split('+')[0]
 
 // ═══ 个人中心面板 ═══
 const showProfilePanel = ref(false)

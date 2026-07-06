@@ -29,7 +29,7 @@ import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
 const router = useRouter();
-const appVersion = import.meta.env.VITE_APP_VERSION || "local";
+const appVersion = import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || "local";
 const buildTime = import.meta.env.VITE_BUILD_TIME || "dev";
 const buildTitle = `咕哝 build ${appVersion} / ${buildTime}`;
 
