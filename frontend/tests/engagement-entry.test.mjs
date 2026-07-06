@@ -79,17 +79,27 @@ test('v4.3 daily return card includes task check-in and companionship streak', a
   assert.match(room, /shengyu_daily_return_state/)
   assert.match(room, /shengyu_companionship_streak/)
   assert.match(room, /shengyu_last_active_date/)
+  const selectMoodBody = functionBody(room, 'selectDailyMood')
+  assert.match(selectMoodBody, /updateCompanionshipStreak\(\)/)
+  const loadStreakBody = functionBody(room, 'loadCompanionshipStreak')
+  assert.doesNotMatch(loadStreakBody, /updateCompanionshipStreak\(\)/)
+  assert.doesNotMatch(loadStreakBody, /localStorage\.setItem/)
+  const completeTaskBody = functionBody(room, 'completeDailyTask')
+  assert.match(completeTaskBody, /updateCompanionshipStreak\(\)/)
 })
 
-test('room home provides a daily emotional ritual card after onboarding', async () => {
+test('room home replaces the old daily ritual with a daily return card', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /daily-ritual-card" v-else/)
-  assert.match(room, /dailyRitual/)
-  assert.match(room, /dailyRitualSeed/)
-  assert.match(room, /openDailyRitualAction/)
-  assert.match(room, /showTreeHolePanel\.value = true/)
-  assert.match(room, /localStorage\.setItem\('shengyu_daily_ritual_seen'/)
+  assert.match(room, /daily-return-card" v-else/)
+  assert.match(room, /dailyReturnTask/)
+  assert.match(room, /dailyReturnTasks/)
+  assert.match(room, /completeDailyTask/)
+  assert.match(room, /showTreeHolePanel.value = true/)
+  assert.doesNotMatch(room, /daily-ritual-card" v-else/)
+  assert.doesNotMatch(room, /dailyRitualSeed/)
+  assert.doesNotMatch(room, /openDailyRitualAction/)
+  assert.doesNotMatch(room, /shengyu_daily_ritual_seen/)
 })
 
 test('engagement cards are responsive and do not block core room interactions', async () => {
@@ -97,7 +107,7 @@ test('engagement cards are responsive and do not block core room interactions', 
 
   assert.match(room, /\.engagement-stack/)
   assert.match(room, /pointer-events:\s*none/)
-  assert.match(room, /\.daily-ritual-card,[\s\S]*?\.first-run-guide[\s\S]*?pointer-events:\s*auto/)
+  assert.match(room, /\.daily-return-card,[\s\S]*?\.first-run-guide[\s\S]*?pointer-events:\s*auto/)
   assert.match(room, /@media \(max-width: 520px\)[\s\S]*?\.engagement-stack/)
 })
 

@@ -76,24 +76,31 @@
         </template>
       </section>
 
-      <section class="daily-ritual-card" v-else>
+      <section class="daily-return-card" v-else>
         <div class="ritual-glow"></div>
         <div class="ritual-meta-row">
-          <div class="ritual-orb">{{ dailyRitual.emoji }}</div>
+          <div class="ritual-orb">{{ dailyReturnTask.emoji }}</div>
           <div>
             <div class="ritual-kicker">今日咕哝</div>
-            <div class="ritual-date">每天给自己一个很小的入口</div>
+            <div class="ritual-date">第 {{ companionshipStreak }} 天回来看看自己</div>
           </div>
         </div>
-        <div class="ritual-title">{{ dailyRitual.title }}</div>
-        <p class="ritual-copy">{{ dailyRitual.copy }}</p>
-        <div class="ritual-chip-row">
-          <span class="ritual-chip">倾诉</span>
-          <span class="ritual-chip">共鸣</span>
-          <span class="ritual-chip">治愈</span>
+        <div class="ritual-title">今天也给自己留一分钟</div>
+        <p class="ritual-copy">你已经陪自己 {{ companionshipStreak }} 天了</p>
+        <p class="ritual-copy">{{ dailyReturnTask.copy }}</p>
+        <div class="daily-check-row" aria-label="今日心情快速签到">
+          <button
+            v-for="option in dailyCheckInOptions"
+            :key="option"
+            type="button"
+            :class="['daily-check-pill', { active: dailyReturnState.mood === option }]"
+            @click="selectDailyMood(option)"
+          >
+            {{ option }}
+          </button>
         </div>
-        <button class="ritual-action" @click="openDailyRitualAction">
-          {{ dailyRitual.actionText }}
+        <button class="ritual-action" @click="completeDailyTask">
+          {{ dailyReturnState.completedTask ? '今天已完成，继续照顾自己' : dailyReturnTask.actionText }}
         </button>
       </section>
     </div>
@@ -1368,49 +1375,91 @@ const showStatusPicker = ref(false)
 const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
 const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
-const DAILY_RITUAL_SEEN_KEY = 'shengyu_daily_ritual_seen'
+const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
+const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
+const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
+const todayKey = new Date().toISOString().slice(0, 10)
 const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
 const guideStage = ref('computer')
 const firstRunMoodCard = ref(loadFirstRunMoodCard())
 const isFirstRunChatPending = computed(() => showFirstRunGuide.value && guideStage.value === 'confession')
-const dailyRitualSeed = new Date().toISOString().slice(0, 10)
-const dailyRituals = [
+const dailyCheckInOptions = ['很累', '有点烦', '还可以', '轻松', '开心']
+const dailyReturnTasks = [
   {
     emoji: '🌿',
-    title: '先不用变好，先把今天说出来',
-    copy: '给自己三分钟，只描述感受，不评价自己。',
-    actionText: '开始倾诉',
+    copy: '先不用变好，只要把此刻的感受说清楚一点点。',
+    actionText: '去倾诉一分钟',
     action: 'chat',
   },
   {
     emoji: '🌙',
-    title: '看看有没有人也这样想',
-    copy: '有些心情被别人说出来以后，会轻一点。',
+    copy: '看看树洞里有没有相似的心情，让自己知道并不孤单。',
     actionText: '去树洞看看',
     action: 'treehole',
   },
   {
     emoji: '✨',
-    title: '今天只做一个很小的照顾',
-    copy: '喝水、伸展、听一首歌，都算认真对待自己。',
+    copy: '给身体一个很小的照顾：喝水、伸展，或听一首轻一点的歌。',
     actionText: '打开治愈角',
     action: 'healing',
   },
 ]
-const dailyRitual = computed(() => {
-  const sum = [...dailyRitualSeed].reduce((total, char) => total + char.charCodeAt(0), 0)
-  return dailyRituals[sum % dailyRituals.length]
+const dailyReturnTask = computed(() => {
+  const sum = [...todayKey].reduce((total, char) => total + char.charCodeAt(0), 0)
+  return dailyReturnTasks[sum % dailyReturnTasks.length]
 })
-function markDailyRitualSeen() {
-  localStorage.setItem('shengyu_daily_ritual_seen', dailyRitualSeed)
+const dailyReturnState = reactive(loadDailyReturnState())
+const companionshipStreak = ref(loadCompanionshipStreak())
+function loadDailyReturnState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
+    if (saved?.date === todayKey) {
+      return {
+        date: todayKey,
+        mood: dailyCheckInOptions.includes(saved.mood) ? saved.mood : '',
+        completedTask: Boolean(saved.completedTask),
+      }
+    }
+  } catch {}
+  return { date: todayKey, mood: '', completedTask: false }
 }
-function openDailyRitualAction() {
-  markDailyRitualSeen()
-  if (dailyRitual.value.action === 'treehole') {
+function saveDailyReturnState() {
+  localStorage.setItem(DAILY_RETURN_STATE_KEY, JSON.stringify({
+    date: dailyReturnState.date,
+    mood: dailyReturnState.mood,
+    completedTask: dailyReturnState.completedTask,
+  }))
+}
+function loadCompanionshipStreak() {
+  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
+  return Number.isFinite(saved) && saved > 0 ? saved : 1
+}
+function updateCompanionshipStreak() {
+  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
+  const lastActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY)
+  if (lastActiveDate === todayKey) return Number.isFinite(saved) && saved > 0 ? saved : 1
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const nextStreak = lastActiveDate === yesterday && Number.isFinite(saved) && saved > 0 ? saved + 1 : 1
+  localStorage.setItem(COMPANIONSHIP_STREAK_KEY, String(nextStreak))
+  localStorage.setItem(LAST_ACTIVE_DATE_KEY, todayKey)
+  return nextStreak
+}
+function selectDailyMood(option) {
+  dailyReturnState.mood = option
+  dailyReturnState.date = todayKey
+  saveDailyReturnState()
+  companionshipStreak.value = updateCompanionshipStreak()
+}
+function completeDailyTask() {
+  dailyReturnState.completedTask = true
+  dailyReturnState.date = todayKey
+  saveDailyReturnState()
+  companionshipStreak.value = updateCompanionshipStreak()
+  if (dailyReturnTask.value.action === 'treehole') {
     showTreeHolePanel.value = true
     return
   }
-  if (dailyRitual.value.action === 'healing') {
+  if (dailyReturnTask.value.action === 'healing') {
     showHealingPanel.value = true
     return
   }
@@ -2950,7 +2999,7 @@ onUnmounted(() => {
   width: min(326px, calc(100vw - 44px));
   pointer-events: none;
 }
-.daily-ritual-card,
+.daily-return-card,
 .first-run-guide {
   position: relative;
   overflow: hidden;
@@ -2963,7 +3012,7 @@ onUnmounted(() => {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
-.daily-ritual-card {
+.daily-return-card {
   padding: 15px;
 }
 .ritual-glow {
@@ -3018,18 +3067,29 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1.55;
 }
-.ritual-chip-row {
+.daily-check-row {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 12px;
 }
-.ritual-chip {
-  padding: 4px 8px;
+.daily-check-pill {
+  border: 1px solid rgba(255,255,255,0.16);
   border-radius: 999px;
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.76);
+  padding: 5px 9px;
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.78);
   font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.daily-check-pill:hover,
+.daily-check-pill.active {
+  transform: translateY(-1px);
+  background: rgba(255, 230, 178, 0.94);
+  color: #2f2114;
 }
 .ritual-action,
 .guide-option,
@@ -3204,7 +3264,7 @@ onUnmounted(() => {
     bottom: 96px;
     width: auto;
   }
-  .daily-ritual-card {
+  .daily-return-card {
     padding: 12px 13px;
   }
   .first-run-guide {
