@@ -43,7 +43,7 @@ test('window hotspot label is hidden until hover and uses subtle copy', async ()
   assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
 })
 
-test('feature release continues from latest 4.2.5 baseline and records changelog', async () => {
+test('small release continues from latest 4.3.0 baseline and records changelog', async () => {
   const pkg = JSON.parse(await source('frontend/package.json'))
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelogPath = join(root, 'CHANGELOG.md')
@@ -51,9 +51,9 @@ test('feature release continues from latest 4.2.5 baseline and records changelog
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '4.3.0')
-  assert.equal(lock.version, '4.3.0')
-  assert.equal(lock.packages[''].version, '4.3.0')
+  assert.equal(pkg.version, '4.3.1')
+  assert.equal(lock.version, '4.3.1')
+  assert.equal(lock.packages[''].version, '4.3.1')
   assert.match(changelog, /## \[4\.3\.0\] - 2026-07-06/)
   assert.match(changelog, /4\.2\.5 -> 4\.3\.0/)
 })

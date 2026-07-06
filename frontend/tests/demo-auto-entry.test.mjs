@@ -32,7 +32,8 @@ test('router initializes demo identity except on the hidden login route', async 
   assert.match(router, /path: "\/teacher-login", name: "Login", component: LoginView/)
   assert.match(router, /await userStore\.ensureDemoSession\(\)/)
   assert.match(router, /catch/)
-  assert.match(router, /return "\/teacher-login"/)
+  assert.match(router, /path: "\/teacher-login"/)
+  assert.match(router, /redirect: to.fullPath/)
   assert.doesNotMatch(router, /next\("\/login"\)/)
 })
 

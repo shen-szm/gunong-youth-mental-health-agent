@@ -29,12 +29,20 @@ router.beforeEach(async (to) => {
   const userStore = useUserStore();
   if (to.path === "/teacher-login") return true;
 
+  if (to.path === "/admin" && !userStore.isAdmin) {
+    return { path: "/teacher-login", query: { redirect: to.fullPath } };
+  }
+
   if (!userStore.isLoggedIn) {
     try {
       await userStore.ensureDemoSession();
     } catch {
-      return "/teacher-login";
+      return { path: "/teacher-login", query: { redirect: to.fullPath } };
     }
+  }
+
+  if (to.path === "/admin" && !userStore.isAdmin) {
+    return { path: "/teacher-login", query: { redirect: to.fullPath } };
   }
 
   return true;

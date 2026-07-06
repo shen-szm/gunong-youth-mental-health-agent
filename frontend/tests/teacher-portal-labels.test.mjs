@@ -63,3 +63,21 @@ test('internal admin compatibility identifiers and routes remain unchanged', asy
   assert.match(adminApi, /prefix="\/api\/admin"/)
   assert.match(adminApi, /is_admin/)
 })
+
+
+test('teacher portal route redirects non-teachers to hidden teacher login', async () => {
+  const router = await source('frontend/src/router.js')
+
+  assert.match(router, /if \(to\.path === "\/admin" && !userStore\.isAdmin\)/)
+  assert.match(router, /path: "\/teacher-login"/)
+  assert.match(router, /redirect: to.fullPath/)
+})
+
+test('teacher login returns teachers to requested portal path', async () => {
+  const login = await source('frontend/src/views/LoginView.vue')
+
+  assert.match(login, /useRoute/)
+  assert.match(login, /const route = useRoute\(\)/)
+  assert.match(login, /const redirect = route.query.redirect/)
+  assert.match(login, /router\.push\(data\.is_admin \? \(redirect \|\| '\/admin'\) : '\/'\)/)
+})

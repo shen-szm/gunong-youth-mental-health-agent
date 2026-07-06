@@ -89,11 +89,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { register, login, recoverPassword } from '../api/user'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const mode = ref('login')
 const loading = ref(false)
@@ -309,7 +310,8 @@ async function handleSubmit() {
       const resp = await login(form.value.username, form.value.password)
       const data = resp.data
       userStore.login(data.user_id, data.nickname, !!data.is_admin)
-      router.push(data.is_admin ? '/admin' : '/')
+      const redirect = route.query.redirect
+      router.push(data.is_admin ? (redirect || '/admin') : '/')
     } else {
       await register(form.value.username, form.value.password, form.value.nickname)
       mode.value = 'login'
