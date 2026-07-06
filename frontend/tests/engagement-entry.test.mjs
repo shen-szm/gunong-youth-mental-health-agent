@@ -8,9 +8,25 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const GUIDE_TITLE = '\u8ddf\u7740\u63d0\u793a\u70b9\u4e24\u4e0b\uff0c\u9a6c\u4e0a\u4f1a\u7528\u5495\u54dd'
 const CLICK_COMPUTER = '\u8bf7\u70b9\u51fb\u623f\u95f4\u91cc\u7684\u7535\u8111'
 const CLICK_TREEHOLE = '\u8bf7\u70b9\u51fb\u5e95\u90e8\u5bfc\u822a\u7684\u6811\u6d1e'
+const FIRST_CONFESSION_PROMPT = '\u628a\u4eca\u5929\u6700\u60f3\u8bf4\u7684\u4e00\u53e5\u8bdd\u4e22\u7ed9\u6211'
+const MOOD_CARD_TITLE = '\u4eca\u65e5\u5fc3\u60c5\u5361'
+const DAILY_RETURN_TITLE = '\u4eca\u5929\u4e5f\u7ed9\u81ea\u5df1\u7559\u4e00\u5206\u949f'
 
 async function source(path) {
   return readFile(join(root, path), 'utf8')
+}
+
+function functionBody(src, name) {
+  const start = src.indexOf(`function ${name}(`)
+  assert.notEqual(start, -1, `${name} should exist`)
+  const braceStart = src.indexOf('{', start)
+  let depth = 0
+  for (let i = braceStart; i < src.length; i += 1) {
+    if (src[i] === '{') depth += 1
+    if (src[i] === '}') depth -= 1
+    if (depth === 0) return src.slice(braceStart + 1, i)
+  }
+  throw new Error(`${name} body not closed`)
 }
 
 test('room home offers first-run teaching for new visitors', async () => {
@@ -21,6 +37,48 @@ test('room home offers first-run teaching for new visitors', async () => {
   assert.match(room, /handleGuideChatTarget/)
   assert.match(room, /handleGuideTreeholeTarget/)
   assert.match(room, /shengyu_first_run_guide_completed_version/)
+})
+test('v4.3 first-run loop completes only after a successful first confession', async () => {
+  const room = await source('frontend/src/views/RoomHomeView.vue')
+
+  assert.match(room, /guideStage = ref\('computer'\)/)
+  assert.match(room, /FIRST_RUN_GUIDE_VERSION = '4\.3\.0'/)
+  assert.match(room, new RegExp(FIRST_CONFESSION_PROMPT))
+  assert.match(room, /isFirstRunChatPending/)
+  assert.match(room, /completeFirstRunAfterChat/)
+  assert.match(room, /res\.data\?\.reply/)
+  assert.match(room, /chatMessages\.value\.push/)
+  assert.match(room, /role: 'assistant'/)
+  assert.match(room, /content: res\.data\.reply/)
+  assert.match(room, /emotion: res\.data\.emotion/)
+  assert.match(room, /completeFirstRunAfterChat\(msg, res\.data\)/)
+  const treeholeHandler = functionBody(room, 'handleGuideTreeholeTarget')
+  assert.doesNotMatch(treeholeHandler, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
+})
+
+test('v4.3 first-run mood card directs users to tree hole resonance', async () => {
+  const room = await source('frontend/src/views/RoomHomeView.vue')
+
+  assert.match(room, /firstRunMoodCard/)
+  assert.match(room, new RegExp(MOOD_CARD_TITLE))
+  assert.match(room, /openTreeHoleFromMoodCard/)
+  assert.match(room, /\u53bb\u6811\u6d1e\u770b\u770b/)
+  assert.match(room, /buildFirstRunMoodCard/)
+  assert.match(room, /localStorage\.setItem\(FIRST_RUN_MOOD_CARD_KEY/)
+})
+
+test('v4.3 daily return card includes task check-in and companionship streak', async () => {
+  const room = await source('frontend/src/views/RoomHomeView.vue')
+
+  assert.match(room, /daily-return-card/)
+  assert.match(room, new RegExp(DAILY_RETURN_TITLE))
+  assert.match(room, /dailyCheckInOptions/)
+  assert.match(room, /selectDailyMood/)
+  assert.match(room, /completeDailyTask/)
+  assert.match(room, /companionshipStreak/)
+  assert.match(room, /shengyu_daily_return_state/)
+  assert.match(room, /shengyu_companionship_streak/)
+  assert.match(room, /shengyu_last_active_date/)
 })
 
 test('room home provides a daily emotional ritual card after onboarding', async () => {
