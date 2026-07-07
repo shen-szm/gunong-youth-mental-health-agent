@@ -135,3 +135,19 @@ test('air-conditioner and TV mini tools are removed completely', async () => {
   assert.doesNotMatch(room, /giao\.me\/air/)
   assert.doesNotMatch(room, /giao\.me\/itv/)
 })
+
+test('student room includes mood-aware pet companion loop', async () => {
+  const room = await source('frontend/src/views/RoomHomeView.vue')
+
+  assert.match(room, /pet-companion-card/)
+  assert.match(room, /咕哝小伙伴/)
+  assert.match(room, /PET_COMPANION_STATE_KEY/)
+  assert.match(room, /petCompanionState/)
+  assert.match(room, /petMoodStatus/)
+  assert.match(room, /petAffinityLabel/)
+  assert.match(room, /petCompanionMessage/)
+  assert.match(room, /petPetting/)
+  assert.match(room, /feedPetSnack/)
+  assert.match(room, /talkWithPet/)
+  assert.match(room, /updatePetFromMood/)
+})

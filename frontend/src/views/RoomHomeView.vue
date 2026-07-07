@@ -103,6 +103,26 @@
           {{ dailyReturnState.completedTask ? '今天已完成，继续照顾自己' : dailyReturnTask.actionText }}
         </button>
       </section>
+
+      <section class="pet-companion-card">
+        <div class="pet-orb" :class="`is-${petMoodStatus}`">
+          <span class="pet-face">{{ petMoodStatus === 'sleepy' ? '😴' : petMoodStatus === 'tired' ? '🥺' : petMoodStatus === 'annoyed' ? '😿' : petMoodStatus === 'happy' ? '😸' : '🐾' }}</span>
+        </div>
+        <div class="pet-body">
+          <div class="pet-kicker">咕哝小伙伴</div>
+          <h3>{{ petAffinityLabel }}</h3>
+          <p>{{ petCompanionMessage }}</p>
+          <div class="pet-meta-row">
+            <span>亲密度 {{ petCompanionState.affinity }}</span>
+            <span>陪伴 {{ companionshipStreak }} 天</span>
+          </div>
+          <div class="pet-actions">
+            <button @click="petPetting">摸摸</button>
+            <button @click="feedPetSnack">喂点心</button>
+            <button class="is-primary" @click="talkWithPet">说句话</button>
+          </div>
+        </div>
+      </section>
     </div>
     <!-- 全局音乐开关 -->
     <button class="global-music-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
@@ -1376,6 +1396,7 @@ const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
 const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
+const PET_COMPANION_STATE_KEY = 'shengyu_pet_companion_v4_5_0'
 const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
 const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
 const todayKey = new Date().toISOString().slice(0, 10)
@@ -1410,6 +1431,14 @@ const dailyReturnTask = computed(() => {
 })
 const dailyReturnState = reactive(loadDailyReturnState())
 const companionshipStreak = ref(loadCompanionshipStreak())
+const petMoodMessages = {
+  tired: ['今天有点累的话，先靠着我坐一会儿。', '不用马上恢复精神，我会慢慢陪你。'],
+  annoyed: ['烦的时候不用讲清楚全部，先说一句也可以。', '我在这里，先把最吵的那件事放下来。'],
+  okay: ['今天能回来看看自己，就已经很好了。', '我们先安静待一分钟。'],
+  happy: ['你今天轻一点了，我也跟着开心。', '这份轻松值得被记住。'],
+  sleepy: ['夜深了，我陪你把声音放轻一点。', '今天先不用逞强，早点休息也很好。'],
+}
+const petCompanionState = reactive(loadPetCompanionState())
 function loadDailyReturnState() {
   try {
     const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
@@ -1430,6 +1459,78 @@ function saveDailyReturnState() {
     completedTask: dailyReturnState.completedTask,
   }))
 }
+
+function loadPetCompanionState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PET_COMPANION_STATE_KEY) || 'null')
+    if (saved && typeof saved === 'object') {
+      return {
+        affinity: Number.isFinite(Number(saved.affinity)) ? Number(saved.affinity) : 1,
+        lastInteractionDate: saved.lastInteractionDate || '',
+        pettedDate: saved.pettedDate || '',
+        fedDate: saved.fedDate || '',
+        talkDate: saved.talkDate || '',
+        taskDate: saved.taskDate || '',
+        mood: saved.mood || '',
+        status: saved.status || 'okay',
+        message: saved.message || '我在这里，等你回来。',
+      }
+    }
+  } catch {}
+  return { affinity: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '我在这里，等你回来。' }
+}
+function savePetCompanionState() {
+  localStorage.setItem(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState }))
+}
+const petMoodStatus = computed(() => {
+  if (timeOfDay.value === 'night' && !['很累', '有点烦'].includes(petCompanionState.mood)) return 'sleepy'
+  return petCompanionState.status || 'okay'
+})
+const petAffinityLabel = computed(() => {
+  if (petCompanionState.affinity >= 8) return '它已经习惯等你回来'
+  if (petCompanionState.affinity >= 4) return '它开始记得你常来的时间'
+  return '它还在慢慢认识你'
+})
+const petCompanionMessage = computed(() => petCompanionState.message || pickPetMessage(petMoodStatus.value))
+function pickPetMessage(status) {
+  const list = petMoodMessages[status] || petMoodMessages.okay
+  const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.affinity
+  return list[seed % list.length]
+}
+function bumpPetAffinityOnce(field, amount = 1) {
+  if (petCompanionState[field] !== todayKey) {
+    petCompanionState.affinity += amount
+    petCompanionState[field] = todayKey
+  }
+  petCompanionState.lastInteractionDate = todayKey
+}
+function setPetStatus(status, message) {
+  petCompanionState.status = status
+  petCompanionState.message = message || pickPetMessage(status)
+  petCompanionState.lastInteractionDate = todayKey
+  savePetCompanionState()
+}
+function petPetting() {
+  bumpPetAffinityOnce('pettedDate')
+  setPetStatus('happy', '它蹭了蹭你，好像认真收到了这份靠近。')
+}
+function feedPetSnack() {
+  bumpPetAffinityOnce('fedDate')
+  setPetStatus('happy', '小点心已经收下了，它看起来安心了一点。')
+}
+function talkWithPet() {
+  bumpPetAffinityOnce('talkDate')
+  setPetStatus(petMoodStatus.value, '我会听你说完，不急着给答案。')
+  openChatPanel()
+}
+function updatePetFromMood(option) {
+  petCompanionState.mood = option
+  if (option === '很累') setPetStatus('tired')
+  else if (option === '有点烦') setPetStatus('annoyed')
+  else if (option === '轻松' || option === '开心') setPetStatus('happy')
+  else setPetStatus('okay')
+}
+
 function loadCompanionshipStreak() {
   const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
   return Number.isFinite(saved) && saved > 0 ? saved : 1
@@ -1448,12 +1549,15 @@ function selectDailyMood(option) {
   dailyReturnState.mood = option
   dailyReturnState.date = todayKey
   saveDailyReturnState()
+  updatePetFromMood(option)
   companionshipStreak.value = updateCompanionshipStreak()
 }
 function completeDailyTask() {
   dailyReturnState.completedTask = true
   dailyReturnState.date = todayKey
   saveDailyReturnState()
+  bumpPetAffinityOnce('taskDate')
+  setPetStatus('happy', '你完成了今天的小照顾，它也替你松了一口气。')
   companionshipStreak.value = updateCompanionshipStreak()
   if (dailyReturnTask.value.action === 'treehole') {
     showTreeHolePanel.value = true
@@ -3111,6 +3215,58 @@ onUnmounted(() => {
   transform: translateY(-1px);
   background: #fff0c6;
 }
+
+.pet-companion-card {
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 14px;
+  padding: 15px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 232, 178, 0.24);
+  background: linear-gradient(145deg, rgba(33, 27, 41, 0.78), rgba(70, 52, 62, 0.62));
+  color: #fff8e8;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.pet-companion-card::before {
+  content: '';
+  position: absolute;
+  right: -34px;
+  top: -46px;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 126, 0.36), rgba(255, 214, 126, 0));
+  pointer-events: none;
+}
+.pet-orb {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.16);
+}
+.pet-orb.is-happy { background: rgba(255, 208, 112, 0.22); }
+.pet-orb.is-tired, .pet-orb.is-annoyed { background: rgba(143, 183, 218, 0.24); }
+.pet-orb.is-sleepy { background: rgba(122, 106, 168, 0.28); }
+.pet-face { font-size: 34px; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.24)); }
+.pet-body { position: relative; display: grid; gap: 6px; min-width: 0; }
+.pet-kicker { font-size: 12px; color: rgba(255,248,232,0.68); font-weight: 700; }
+.pet-body h3 { font-size: 16px; line-height: 1.35; }
+.pet-body p { font-size: 13px; line-height: 1.55; color: rgba(255,248,232,0.78); }
+.pet-meta-row { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: rgba(255,248,232,0.66); }
+.pet-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.pet-actions button { padding: 7px 10px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14); color: #fff8e8; font-size: 12px; font-family: inherit; cursor: pointer; transition: transform 0.18s ease, background 0.18s ease; }
+.pet-actions button:hover { transform: translateY(-1px); background: rgba(255,255,255,0.2); }
+.pet-actions button.is-primary { background: rgba(255, 214, 126, 0.92); color: #3a2812; font-weight: 800; }
+
 .first-run-guide {
   padding: 15px;
   background: linear-gradient(145deg, rgba(28,31,42,0.82), rgba(70,54,66,0.68));
