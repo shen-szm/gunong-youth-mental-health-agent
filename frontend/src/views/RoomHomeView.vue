@@ -106,7 +106,7 @@
 
       <section class="pet-companion-card">
         <div class="pet-orb" :class="`is-${petMoodStatus}`">
-          <span class="pet-face">{{ petMoodStatus === 'sleepy' ? '😴' : petMoodStatus === 'tired' ? '🥺' : petMoodStatus === 'annoyed' ? '😿' : petMoodStatus === 'happy' ? '😸' : '🐾' }}</span>
+          <img class="pet-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
         </div>
         <div class="pet-body">
           <div class="pet-kicker">咕哝小伙伴</div>
@@ -131,7 +131,7 @@
         <button type="button" class="pet-panel-close" @click="showPetCompanionPanel = false">×</button>
         <div class="pet-panel-head">
           <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
-            <span>{{ petMoodStatus === 'sleepy' ? '😴' : petMoodStatus === 'tired' ? '🥺' : petMoodStatus === 'annoyed' ? '😿' : petMoodStatus === 'happy' ? '😸' : '🐾' }}</span>
+            <img class="pet-panel-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
           </div>
           <div>
             <span class="pet-panel-kicker">宠物互动</span>
@@ -148,6 +148,24 @@
           <button type="button" @click.stop="feedPetSnack">喂点心</button>
           <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
         </div>
+        <div class="pet-visual-picker">
+          <div class="pet-section-title">
+            <span>宠物形象</span>
+            <small>选择陪你待机的小伙伴</small>
+          </div>
+          <div class="pet-visual-list">
+            <button
+              v-for="visual in PET_VISUALS"
+              :key="visual.key"
+              type="button"
+              :class="['pet-visual-option', { active: selectedPetVisualKey === visual.key }]"
+              @click.stop="selectPetVisual(visual.key)"
+            >
+              <img :src="visual.frames[0]" :alt="visual.name" />
+              <strong>{{ visual.name }}</strong>
+            </button>
+          </div>
+        </div>
         <div class="pet-companion-restored">
           <div class="pet-section-title">
             <span>原陪伴角色</span>
@@ -161,7 +179,7 @@
               :class="['pet-companion-option', { active: activePetCompanionId === companion.id }]"
               @click.stop="startPetCompanion(companion)"
             >
-              <img :src="companion.image || '/images/logo.jpg'" :alt="companion.name" />
+              <img :src="companion.image || selectedPetFrame" :alt="companion.name" />
               <span class="pet-companion-emoji">{{ companion.avatar }}</span>
               <strong>{{ companion.name }}</strong>
               <em>{{ companion.desc }}</em>
@@ -1462,6 +1480,7 @@ const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
 const PET_COMPANION_STATE_KEY = 'shengyu_pet_companion_v4_5_0'
+const PET_VISUAL_KEY = 'shengyu_pet_visual_v4_5_4'
 const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
 const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
 const todayKey = new Date().toISOString().slice(0, 10)
@@ -1505,10 +1524,38 @@ const petMoodMessages = {
 }
 const petCompanionState = reactive(loadPetCompanionState())
 const showPetCompanionPanel = ref(false)
+const PET_VISUALS = [
+  { key: 'snorlax', name: '卡比兽', frames: Array.from({ length: 8 }, (_, index) => `/pets/snorlax/frame-${String(index + 1).padStart(2, '0')}.png`) },
+  { key: 'bubu', name: '布布', frames: Array.from({ length: 8 }, (_, index) => `/pets/bubu/frame-${String(index + 1).padStart(2, '0')}.png`) },
+  { key: 'kabi', name: '卡比', frames: Array.from({ length: 8 }, (_, index) => `/pets/kabi/frame-${String(index + 1).padStart(2, '0')}.png`) },
+]
+const selectedPetVisualKey = ref(loadPetVisualKey())
+const petAnimationFrame = ref(0)
+let petAnimationTimer = null
+const selectedPetVisual = computed(() => PET_VISUALS.find(visual => visual.key === selectedPetVisualKey.value) || PET_VISUALS[0])
+const selectedPetFrame = computed(() => selectedPetVisual.value.frames[petAnimationFrame.value % selectedPetVisual.value.frames.length])
+
+function loadPetVisualKey() {
+  const saved = localStorage.getItem(PET_VISUAL_KEY)
+  return PET_VISUALS.some(visual => visual.key === saved) ? saved : 'snorlax'
+}
+function selectPetVisual(key) {
+  if (!PET_VISUALS.some(visual => visual.key === key)) return
+  selectedPetVisualKey.value = key
+  petAnimationFrame.value = 0
+  localStorage.setItem(PET_VISUAL_KEY, key)
+  setPetStatus('happy', `${selectedPetVisual.value.name}靠近了一点，准备继续陪你。`)
+}
+function startPetAnimation() {
+  if (petAnimationTimer) clearInterval(petAnimationTimer)
+  petAnimationTimer = setInterval(() => {
+    petAnimationFrame.value = (petAnimationFrame.value + 1) % selectedPetVisual.value.frames.length
+  }, 180)
+}
 
 const PET_COMPANION_PROFILES = {
   xiaoqing: {
-    id: 'xiaoqing', avatar: '🌸', image: '/images/logo.jpg', name: '温柔学姐「小晴」', shortName: '小晴', desc: '轻柔、耐心，适合想被认真接住的时候。',
+    id: 'xiaoqing', avatar: '🌸', image: '/pets/snorlax/frame-01.png', name: '温柔学姐「小晴」', shortName: '小晴', desc: '轻柔、耐心，适合想被认真接住的时候。',
     greeting: '我在这里。你可以慢慢说，今天最让你卡住的那件事是什么？',
     replies: {
       default: ['慢慢说，我会认真听完。', '你现在的感受是真实的，也值得被好好对待。', '不用急着变好，先把心里的声音放下来。'],
@@ -1520,7 +1567,7 @@ const PET_COMPANION_PROFILES = {
     },
   },
   aze: {
-    id: 'aze', avatar: '☀️', image: '/images/logo.jpg', name: '邻家哥哥「阿泽」', shortName: '阿泽', desc: '直接、行动感强，适合需要一点推动和陪跑的时候。',
+    id: 'aze', avatar: '☀️', image: '/pets/snorlax/frame-01.png', name: '邻家哥哥「阿泽」', shortName: '阿泽', desc: '直接、行动感强，适合需要一点推动和陪跑的时候。',
     greeting: '来了？坐。先别一个人扛，说说现在最难处理的是哪一块。',
     replies: {
       default: ['我听着，先把情况讲清楚。', '稳住，我们先找一个能做的小动作。', '别急着全解决，先解决最靠近你的那一步。'],
@@ -1532,7 +1579,7 @@ const PET_COMPANION_PROFILES = {
     },
   },
   gunong: {
-    id: 'gunong', avatar: '🌿', image: '/images/logo.jpg', name: '咕哝', shortName: '咕哝', desc: '更像你的专属情绪小伙伴，陪你倾诉、复盘、恢复一点力量。',
+    id: 'gunong', avatar: '🌿', image: '/pets/snorlax/frame-01.png', name: '咕哝', shortName: '咕哝', desc: '更像你的专属情绪小伙伴，陪你倾诉、复盘、恢复一点力量。',
     greeting: '我一直在这里。你不用组织得很完整，先说一句现在最真实的感受就可以。',
     replies: {
       default: ['我听见了。能再多说一点吗？', '这件事对你来说应该不轻松，我们先把它放在桌面上看一看。', '我会陪你说完，不急着给答案。'],
@@ -1552,7 +1599,7 @@ const petCompanionInput = ref('')
 const petCompanionTyping = ref(false)
 const petChatMessages = ref(null)
 const activePetCompanion = computed(() => PET_COMPANION_PROFILES[activePetCompanionId.value] || PET_COMPANION_PROFILES.gunong)
-const activePetImage = computed(() => activePetCompanion.value.image || '/images/logo.jpg')
+const activePetImage = computed(() => selectedPetFrame.value)
 
 function pickPetReply(characterId, userContent) {
   const profile = PET_COMPANION_PROFILES[characterId] || PET_COMPANION_PROFILES.gunong
@@ -1571,7 +1618,7 @@ async function loadPetCompanions() {
   try {
     const res = await axios.get(`${API}/api/companion/list`)
     if (Array.isArray(res.data?.companions) && res.data.companions.length) {
-      petCompanions.value = res.data.companions.map(c => ({ ...c, image: PET_COMPANION_PROFILES[c.id]?.image || '/images/logo.jpg' }))
+      petCompanions.value = res.data.companions.map(c => ({ ...c, image: PET_COMPANION_PROFILES[c.id]?.image || selectedPetFrame.value }))
     }
   } catch (e) {
     petCompanions.value = Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc }))
@@ -3249,9 +3296,10 @@ async function openChatPanel() {
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions() })
+onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions(); startPetAnimation() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (petAnimationTimer) clearInterval(petAnimationTimer)
   if (audioEl.value) audioEl.value.pause()
   window.removeEventListener('resize', onResize)
 })
@@ -3436,6 +3484,7 @@ onUnmounted(() => {
 .pet-orb.is-tired, .pet-orb.is-annoyed { background: rgba(143, 183, 218, 0.24); }
 .pet-orb.is-sleepy { background: rgba(122, 106, 168, 0.28); }
 .pet-face { font-size: 34px; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.24)); }
+.pet-frame { width: 82px; height: 82px; object-fit: contain; filter: drop-shadow(0 10px 18px rgba(0,0,0,0.24)); transform: translateY(2px); }
 .pet-body { position: relative; display: grid; gap: 6px; min-width: 0; }
 .pet-kicker { font-size: 12px; color: rgba(255,248,232,0.68); font-weight: 700; }
 .pet-body h3 { font-size: 16px; line-height: 1.35; }
@@ -3465,6 +3514,7 @@ onUnmounted(() => {
 .pet-panel-head { display: grid; grid-template-columns: 86px 1fr; gap: 16px; align-items: center; }
 .pet-panel-avatar { width: 86px; height: 86px; border-radius: 28px; display: grid; place-items: center; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.16); }
 .pet-panel-avatar span { font-size: 42px; }
+.pet-panel-frame { width: 94px; height: 94px; object-fit: contain; filter: drop-shadow(0 12px 22px rgba(0,0,0,0.24)); }
 .pet-panel-kicker { display: inline-flex; margin-bottom: 6px; color: rgba(255,248,232,0.68); font-size: 13px; font-weight: 800; }
 .pet-panel-head h3 { font-size: 21px; margin-bottom: 8px; }
 .pet-panel-head p { color: rgba(255,248,232,0.78); line-height: 1.65; }
@@ -3473,6 +3523,12 @@ onUnmounted(() => {
 .pet-panel-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .pet-panel-actions button { min-height: 44px; border: none; border-radius: 15px; background: rgba(255,255,255,0.16); color: #fff8e8; font-size: 14px; font-weight: 900; font-family: inherit; cursor: pointer; }
 .pet-panel-actions button.is-primary { background: #ffd67e; color: #33220f; }
+.pet-visual-picker { margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.12); }
+.pet-visual-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.pet-visual-option { min-height: 98px; padding: 9px; border-radius: 17px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.1); color: #fff8e8; font-family: inherit; cursor: pointer; }
+.pet-visual-option.active { border-color: rgba(255,214,126,0.9); background: rgba(255,214,126,0.18); box-shadow: 0 12px 30px rgba(255,214,126,0.14); }
+.pet-visual-option img { width: 58px; height: 58px; object-fit: contain; display: block; margin: 0 auto 6px; filter: drop-shadow(0 8px 14px rgba(0,0,0,0.22)); }
+.pet-visual-option strong { display: block; text-align: center; font-size: 13px; }
 
 .first-run-guide {
   padding: 15px;
@@ -3641,6 +3697,7 @@ onUnmounted(() => {
   .pet-panel-avatar { width: 64px; height: 64px; border-radius: 21px; }
   .pet-panel-avatar span { font-size: 32px; }
   .pet-panel-actions { grid-template-columns: 1fr; }
+  .pet-visual-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {
   .engagement-stack {
