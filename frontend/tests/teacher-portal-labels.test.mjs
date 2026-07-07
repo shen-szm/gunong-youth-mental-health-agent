@@ -62,22 +62,33 @@ test('teacher portal keeps detailed student emotion analytics', async () => {
   assert.match(portal, /detail\.stats\.total_moods/)
   assert.match(portal, /detail\.trend/)
   assert.match(portal, /detail\.distribution/)
-  assert.match(portal, /detail\.word_cloud/)
+  assert.match(portal, /normalizedWordCloud/)
 })
 
-test('teacher onboarding is replayable and guides the core workflow', async () => {
+test('teacher onboarding guide is removed from the portal', async () => {
   const portal = await source('frontend/src/views/AdminView.vue')
 
-  assert.match(portal, /shengyu_teacher_guide_v4_4_0/)
-  assert.match(portal, /新手引导/)
-  assert.match(portal, /第一步：先看待处理预警/)
-  assert.match(portal, /第二步：打开一个预警详情/)
-  assert.match(portal, /第三步：查看学生画像/)
-  assert.match(portal, /第四步：生成班会方案/)
-  assert.match(portal, /重新引导/)
-  assert.match(portal, /localStorage\.setItem\(GUIDE_KEY, 'done'\)/)
+  assert.doesNotMatch(portal, /shengyu_teacher_guide_v4_4_0/)
+  assert.doesNotMatch(portal, /guide-card/)
+  assert.doesNotMatch(portal, /showGuide/)
+  assert.doesNotMatch(portal, /guideSteps/)
+  assert.doesNotMatch(portal, /restartGuide/)
+  assert.doesNotMatch(portal, /新手引导/)
 })
 
+test('teacher emotion analytics uses readable keyword chips and structured AI analysis', async () => {
+  const portal = await source('frontend/src/views/AdminView.vue')
+
+  assert.match(portal, /keyword-cloud/)
+  assert.match(portal, /keyword-chip/)
+  assert.match(portal, /normalizedWordCloud/)
+  assert.doesNotMatch(portal, /wordCloudCanvas/)
+  assert.doesNotMatch(portal, /renderWordCloud/)
+  assert.match(portal, /analysis-sections/)
+  assert.match(portal, /analysis-block/)
+  assert.match(portal, /analysisSections/)
+  assert.match(portal, /parseAnalysisSections/)
+})
 test('internal compatibility identifiers and routes remain stable', async () => {
   const store = await source('frontend/src/stores/user.js')
   const router = await source('frontend/src/router.js')

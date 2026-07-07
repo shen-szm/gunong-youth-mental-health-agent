@@ -7,7 +7,6 @@
         <p class="hero-copy">从班级情绪态势出发，快速发现预警、完成处理，并生成可落地的班会方案。</p>
       </div>
       <div class="hero-actions">
-        <button class="ghost-btn" @click="restartGuide">重新引导</button>
         <button class="ghost-btn" @click="handleBack">返回学生端</button>
         <button class="danger-btn" @click="handleLogout">退出</button>
       </div>
@@ -19,19 +18,6 @@
     </div>
 
     <template v-else>
-      <section class="guide-card" v-if="showGuide" data-guide="guide-card">
-        <div class="guide-progress">
-          <span>新手引导 {{ guideIndex + 1 }} / {{ guideSteps.length }}</span>
-          <div class="progress-track"><i :style="{ width: guideProgress + '%' }"></i></div>
-        </div>
-        <h3>{{ currentGuide.title }}</h3>
-        <p>{{ currentGuide.description }}</p>
-        <div class="guide-actions">
-          <button class="primary-btn" @click="runGuideAction">{{ currentGuide.action }}</button>
-          <button class="ghost-btn" @click="skipGuide">跳过</button>
-        </div>
-      </section>
-
       <section class="overview-grid" data-guide="overview">
         <article class="metric-card strong">
           <span>班级学生</span>
@@ -93,7 +79,7 @@
               <p v-if="!warningList.length" class="empty-state">暂无预警。系统检测到风险后会显示在这里。</p>
             </div>
 
-            <aside class="detail-card" data-guide="warning-detail">
+            <aside class="detail-card" data-guide="warning-detail"><span class="section-kicker">预警详情</span>
               <template v-if="selectedWarning">
                 <div class="detail-head">
                   <div>
@@ -171,8 +157,8 @@
             <div class="emotion-sections">
               <div class="chart-section"><h4>📈 心情趋势（近30天）</h4><div class="trend-chart" v-if="detail.trend?.length"><div class="trend-area"><div class="trend-grid" style="top:25%"></div><div class="trend-grid" style="top:50%"></div><div class="trend-grid" style="top:75%"></div><div v-for="d in detail.trend" :key="d.date" class="trend-col"><span class="trend-val">{{ d.avg }}</span><div class="trend-track"><div class="trend-bar" :style="{ height: Math.max(4, Number(d.avg || 0) * 10) + '%', background: getScoreColor(d.avg) }"></div></div><span class="trend-date">{{ String(d.date).slice(5) }}</span></div></div></div><p v-else class="empty-state">暂无趋势数据</p></div>
               <div class="chart-section"><h4>🎯 情绪分布</h4><div class="dist-bars" v-if="detail.distribution && Object.keys(detail.distribution).length"><div v-for="(count, label) in sortedDist" :key="label" class="dist-row"><span class="dist-emoji">{{ getEmoji(label) }}</span><span class="dist-label">{{ label }}</span><div class="dist-track"><div class="dist-fill" :style="{ width: getDistPct(count) + '%', background: getMoodColor(label) }"></div></div><span class="dist-count">{{ count }}次</span></div></div><p v-else class="empty-state">暂无分布数据</p></div>
-              <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="detail.word_cloud?.length"><canvas ref="wordCloudCanvas" class="word-cloud-canvas"></canvas></div><p v-else class="empty-state">暂无词云数据</p></div>
-              <div class="chart-section"><h4>🤖 AI 心理分析</h4><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><p v-else>{{ analysis || '选择学生后会自动生成心理分析建议。' }}</p></div></div>
+              <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="normalizedWordCloud.length"><div class="keyword-cloud"><span v-for="(item, index) in normalizedWordCloud" :key="item.word + index" :class="['keyword-chip', 'level-' + item.level]" :style="{ '--weight': item.weight }"><b>{{ item.word }}</b><em>{{ item.count }}次</em></span></div></div><p v-else class="empty-state">暂无词云数据</p></div>
+              <div class="chart-section"><h4>🤖 AI 心理分析</h4><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><div v-else-if="analysisSections.length" class="analysis-sections"><article v-for="section in analysisSections" :key="section.title" :class="['analysis-block', section.kind]"><span>{{ section.label }}</span><h5>{{ section.title }}</h5><ul><li v-for="(item, index) in section.items" :key="index">{{ item }}</li></ul></article></div><p v-else class="analysis-empty">选择学生后会自动生成心理分析建议。</p></div></div>
             </div>
           </section>
         </section>
@@ -262,7 +248,6 @@ import {
   updateTeacherAccount,
 } from '../api/teacher'
 
-const GUIDE_KEY = 'shengyu_teacher_guide_v4_4_0'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -278,25 +263,12 @@ const studentProfile = ref({})
 const detail = ref({ stats: {}, trend: [], distribution: {}, word_cloud: [] })
 const analysis = ref('')
 const analysisLoading = ref(false)
-const wordCloudCanvas = ref(null)
 const templates = ref([])
 const accounts = ref([])
 const handleNote = ref('')
 const lessonLoading = ref(false)
 const lessonPlan = ref('')
 const lessonForm = ref({ template: '', topic: '考前减压与情绪调节', context: '' })
-const showGuide = ref(localStorage.getItem(GUIDE_KEY) !== 'done')
-const guideIndex = ref(0)
-
-const guideSteps = [
-  { tab: 'warnings', title: '第一步：先看待处理预警', description: '教师端的核心不是翻数据，而是先定位今天最需要被关注的学生。', action: '查看情绪预警' },
-  { tab: 'warnings', title: '第二步：打开一个预警详情', description: '点击预警后可以看到风险原因、建议动作和处理记录入口。', action: '打开首条预警' },
-  { tab: 'students', title: '第三步：查看学生画像', description: '画像用于判断风险是否持续，避免只凭单条记录做判断。', action: '查看学生画像' },
-  { tab: 'lesson', title: '第四步：生成班会方案', description: '当风险呈现班级共性时，用 AI 班会把问题转成可执行的课堂活动。', action: '进入班会生成' },
-]
-
-const currentGuide = computed(() => guideSteps[guideIndex.value])
-const guideProgress = computed(() => Math.round(((guideIndex.value + 1) / guideSteps.length) * 100))
 const riskCounts = computed(() => overview.value.risk_counts || {})
 const trendClass = computed(() => Number(overview.value.week_change || 0) >= 0 ? 'up' : 'down')
 const profileKeywords = computed(() => {
@@ -304,6 +276,27 @@ const profileKeywords = computed(() => {
   if (!words.length) return '--'
   return words.slice(0, 4).map((w) => w.word || w).join('、')
 })
+
+const normalizedWordCloud = computed(() => {
+  const raw = Array.isArray(detail.value.word_cloud) ? detail.value.word_cloud : []
+  const items = raw
+    .map((item) => {
+      const word = String(item.word || item.text || item.keyword || item || '').trim()
+      const count = Number(item.count || item.value || item.weight || 1)
+      return word ? { word, count: Number.isFinite(count) ? count : 1 } : null
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 18)
+  const max = Math.max(1, ...items.map((item) => item.count))
+  return items.map((item, index) => ({
+    ...item,
+    weight: (0.76 + (item.count / max) * 0.7).toFixed(2),
+    level: index < 3 ? 'hot' : index < 8 ? 'mid' : 'soft',
+  }))
+})
+
+const analysisSections = computed(() => parseAnalysisSections(analysis.value))
 
 function normalizeList(payload, keys) {
   const data = payload?.data || payload
@@ -407,6 +400,31 @@ async function loadAnalysis() {
 }
 
 
+function parseAnalysisSections(text = '') {
+  const cleaned = String(text || '')
+    .replace(/\*\*/g, '')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\r/g, '')
+    .trim()
+  if (!cleaned || cleaned.includes('暂无 AI 分析结果') || cleaned.includes('暂时不可用')) return []
+  const markers = [
+    { key: 'summary', label: '状态总览', title: '心理状态总结', words: ['心理状态总结', '状态总结', '整体情绪'] },
+    { key: 'finding', label: '重点发现', title: '关键发现', words: ['关键发现', '发现'] },
+    { key: 'advice', label: '跟进建议', title: '专业建议', words: ['专业建议', '建议'] },
+  ]
+  const sentences = cleaned
+    .split(/(?=\d+\.|[。；;]|\n+)/)
+    .map((line) => line.replace(/^[-\s\d.、]+/, '').trim())
+    .filter(Boolean)
+  return markers.map((marker) => {
+    const picked = sentences.filter((line) => marker.words.some((word) => line.includes(word)))
+    const items = (picked.length ? picked : sentences).slice(0, marker.key === 'summary' ? 2 : 3)
+      .map((line) => line.replace(new RegExp(marker.words.join('|'), 'g'), '').replace(/^[:：\s]+/, '').trim())
+      .filter(Boolean)
+    return { kind: marker.key, label: marker.label, title: marker.title, items: items.length ? items : ['暂无足够内容，请结合学生近期记录综合判断。'] }
+  })
+}
+
 async function handleWarning() {
   if (!selectedWarning.value) return
   await handleTeacherWarning(selectedWarning.value.id, userStore.userId, handleNote.value || '教师已确认并跟进')
@@ -450,33 +468,6 @@ function openTab(name) {
   tab.value = name
 }
 
-function runGuideAction() {
-  const step = currentGuide.value
-  tab.value = step.tab
-  if (guideIndex.value === 1 && warningList.value.length) selectWarning(warningList.value[0])
-  if (guideIndex.value === 2 && students.value.length) selectStudent(students.value[0])
-  if (guideIndex.value < guideSteps.length - 1) {
-    guideIndex.value += 1
-  } else {
-    completeGuide()
-  }
-}
-
-function completeGuide() {
-  localStorage.setItem(GUIDE_KEY, 'done')
-  showGuide.value = false
-}
-
-function skipGuide() {
-  completeGuide()
-}
-
-function restartGuide() {
-  localStorage.removeItem(GUIDE_KEY)
-  guideIndex.value = 0
-  showGuide.value = true
-  tab.value = 'warnings'
-}
 
 function handleBack() {
   router.push('/')
@@ -523,37 +514,6 @@ function getScoreColor(score) {
   return '#c76558'
 }
 
-function renderWordCloud() {
-  const canvas = wordCloudCanvas.value
-  if (!canvas || !detail.value.word_cloud?.length) return
-  const dpr = window.devicePixelRatio || 1
-  const rect = canvas.parentElement.getBoundingClientRect()
-  const W = Math.max(280, rect.width - 24)
-  const H = 260
-  canvas.width = W * dpr
-  canvas.height = H * dpr
-  canvas.style.width = W + 'px'
-  canvas.style.height = H + 'px'
-  const ctx = canvas.getContext('2d')
-  ctx.scale(dpr, dpr)
-  ctx.clearRect(0, 0, W, H)
-  const words = detail.value.word_cloud.slice(0, 28)
-  const max = Math.max(...words.map((w) => Number(w.count || 1)))
-  words.forEach((w, i) => {
-    const size = 13 + (Number(w.count || 1) / max) * 22
-    const angle = i * 2.399
-    const radius = 10 + i * 6
-    const x = W / 2 + Math.cos(angle) * radius
-    const y = H / 2 + Math.sin(angle) * radius * 0.72
-    ctx.font = `${i < 4 ? 700 : 500} ${size}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-    ctx.fillStyle = ['#4f7d70', '#6d9f93', '#d3a13f', '#769fbd', '#9b7aa5'][i % 5]
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(w.word || w.text || String(w), Math.max(42, Math.min(W - 42, x)), Math.max(24, Math.min(H - 24, y)))
-  })
-}
-
-watch(() => detail.value.word_cloud, () => nextTick(renderWordCloud), { flush: 'post' })
 
 
 function formatChange(value) {
@@ -581,7 +541,7 @@ onMounted(() => {
 .eyebrow { color: #4f7d70; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
 .teacher-hero h2 { font-size: 30px; margin-bottom: 8px; }
 .hero-copy { color: #60716b; max-width: 680px; line-height: 1.7; }
-.hero-actions, .guide-actions, .detail-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-actions, .detail-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .primary-btn, .ghost-btn, .danger-btn { min-height: 36px; padding: 8px 15px; border-radius: 10px; font-size: 14px; transition: transform .18s ease, background .18s ease; }
 .primary-btn { background: #4f7d70; color: white; }
 .ghost-btn { background: #eef4f1; color: #36554d; }
@@ -589,11 +549,6 @@ onMounted(() => {
 .primary-btn:hover, .ghost-btn:hover, .danger-btn:hover { transform: translateY(-1px); }
 .primary-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 .error-screen { margin-top: 20px; padding: 48px; border-radius: 18px; background: white; text-align: center; color: #b85c50; }
-.guide-card { margin-top: 18px; padding: 18px 20px; border-radius: 18px; background: #18231f; color: white; display: grid; gap: 10px; }
-.guide-card p { color: rgba(255,255,255,.78); line-height: 1.7; }
-.guide-progress { display: flex; align-items: center; gap: 12px; font-size: 13px; color: rgba(255,255,255,.72); }
-.progress-track { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,.16); overflow: hidden; }
-.progress-track i { display: block; height: 100%; background: #8bc8b5; }
 .overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
 .metric-card, .risk-card { padding: 18px; border-radius: 16px; background: white; border: 1px solid #e1e9e5; }
 .metric-card span, .risk-card span { display: block; color: #71817b; font-size: 13px; }
@@ -621,6 +576,7 @@ onMounted(() => {
 .warning-main small, .student-card small, .template-list small, .account-row small { color: #75857f; line-height: 1.5; }
 .risk-dot { width: 10px; height: 10px; border-radius: 50%; background: #8bb7a9; }
 .warning-item.high .risk-dot { background: #d46f61; } .warning-item.middle .risk-dot, .warning-item.medium .risk-dot { background: #d5a73f; }
+.section-kicker { display: inline-flex; margin-bottom: 10px; padding: 4px 9px; border-radius: 999px; background: #eaf4f0; color: #4f7d70; font-size: 12px; font-weight: 800; }
 .detail-card, .profile-card, .lesson-result { padding: 18px; border-radius: 16px; background: #f8fbf9; border: 1px solid #e1e9e5; }
 .detail-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .detail-head h4, .profile-card h4, .lesson-result h4 { font-size: 18px; margin-top: 8px; }
@@ -658,9 +614,24 @@ textarea { min-height: 96px; resize: vertical; }
 .dist-track { flex: 1; height: 8px; border-radius: 999px; background: #edf3f0; overflow: hidden; }
 .dist-fill { height: 100%; border-radius: 999px; }
 .dist-count { width: 42px; text-align: right; color: #75857f; font-size: 12px; }
-.word-cloud-wrap { min-height: 260px; display: grid; place-items: center; background: #f7faf8; border-radius: 12px; }
-.word-cloud-canvas { width: 100%; display: block; }
+.word-cloud-wrap { min-height: 260px; padding: 18px; background: #f7faf8; border-radius: 12px; }
+.keyword-cloud { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px; min-height: 224px; }
+.keyword-chip { --weight: 1; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid #dfeae4; background: white; color: #41645b; transform: scale(var(--weight)); transform-origin: center; box-shadow: 0 6px 18px rgba(58, 91, 79, .07); }
+.keyword-chip b { font-size: 14px; line-height: 1; }
+.keyword-chip em { font-size: 11px; color: #7b8d86; }
+.keyword-chip.level-hot { background: #e4f2ec; color: #315d51; border-color: #bfd9cf; }
+.keyword-chip.level-mid { background: #fff6dd; color: #8a6425; border-color: #f0dca7; }
+.keyword-chip.level-soft { background: #eef5f9; color: #5b7086; }
 .analysis-card { min-height: 120px; padding: 14px; border-radius: 12px; background: #f7faf8; color: #52645e; line-height: 1.8; }
+.analysis-sections { display: grid; gap: 10px; }
+.analysis-block { padding: 13px 14px; border-radius: 12px; background: white; border: 1px solid #e3ece7; }
+.analysis-block span { display: inline-flex; margin-bottom: 5px; padding: 3px 8px; border-radius: 999px; background: #eaf4f0; color: #4f7d70; font-size: 12px; font-weight: 800; }
+.analysis-block h5 { margin: 0 0 6px; font-size: 15px; color: #2f403b; }
+.analysis-block ul { margin: 0; padding-left: 18px; }
+.analysis-block li { margin: 4px 0; color: #52645e; line-height: 1.65; }
+.analysis-block.finding span { background: #fff4d7; color: #9b7528; }
+.analysis-block.advice span { background: #e9f0fa; color: #5c718f; }
+.analysis-empty { color: #81908b; }
 .analysis-loading { display: flex; gap: 6px; padding: 10px 0; }
 .analysis-loading .dot { width: 9px; height: 9px; border-radius: 50%; background: #4f7d70; animation: bounce 1.2s infinite both; }
 .analysis-loading .dot:nth-child(2) { animation-delay: .2s; }
