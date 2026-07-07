@@ -148,6 +148,45 @@
           <button type="button" @click.stop="feedPetSnack">喂点心</button>
           <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
         </div>
+        <div class="pet-companion-restored">
+          <div class="pet-section-title">
+            <span>原陪伴角色</span>
+            <small>选择一个小伙伴开始聊天</small>
+          </div>
+          <div class="pet-companion-list">
+            <button
+              v-for="companion in petCompanions"
+              :key="companion.id"
+              type="button"
+              :class="['pet-companion-option', { active: activePetCompanionId === companion.id }]"
+              @click.stop="startPetCompanion(companion)"
+            >
+              <img :src="companion.image || '/images/logo.jpg'" :alt="companion.name" />
+              <span class="pet-companion-emoji">{{ companion.avatar }}</span>
+              <strong>{{ companion.name }}</strong>
+              <em>{{ companion.desc }}</em>
+            </button>
+          </div>
+          <div class="pet-companion-chat" v-if="petCompanionActive">
+            <div class="pet-chat-head">
+              <img :src="activePetImage" :alt="activePetCompanion.name" />
+              <div>
+                <strong>{{ activePetCompanion.name }}</strong>
+                <span>正在陪你聊天</span>
+              </div>
+            </div>
+            <div ref="petChatMessages" class="pet-chat-messages">
+              <div v-for="(msg, index) in petCompanionMsgs" :key="index" :class="['pet-chat-msg', msg.role]">
+                {{ msg.content }}
+              </div>
+              <div v-if="petCompanionTyping" class="pet-chat-msg assistant">正在想怎么回应你...</div>
+            </div>
+            <div class="pet-chat-input-row">
+              <input v-model="petCompanionInput" placeholder="和它说点什么..." @keyup.enter="sendPetCompanionMsg" />
+              <button type="button" @click.stop="sendPetCompanionMsg" :disabled="!petCompanionInput.trim() || petCompanionTyping">发送</button>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
     <!-- 全局音乐开关 -->
@@ -1466,7 +1505,117 @@ const petMoodMessages = {
 }
 const petCompanionState = reactive(loadPetCompanionState())
 const showPetCompanionPanel = ref(false)
-function loadDailyReturnState() {
+
+const PET_COMPANION_PROFILES = {
+  xiaoqing: {
+    id: 'xiaoqing', avatar: '🌸', image: '/images/logo.jpg', name: '温柔学姐「小晴」', shortName: '小晴', desc: '轻柔、耐心，适合想被认真接住的时候。',
+    greeting: '我在这里。你可以慢慢说，今天最让你卡住的那件事是什么？',
+    replies: {
+      default: ['慢慢说，我会认真听完。', '你现在的感受是真实的，也值得被好好对待。', '不用急着变好，先把心里的声音放下来。'],
+      sad: ['听起来你真的撑了很久。先深呼吸一下，我们一点点把它说清楚。', '难过不是软弱，它是在提醒你有些需求需要被看见。'],
+      anxious: ['焦虑来的时候，先把它拆成一件具体的小事。现在最担心的是什么？', '我们先回到当下：喝口水、放慢呼吸，然后只处理眼前一步。'],
+      tired: ['累了就先靠一会儿，不需要马上证明自己。', '你的身体在提醒你要休息，这不是退步。'],
+      happy: ['真好，这份开心值得被记住。能告诉我它从哪里来的吗？'],
+      hello: ['你好呀，我在。今天想从哪一句开始说？'],
+    },
+  },
+  aze: {
+    id: 'aze', avatar: '☀️', image: '/images/logo.jpg', name: '邻家哥哥「阿泽」', shortName: '阿泽', desc: '直接、行动感强，适合需要一点推动和陪跑的时候。',
+    greeting: '来了？坐。先别一个人扛，说说现在最难处理的是哪一块。',
+    replies: {
+      default: ['我听着，先把情况讲清楚。', '稳住，我们先找一个能做的小动作。', '别急着全解决，先解决最靠近你的那一步。'],
+      sad: ['难受就先说出来，别憋着。说完我们再想办法。', '低谷不是终点，只是现在这段路比较暗。'],
+      anxious: ['担心可以理解。我们把最坏情况、发生概率、你能做什么列出来。', '压力大时先别硬扛，先做一件能立刻完成的小事。'],
+      tired: ['累就先停。能量不够的时候，休息本身就是任务。'],
+      happy: ['可以啊，这状态就对了。把这个小胜利记下来。'],
+      hello: ['在。今天遇到什么事了？'],
+    },
+  },
+  gunong: {
+    id: 'gunong', avatar: '🌿', image: '/images/logo.jpg', name: '咕哝', shortName: '咕哝', desc: '更像你的专属情绪小伙伴，陪你倾诉、复盘、恢复一点力量。',
+    greeting: '我一直在这里。你不用组织得很完整，先说一句现在最真实的感受就可以。',
+    replies: {
+      default: ['我听见了。能再多说一点吗？', '这件事对你来说应该不轻松，我们先把它放在桌面上看一看。', '我会陪你说完，不急着给答案。'],
+      sad: ['现在不需要马上好起来。先允许自己难过一会儿。', '如果这份难过有名字，它更像委屈、失落，还是无助？'],
+      anxious: ['先把注意力拉回现在：你能看到的三样东西是什么？', '焦虑常常把未来放大。我们先确认眼前真正需要处理的一步。'],
+      tired: ['今天先降低要求。能好好休息，也是照顾自己的一部分。'],
+      happy: ['这份轻松很珍贵。要不要把它记录成今天的一个小亮点？'],
+      hello: ['你好，我在。今天想聊聊什么？'],
+    },
+  },
+}
+const petCompanions = ref(Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc })))
+const activePetCompanionId = ref('gunong')
+const petCompanionActive = ref(false)
+const petCompanionMsgs = ref([])
+const petCompanionInput = ref('')
+const petCompanionTyping = ref(false)
+const petChatMessages = ref(null)
+const activePetCompanion = computed(() => PET_COMPANION_PROFILES[activePetCompanionId.value] || PET_COMPANION_PROFILES.gunong)
+const activePetImage = computed(() => activePetCompanion.value.image || '/images/logo.jpg')
+
+function pickPetReply(characterId, userContent) {
+  const profile = PET_COMPANION_PROFILES[characterId] || PET_COMPANION_PROFILES.gunong
+  const text = String(userContent || '').toLowerCase()
+  let category = 'default'
+  if (/你好|hi|hello|在吗|在嘛/.test(text)) category = 'hello'
+  else if (/开心|高兴|快乐|兴奋|不错|太好了|舒服/.test(text)) category = 'happy'
+  else if (/难过|伤心|哭|痛苦|emo|悲伤|失落|抑郁|绝望/.test(text)) category = 'sad'
+  else if (/焦虑|紧张|害怕|担心|压力|慌|恐惧|不安/.test(text)) category = 'anxious'
+  else if (/累|疲惫|困|睡不着|失眠|没劲/.test(text)) category = 'tired'
+  const pool = profile.replies[category] || profile.replies.default
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
+async function loadPetCompanions() {
+  try {
+    const res = await axios.get(`${API}/api/companion/list`)
+    if (Array.isArray(res.data?.companions) && res.data.companions.length) {
+      petCompanions.value = res.data.companions.map(c => ({ ...c, image: PET_COMPANION_PROFILES[c.id]?.image || '/images/logo.jpg' }))
+    }
+  } catch (e) {
+    petCompanions.value = Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc }))
+  }
+}
+
+async function startPetCompanion(companion = activePetCompanion.value) {
+  const id = companion.id || 'gunong'
+  activePetCompanionId.value = id
+  petCompanionActive.value = true
+  petCompanionMsgs.value = []
+  bumpPetAffinityOnce('talkDate')
+  setPetStatus(petMoodStatus.value, '它坐近了一点，准备认真听你说。')
+  const fallbackGreeting = PET_COMPANION_PROFILES[id]?.greeting || '我在这里，想说什么都可以。'
+  try {
+    const res = await axios.post(`${API}/api/companion/start`, null, { params: { user_id: Number(userStore.userId) || 1, character_id: id } })
+    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.greeting || fallbackGreeting })
+  } catch (e) {
+    petCompanionMsgs.value.push({ role: 'assistant', content: fallbackGreeting })
+  }
+  await nextTick()
+  if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
+}
+
+async function sendPetCompanionMsg() {
+  const content = petCompanionInput.value.trim()
+  if (!content || petCompanionTyping.value) return
+  petCompanionMsgs.value.push({ role: 'user', content })
+  petCompanionInput.value = ''
+  petCompanionTyping.value = true
+  await nextTick()
+  if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
+  await new Promise(resolve => setTimeout(resolve, 420))
+  try {
+    const res = await axios.post(`${API}/api/companion/chat`, { user_id: Number(userStore.userId) || 1, character_id: activePetCompanionId.value, content })
+    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.reply || pickPetReply(activePetCompanionId.value, content) })
+  } catch (e) {
+    petCompanionMsgs.value.push({ role: 'assistant', content: pickPetReply(activePetCompanionId.value, content) })
+  } finally {
+    petCompanionTyping.value = false
+    await nextTick()
+    if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
+  }
+}function loadDailyReturnState() {
   try {
     const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
     if (saved?.date === todayKey) {
@@ -1545,11 +1694,9 @@ function feedPetSnack() {
   bumpPetAffinityOnce('fedDate')
   setPetStatus('happy', '小点心已经收下了，它看起来安心了一点。')
 }
-function talkWithPet() {
-  bumpPetAffinityOnce('talkDate')
-  setPetStatus(petMoodStatus.value, '我会听你说完，不急着给答案。')
-  showPetCompanionPanel.value = false
-  openChatPanel()
+async function talkWithPet() {
+  showPetCompanionPanel.value = true
+  await startPetCompanion(activePetCompanion.value)
 }
 function updatePetFromMood(option) {
   petCompanionState.mood = option
@@ -3102,7 +3249,7 @@ async function openChatPanel() {
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats() })
+onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (audioEl.value) audioEl.value.pause()
