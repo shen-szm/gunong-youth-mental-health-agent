@@ -150,4 +150,8 @@ test('student room includes mood-aware pet companion loop', async () => {
   assert.match(room, /feedPetSnack/)
   assert.match(room, /talkWithPet/)
   assert.match(room, /updatePetFromMood/)
+  assert.match(room, /\.pet-companion-card \{[\s\S]*?position:\s*fixed/)
+  assert.match(room, /\.pet-companion-card \{[\s\S]*?right:\s*24px/)
+  assert.match(room, /\.pet-actions button \{[\s\S]*?min-width:\s*74px/)
+  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.pet-companion-card \{[\s\S]*?left:\s*12px/)
 })

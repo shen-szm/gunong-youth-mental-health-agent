@@ -3217,20 +3217,24 @@ onUnmounted(() => {
 }
 
 .pet-companion-card {
-  position: relative;
+  position: fixed;
+  right: 24px;
+  top: 38%;
+  z-index: 32;
+  width: min(360px, calc(100vw - 48px));
   overflow: hidden;
   pointer-events: auto;
   display: grid;
   grid-template-columns: 74px 1fr;
   gap: 14px;
-  padding: 15px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 232, 178, 0.24);
-  background: linear-gradient(145deg, rgba(33, 27, 41, 0.78), rgba(70, 52, 62, 0.62));
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 232, 178, 0.34);
+  background: linear-gradient(145deg, rgba(33, 27, 41, 0.88), rgba(70, 52, 62, 0.76));
   color: #fff8e8;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.36), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .pet-companion-card::before {
   content: '';
@@ -3262,10 +3266,23 @@ onUnmounted(() => {
 .pet-body h3 { font-size: 16px; line-height: 1.35; }
 .pet-body p { font-size: 13px; line-height: 1.55; color: rgba(255,248,232,0.78); }
 .pet-meta-row { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: rgba(255,248,232,0.66); }
-.pet-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.pet-actions button { padding: 7px 10px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14); color: #fff8e8; font-size: 12px; font-family: inherit; cursor: pointer; transition: transform 0.18s ease, background 0.18s ease; }
-.pet-actions button:hover { transform: translateY(-1px); background: rgba(255,255,255,0.2); }
-.pet-actions button.is-primary { background: rgba(255, 214, 126, 0.92); color: #3a2812; font-weight: 800; }
+.pet-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pet-actions button {
+  min-width: 74px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.18);
+  color: #fff8e8;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.16);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.pet-actions button:hover { transform: translateY(-1px); background: rgba(255,255,255,0.26); }
+.pet-actions button.is-primary { background: rgba(255, 214, 126, 0.96); color: #3a2812; border-color: rgba(255, 214, 126, 0.9); }
 
 .first-run-guide {
   padding: 15px;
@@ -3412,6 +3429,23 @@ onUnmounted(() => {
 .guide-target-badge { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); padding: 7px 12px; border-radius: 999px; background: rgba(35, 25, 14, 0.86); color: #fff4cc; font-size: 13px; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
 .nav-guide-badge { top: -36px; }
 @keyframes guide-target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
+@media (max-width: 760px) {
+  .pet-companion-card {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 92px;
+    width: auto;
+    grid-template-columns: 56px 1fr;
+    padding: 12px;
+    border-radius: 18px;
+  }
+  .pet-orb { width: 56px; height: 56px; border-radius: 18px; }
+  .pet-face { font-size: 28px; }
+  .pet-body h3 { font-size: 14px; }
+  .pet-body p { font-size: 12px; }
+  .pet-actions button { min-width: 68px; padding: 8px 10px; font-size: 12px; }
+}
 @media (max-width: 520px) {
   .engagement-stack {
     top: auto;
