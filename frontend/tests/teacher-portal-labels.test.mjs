@@ -79,8 +79,8 @@ test('teacher onboarding guide is removed from the portal', async () => {
 test('teacher emotion analytics uses readable keyword chips and structured AI analysis', async () => {
   const portal = await source('frontend/src/views/AdminView.vue')
 
-  assert.match(portal, /keyword-cloud/)
-  assert.match(portal, /keyword-chip/)
+  assert.match(portal, /normal-word-cloud/)
+  assert.match(portal, /word-cloud-item/)
   assert.match(portal, /normalizedWordCloud/)
   assert.doesNotMatch(portal, /wordCloudCanvas/)
   assert.doesNotMatch(portal, /renderWordCloud/)

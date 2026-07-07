@@ -157,7 +157,7 @@
             <div class="emotion-sections">
               <div class="chart-section"><h4>📈 心情趋势（近30天）</h4><div class="trend-chart" v-if="detail.trend?.length"><div class="trend-area"><div class="trend-grid" style="top:25%"></div><div class="trend-grid" style="top:50%"></div><div class="trend-grid" style="top:75%"></div><div v-for="d in detail.trend" :key="d.date" class="trend-col"><span class="trend-val">{{ d.avg }}</span><div class="trend-track"><div class="trend-bar" :style="{ height: Math.max(4, Number(d.avg || 0) * 10) + '%', background: getScoreColor(d.avg) }"></div></div><span class="trend-date">{{ String(d.date).slice(5) }}</span></div></div></div><p v-else class="empty-state">暂无趋势数据</p></div>
               <div class="chart-section"><h4>🎯 情绪分布</h4><div class="dist-bars" v-if="detail.distribution && Object.keys(detail.distribution).length"><div v-for="(count, label) in sortedDist" :key="label" class="dist-row"><span class="dist-emoji">{{ getEmoji(label) }}</span><span class="dist-label">{{ label }}</span><div class="dist-track"><div class="dist-fill" :style="{ width: getDistPct(count) + '%', background: getMoodColor(label) }"></div></div><span class="dist-count">{{ count }}次</span></div></div><p v-else class="empty-state">暂无分布数据</p></div>
-              <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="normalizedWordCloud.length"><div class="keyword-cloud"><span v-for="(item, index) in normalizedWordCloud" :key="item.word + index" :class="['keyword-chip', 'level-' + item.level]" :style="{ '--weight': item.weight }"><b>{{ item.word }}</b><em>{{ item.count }}次</em></span></div></div><p v-else class="empty-state">暂无词云数据</p></div>
+              <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="normalizedWordCloud.length"><div class="normal-word-cloud"><span v-for="(item, index) in normalizedWordCloud" :key="item.word + index" :class="['word-cloud-item', 'level-' + item.level, 'pos-' + (index % 18)]" :style="{ '--word-size': item.size + 'px', '--word-opacity': item.opacity }">{{ item.word }}</span></div></div><p v-else class="empty-state">暂无词云数据</p></div>
               <div class="chart-section"><h4>🤖 AI 心理分析</h4><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><div v-else-if="analysisSections.length" class="analysis-sections"><article v-for="section in analysisSections" :key="section.title" :class="['analysis-block', section.kind]"><span>{{ section.label }}</span><h5>{{ section.title }}</h5><ul><li v-for="(item, index) in section.items" :key="index">{{ item }}</li></ul></article></div><p v-else class="analysis-empty">选择学生后会自动生成心理分析建议。</p></div></div>
             </div>
           </section>
@@ -291,7 +291,8 @@ const normalizedWordCloud = computed(() => {
   const max = Math.max(1, ...items.map((item) => item.count))
   return items.map((item, index) => ({
     ...item,
-    weight: (0.76 + (item.count / max) * 0.7).toFixed(2),
+    size: Math.round(14 + (item.count / max) * 24),
+    opacity: (0.68 + (item.count / max) * 0.32).toFixed(2),
     level: index < 3 ? 'hot' : index < 8 ? 'mid' : 'soft',
   }))
 })
@@ -614,14 +615,30 @@ textarea { min-height: 96px; resize: vertical; }
 .dist-track { flex: 1; height: 8px; border-radius: 999px; background: #edf3f0; overflow: hidden; }
 .dist-fill { height: 100%; border-radius: 999px; }
 .dist-count { width: 42px; text-align: right; color: #75857f; font-size: 12px; }
-.word-cloud-wrap { min-height: 260px; padding: 18px; background: #f7faf8; border-radius: 12px; }
-.keyword-cloud { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px; min-height: 224px; }
-.keyword-chip { --weight: 1; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid #dfeae4; background: white; color: #41645b; transform: scale(var(--weight)); transform-origin: center; box-shadow: 0 6px 18px rgba(58, 91, 79, .07); }
-.keyword-chip b { font-size: 14px; line-height: 1; }
-.keyword-chip em { font-size: 11px; color: #7b8d86; }
-.keyword-chip.level-hot { background: #e4f2ec; color: #315d51; border-color: #bfd9cf; }
-.keyword-chip.level-mid { background: #fff6dd; color: #8a6425; border-color: #f0dca7; }
-.keyword-chip.level-soft { background: #eef5f9; color: #5b7086; }
+.word-cloud-wrap { min-height: 260px; padding: 18px; background: #f7faf8; border-radius: 12px; overflow: hidden; }
+.normal-word-cloud { position: relative; min-height: 224px; }
+.word-cloud-item { position: absolute; left: 50%; top: 50%; display: inline-block; max-width: 220px; color: #4f7d70; font-size: var(--word-size); font-weight: 800; line-height: 1.1; white-space: nowrap; opacity: var(--word-opacity); text-shadow: 0 8px 22px rgba(58, 91, 79, .08); transform: translate(-50%, -50%); }
+.word-cloud-item.level-hot { color: #315d51; font-weight: 900; }
+.word-cloud-item.level-mid { color: #9b7528; }
+.word-cloud-item.level-soft { color: #6f8ca0; font-weight: 700; }
+.word-cloud-item.pos-0 { transform: translate(-50%, -50%) scale(1.08); }
+.word-cloud-item.pos-1 { transform: translate(-112%, -118%) rotate(-4deg); }
+.word-cloud-item.pos-2 { transform: translate(18%, -112%) rotate(3deg); }
+.word-cloud-item.pos-3 { transform: translate(-120%, 16%) rotate(2deg); }
+.word-cloud-item.pos-4 { transform: translate(28%, 20%) rotate(-3deg); }
+.word-cloud-item.pos-5 { transform: translate(-50%, 118%) rotate(1deg); }
+.word-cloud-item.pos-6 { transform: translate(-156%, -52%) rotate(5deg); }
+.word-cloud-item.pos-7 { transform: translate(72%, -48%) rotate(-5deg); }
+.word-cloud-item.pos-8 { transform: translate(-158%, 78%) rotate(-2deg); }
+.word-cloud-item.pos-9 { transform: translate(82%, 86%) rotate(4deg); }
+.word-cloud-item.pos-10 { transform: translate(-14%, -174%) rotate(2deg); }
+.word-cloud-item.pos-11 { transform: translate(-24%, 174%) rotate(-3deg); }
+.word-cloud-item.pos-12 { transform: translate(-198%, -8%) scale(.92); }
+.word-cloud-item.pos-13 { transform: translate(116%, -6%) scale(.92); }
+.word-cloud-item.pos-14 { transform: translate(-210%, -104%) scale(.86); }
+.word-cloud-item.pos-15 { transform: translate(126%, -104%) scale(.86); }
+.word-cloud-item.pos-16 { transform: translate(-218%, 128%) scale(.82); }
+.word-cloud-item.pos-17 { transform: translate(132%, 132%) scale(.82); }
 .analysis-card { min-height: 120px; padding: 14px; border-radius: 12px; background: #f7faf8; color: #52645e; line-height: 1.8; }
 .analysis-sections { display: grid; gap: 10px; }
 .analysis-block { padding: 13px 14px; border-radius: 12px; background: white; border: 1px solid #e3ece7; }

@@ -117,10 +117,36 @@
             <span>陪伴 {{ companionshipStreak }} 天</span>
           </div>
           <div class="pet-actions">
-            <button @click="petPetting">摸摸</button>
-            <button @click="feedPetSnack">喂点心</button>
-            <button class="is-primary" @click="talkWithPet">说句话</button>
+            <button type="button" class="pet-open-btn" @click.stop="showPetCompanionPanel = true">打开宠物互动</button>
+            <button type="button" @click.stop="petPetting">摸摸</button>
+            <button type="button" @click.stop="feedPetSnack">喂点心</button>
+            <button type="button" class="is-primary" @click.stop="talkWithPet">说句话</button>
           </div>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="showPetCompanionPanel = false">
+      <section class="pet-panel-card">
+        <button type="button" class="pet-panel-close" @click="showPetCompanionPanel = false">×</button>
+        <div class="pet-panel-head">
+          <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
+            <span>{{ petMoodStatus === 'sleepy' ? '😴' : petMoodStatus === 'tired' ? '🥺' : petMoodStatus === 'annoyed' ? '😿' : petMoodStatus === 'happy' ? '😸' : '🐾' }}</span>
+          </div>
+          <div>
+            <span class="pet-panel-kicker">宠物互动</span>
+            <h3>{{ petAffinityLabel }}</h3>
+            <p>{{ petCompanionMessage }}</p>
+          </div>
+        </div>
+        <div class="pet-panel-meta">
+          <span>亲密度 {{ petCompanionState.affinity }}</span>
+          <span>陪伴 {{ companionshipStreak }} 天</span>
+        </div>
+        <div class="pet-panel-actions">
+          <button type="button" @click.stop="petPetting">摸摸它</button>
+          <button type="button" @click.stop="feedPetSnack">喂点心</button>
+          <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
         </div>
       </section>
     </div>
@@ -1439,6 +1465,7 @@ const petMoodMessages = {
   sleepy: ['夜深了，我陪你把声音放轻一点。', '今天先不用逞强，早点休息也很好。'],
 }
 const petCompanionState = reactive(loadPetCompanionState())
+const showPetCompanionPanel = ref(false)
 function loadDailyReturnState() {
   try {
     const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
@@ -1521,6 +1548,7 @@ function feedPetSnack() {
 function talkWithPet() {
   bumpPetAffinityOnce('talkDate')
   setPetStatus(petMoodStatus.value, '我会听你说完，不急着给答案。')
+  showPetCompanionPanel.value = false
   openChatPanel()
 }
 function updatePetFromMood(option) {
@@ -3283,6 +3311,21 @@ onUnmounted(() => {
 }
 .pet-actions button:hover { transform: translateY(-1px); background: rgba(255,255,255,0.26); }
 .pet-actions button.is-primary { background: rgba(255, 214, 126, 0.96); color: #3a2812; border-color: rgba(255, 214, 126, 0.9); }
+.pet-actions .pet-open-btn { min-width: 132px; background: rgba(255, 248, 232, 0.92); color: #3a2812; }
+.pet-panel-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(20, 17, 24, 0.48); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: auto; }
+.pet-panel-card { position: relative; width: min(430px, 100%); padding: 24px; border-radius: 26px; background: linear-gradient(145deg, rgba(42, 35, 48, 0.96), rgba(84, 63, 70, 0.94)); color: #fff8e8; box-shadow: 0 28px 80px rgba(0,0,0,0.42); border: 1px solid rgba(255, 232, 178, 0.28); }
+.pet-panel-close { position: absolute; right: 16px; top: 14px; width: 34px; height: 34px; border-radius: 50%; border: none; background: rgba(255,255,255,0.12); color: #fff8e8; font-size: 22px; cursor: pointer; }
+.pet-panel-head { display: grid; grid-template-columns: 86px 1fr; gap: 16px; align-items: center; }
+.pet-panel-avatar { width: 86px; height: 86px; border-radius: 28px; display: grid; place-items: center; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.16); }
+.pet-panel-avatar span { font-size: 42px; }
+.pet-panel-kicker { display: inline-flex; margin-bottom: 6px; color: rgba(255,248,232,0.68); font-size: 13px; font-weight: 800; }
+.pet-panel-head h3 { font-size: 21px; margin-bottom: 8px; }
+.pet-panel-head p { color: rgba(255,248,232,0.78); line-height: 1.65; }
+.pet-panel-meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+.pet-panel-meta span { padding: 7px 10px; border-radius: 999px; background: rgba(255,255,255,0.12); color: rgba(255,248,232,0.76); font-size: 12px; }
+.pet-panel-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pet-panel-actions button { min-height: 44px; border: none; border-radius: 15px; background: rgba(255,255,255,0.16); color: #fff8e8; font-size: 14px; font-weight: 900; font-family: inherit; cursor: pointer; }
+.pet-panel-actions button.is-primary { background: #ffd67e; color: #33220f; }
 
 .first-run-guide {
   padding: 15px;
@@ -3445,6 +3488,12 @@ onUnmounted(() => {
   .pet-body h3 { font-size: 14px; }
   .pet-body p { font-size: 12px; }
   .pet-actions button { min-width: 68px; padding: 8px 10px; font-size: 12px; }
+  .pet-actions .pet-open-btn { min-width: 118px; }
+  .pet-panel-card { padding: 18px; }
+  .pet-panel-head { grid-template-columns: 64px 1fr; }
+  .pet-panel-avatar { width: 64px; height: 64px; border-radius: 21px; }
+  .pet-panel-avatar span { font-size: 32px; }
+  .pet-panel-actions { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .engagement-stack {
