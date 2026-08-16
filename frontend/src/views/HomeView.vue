@@ -67,7 +67,13 @@
         <span>粤公网安备44011202003950号</span>
       </a>
       <span class="beian-divider">|</span>
-      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
+      <a
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="icp-link"
+        aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
+      >粤ICP备2026048986号-2</a>
     </footer>
   </div>
 </template>
@@ -260,6 +266,12 @@ onMounted(async () => {
   opacity: 1;
   color: var(--primary);
 }
+.beian-footer a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  opacity: 1;
+}
+.icp-link { font-weight: 600; }
 .beian-link {
   display: inline-flex; align-items: center; gap: 4px;
 }

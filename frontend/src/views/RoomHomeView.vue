@@ -1,5 +1,5 @@
 <template>
-  <div class="room" :class="timeOfDay">
+  <div ref="roomRoot" class="room" :class="timeOfDay" @click="handleRoomPetMove">
 
     <!-- ══ 欢迎遮罩：点击任意处进入 ══ -->
     <Transition name="splash-fade">
@@ -117,17 +117,23 @@
             <span>陪伴 {{ companionshipStreak }} 天</span>
           </div>
           <div class="pet-actions">
-            <button type="button" class="pet-open-btn" @click.stop="showPetCompanionPanel = true">打开宠物互动</button>
-            <button type="button" @click.stop="petPetting">摸摸</button>
-            <button type="button" @click.stop="feedPetSnack">喂点心</button>
-            <button type="button" class="is-primary" @click.stop="talkWithPet">说句话</button>
+            <button type="button" class="pet-open-btn" @click.stop="openPetPlayground">进入宠物互动</button>
           </div>
         </div>
       </section>
     </div>
-
+    <button
+      v-if="!showSplash"
+      type="button"
+      :class="['room-roaming-pet', { moving: petIsMoving }]"
+      :style="{ left: `${roomPetPosition.x}px`, top: `${roomPetPosition.y}px` }"
+      @click.stop="openPetPlayground"
+    >
+      <img :src="selectedPetFrame" :alt="selectedPetVisual.name" />
+      <span>{{ petRoamingBubble }}</span>
+    </button>
     <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="showPetCompanionPanel = false">
-      <section class="pet-panel-card">
+      <section class="pet-panel-card pet-playground-card">
         <button type="button" class="pet-panel-close" @click="showPetCompanionPanel = false">×</button>
         <div class="pet-panel-head">
           <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
@@ -143,10 +149,16 @@
           <span>亲密度 {{ petCompanionState.affinity }}</span>
           <span>陪伴 {{ companionshipStreak }} 天</span>
         </div>
+        <div class="pet-playground-stage">
+          <div class="pet-stage-hint">点击房间任意位置，它会跑过去陪你</div>
+          <img class="pet-stage-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
+          <div class="pet-stage-bubble">{{ petCompanionMessage }}</div>
+        </div>
         <div class="pet-panel-actions">
           <button type="button" @click.stop="petPetting">摸摸它</button>
           <button type="button" @click.stop="feedPetSnack">喂点心</button>
           <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
+          <button type="button" @click.stop="showPetCompanionPanel = false">回到房间</button>
         </div>
         <div class="pet-visual-picker">
           <div class="pet-section-title">
@@ -1447,7 +1459,13 @@
         <span>粤公网安备44011202003950号</span>
       </a>
       <span class="beian-divider">|</span>
-      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026048986号-2</a>
+      <a
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="icp-link"
+        aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
+      >粤ICP备2026048986号-2</a>
     </footer>
   </div>
 </template>
@@ -1481,6 +1499,7 @@ const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
 const PET_COMPANION_STATE_KEY = 'shengyu_pet_companion_v4_5_0'
 const PET_VISUAL_KEY = 'shengyu_pet_visual_v4_5_4'
+const ROOM_PET_POSITION_KEY = 'shengyu_room_pet_position_v4_5_5'
 const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
 const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
 const todayKey = new Date().toISOString().slice(0, 10)
@@ -1535,6 +1554,41 @@ let petAnimationTimer = null
 const selectedPetVisual = computed(() => PET_VISUALS.find(visual => visual.key === selectedPetVisualKey.value) || PET_VISUALS[0])
 const selectedPetFrame = computed(() => selectedPetVisual.value.frames[petAnimationFrame.value % selectedPetVisual.value.frames.length])
 
+const roomRoot = ref(null)
+const roomPetPosition = reactive(loadRoomPetPosition())
+const petIsMoving = ref(false)
+let petMoveTimer = null
+const petRoamingBubble = computed(() => petIsMoving.value ? '我来了' : '点房间，我会过去')
+
+function loadRoomPetPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ROOM_PET_POSITION_KEY) || 'null')
+    if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
+      return { x: Number(saved.x), y: Number(saved.y) }
+    }
+  } catch {}
+  return { x: Math.max(120, window.innerWidth - 180), y: Math.max(220, window.innerHeight - 180) }
+}
+function saveRoomPetPosition() {
+  localStorage.setItem(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
+}
+function openPetPlayground() {
+  showPetCompanionPanel.value = true
+}
+function handleRoomPetMove(event) {
+  if (showSplash.value || showPetCompanionPanel.value) return
+  const target = event.target
+  if (target?.closest?.('button, a, input, textarea, select, .hot-zone, .bottom-nav, .engagement-stack, .global-music-btn, .weather-float, .transport-panel, .profile-panel, .chat-panel, .report-panel, .healing-panel, .treehole-panel')) return
+  const padding = 52
+  const nextX = Math.min(Math.max(event.clientX, padding), window.innerWidth - padding)
+  const nextY = Math.min(Math.max(event.clientY, 120), window.innerHeight - 96)
+  roomPetPosition.x = nextX
+  roomPetPosition.y = nextY
+  saveRoomPetPosition()
+  petIsMoving.value = true
+  if (petMoveTimer) clearTimeout(petMoveTimer)
+  petMoveTimer = setTimeout(() => { petIsMoving.value = false }, 720)
+}
 function loadPetVisualKey() {
   const saved = localStorage.getItem(PET_VISUAL_KEY)
   return PET_VISUALS.some(visual => visual.key === saved) ? saved : 'snorlax'
@@ -3300,6 +3354,7 @@ onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); wi
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (petAnimationTimer) clearInterval(petAnimationTimer)
+  if (petMoveTimer) clearTimeout(petMoveTimer)
   if (audioEl.value) audioEl.value.pause()
   window.removeEventListener('resize', onResize)
 })
@@ -3438,7 +3493,52 @@ onUnmounted(() => {
   transform: translateY(-1px);
   background: #fff0c6;
 }
-
+  .room-roaming-pet {
+  position: fixed;
+  z-index: 36;
+  width: 88px;
+  min-height: 92px;
+  transform: translate(-50%, -78%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: left 0.68s cubic-bezier(0.22, 1, 0.36, 1), top 0.68s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
+  pointer-events: auto;
+}
+.room-roaming-pet img {
+  width: 86px;
+  height: 86px;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 18px rgba(0,0,0,0.34));
+}
+.room-roaming-pet span {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(38, 30, 42, 0.78);
+  color: #fff8e8;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.room-roaming-pet:hover span,
+.room-roaming-pet.moving span {
+  opacity: 1;
+  transform: translate(-50%, -4px);
+}
+.room-roaming-pet.moving img {
+  animation: pet-run-bob 0.34s ease-in-out infinite;
+}
+@keyframes pet-run-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.03); }
+}
 .pet-companion-card {
   position: fixed;
   right: 24px;
@@ -3520,7 +3620,13 @@ onUnmounted(() => {
 .pet-panel-head p { color: rgba(255,248,232,0.78); line-height: 1.65; }
 .pet-panel-meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
 .pet-panel-meta span { padding: 7px 10px; border-radius: 999px; background: rgba(255,255,255,0.12); color: rgba(255,248,232,0.76); font-size: 12px; }
-.pet-panel-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pet-playground-card { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow-y: auto; }
+.pet-playground-stage { position: relative; margin: 18px 0; min-height: 260px; border-radius: 28px; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 42%, rgba(255, 220, 148, 0.22), rgba(255,255,255,0.07) 42%, rgba(255,255,255,0.04)); border: 1px solid rgba(255,255,255,0.12); }
+.pet-stage-hint { position: absolute; top: 14px; left: 16px; padding: 7px 11px; border-radius: 999px; background: rgba(255,255,255,0.12); color: rgba(255,248,232,0.72); font-size: 12px; font-weight: 800; }
+.pet-stage-frame { width: min(220px, 52vw); height: min(220px, 52vw); object-fit: contain; filter: drop-shadow(0 22px 30px rgba(0,0,0,0.28)); animation: pet-idle-float 1.8s ease-in-out infinite; }
+.pet-stage-bubble { position: absolute; right: 16px; bottom: 16px; max-width: min(320px, 72%); padding: 10px 13px; border-radius: 18px 18px 6px 18px; background: rgba(255, 214, 126, 0.94); color: #33220f; font-size: 13px; line-height: 1.5; font-weight: 800; }
+@keyframes pet-idle-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.pet-panel-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .pet-panel-actions button { min-height: 44px; border: none; border-radius: 15px; background: rgba(255,255,255,0.16); color: #fff8e8; font-size: 14px; font-weight: 900; font-family: inherit; cursor: pointer; }
 .pet-panel-actions button.is-primary { background: #ffd67e; color: #33220f; }
 .pet-visual-picker { margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.12); }
@@ -3697,6 +3803,9 @@ onUnmounted(() => {
   .pet-panel-avatar { width: 64px; height: 64px; border-radius: 21px; }
   .pet-panel-avatar span { font-size: 32px; }
   .pet-panel-actions { grid-template-columns: 1fr; }
+  .pet-playground-stage { min-height: 220px; }
+  .room-roaming-pet { width: 72px; min-height: 76px; }
+  .room-roaming-pet img { width: 70px; height: 70px; }
   .pet-visual-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {
@@ -5147,6 +5256,11 @@ onUnmounted(() => {
   color: #fff;
   opacity: 0.86;
 }
+.beian-footer a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+.icp-link { white-space: nowrap; }
 .beian-link {
   display: inline-flex; align-items: center; gap: 5px;
 }

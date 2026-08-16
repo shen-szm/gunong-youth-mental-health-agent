@@ -1,8 +1,11 @@
 $ErrorActionPreference = "Stop"
 
-$Server = "ubuntu@<OLD_SERVER_IP>"
+$Server = "$env:DEPLOY_SERVER"
 $RemoteDist = "/opt/shengyu/frontend/dist"
 $FrontendDir = Join-Path $PSScriptRoot "frontend"
+$ReleaseStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$RemoteNext = "/opt/shengyu/frontend/dist-next-$ReleaseStamp"
+$RemoteBackup = "/opt/shengyu/backups/frontend-dist-$ReleaseStamp"
 
 if (-not (Test-Path -LiteralPath $FrontendDir)) {
   throw "Frontend directory not found: $FrontendDir"
@@ -19,11 +22,12 @@ try {
   npm.cmd install
   npm.cmd run build
 
-  ssh $Server "sudo mkdir -p $RemoteDist && sudo chown -R ubuntu:ubuntu /opt/shengyu && rm -rf $RemoteDist/*"
-  scp -r ".\dist\*" "${Server}:$RemoteDist/"
-  ssh $Server "sudo nginx -t && sudo systemctl reload nginx"
+  ssh $Server "mkdir -p '$RemoteNext'"
+  scp -r ".\dist\*" "${Server}:$RemoteNext/"
+  ssh $Server "test -f '$RemoteNext/index.html' && sudo mkdir -p /opt/shengyu/backups && if [ -d '$RemoteDist' ]; then sudo mv '$RemoteDist' '$RemoteBackup'; fi && sudo mv '$RemoteNext' '$RemoteDist' && sudo nginx -t && sudo systemctl reload nginx"
 
   Write-Host "Frontend deployed to ${Server}:$RemoteDist"
+  Write-Host "Previous frontend backup: $RemoteBackup"
   Write-Host "Version: $env:VITE_APP_VERSION"
   Write-Host "Build time: $env:VITE_BUILD_TIME"
 }

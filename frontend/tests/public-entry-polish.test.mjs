@@ -36,7 +36,12 @@ test('handheld game mini app is removed from the room UI', async () => {
 
 test('beian footer is readable over the room background', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
+  const home = await source('frontend/src/views/HomeView.vue')
 
+  for (const page of [room, home]) {
+    assert.match(page, /href="https:\/\/beian\.miit\.gov\.cn\/"/)
+    assert.match(page, />粤ICP备2026048986号-2<\/a>/)
+  }
   assert.match(room, /\.beian-footer\s*\{[\s\S]*background:\s*rgba\(18,\s*24,\s*32,\s*0\.72\)/)
   assert.match(room, /\.beian-footer\s*\{[\s\S]*backdrop-filter:\s*blur\(10px\)/)
   assert.match(room, /\.beian-footer\s*\{[\s\S]*text-shadow:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*0\.65\)/)

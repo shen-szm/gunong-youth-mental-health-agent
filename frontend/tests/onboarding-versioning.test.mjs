@@ -43,7 +43,7 @@ test('window hotspot label is hidden until hover and uses subtle copy', async ()
   assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
 })
 
-test('patch release continues from latest 4.5.1 baseline and records changelog', async () => {
+test('patch release continues from latest baseline and records changelog', async () => {
   const pkg = JSON.parse(await source('frontend/package.json'))
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelogPath = join(root, 'CHANGELOG.md')
@@ -51,13 +51,15 @@ test('patch release continues from latest 4.5.1 baseline and records changelog',
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '4.5.4')
-  assert.equal(lock.version, '4.5.4')
-  assert.equal(lock.packages[''].version, '4.5.4')
+  assert.equal(pkg.version, '4.5.6')
+  assert.equal(lock.version, '4.5.6')
+  assert.equal(lock.packages[''].version, '4.5.6')
   assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
   assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)
   assert.match(changelog, /4\.5\.2 -> 4\.5\.3/)
   assert.match(changelog, /4\.5\.3 -> 4\.5\.4/)
+  assert.match(changelog, /4\.5\.4 -> 4\.5\.5/)
+  assert.match(changelog, /## \[4\.5\.6\] - 2026-08-16/)
 })
 
 test('deploy script publishes semantic version plus git commit for visible build badge', async () => {

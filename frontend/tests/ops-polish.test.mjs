@@ -10,15 +10,17 @@ async function source(path) {
   return readFile(join(root, path), 'utf8')
 }
 
-test('local frontend deploy script builds, uploads and reloads the known Tencent Cloud target', async () => {
+test('local frontend deploy script backs up and publishes to the Aliyun target', async () => {
   const scriptPath = join(root, 'deploy-frontend.ps1')
   const info = await stat(scriptPath)
   assert.ok(info.isFile())
 
   const script = await source('deploy-frontend.ps1')
   assert.match(script, /npm\.cmd run build/)
-  assert.match(script, /43\.136\.69\.47/)
+  assert.match(script, /8\.138\.151\.152/)
+  assert.doesNotMatch(script, /43\.136\.69\.47/)
   assert.match(script, /\/opt\/shengyu\/frontend\/dist/)
+  assert.match(script, /\/opt\/shengyu\/backups\/frontend-dist-/)
   assert.match(script, /scp/)
   assert.match(script, /sudo nginx -t/)
   assert.match(script, /sudo systemctl reload nginx/)
