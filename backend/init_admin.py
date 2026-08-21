@@ -1,35 +1,39 @@
-"""
-管理员账号初始化脚本
-启动时自动创建默认管理员账号
-"""
-from database import SessionLocal, init_db
-from models import User
-from security import get_password_hash
-from config import settings
+"""按显式环境变量初始化本地教师账号，不提供默认弱口令。"""
 
-def create_default_admin():
-    """创建默认管理员账号（如果不存在）"""
+from config import settings
+from database import SessionLocal
+from models import User, UserSession
+from security import get_password_hash
+
+
+def create_default_admin() -> None:
+    username = settings.ADMIN_USERNAME.strip()
+    password = settings.ADMIN_PASSWORD
+    if not username and not password:
+        print("[admin] 未配置本地教师账号，跳过初始化")
+        return
+    if not username or len(password) < 12:
+        print("[admin] ADMIN_USERNAME/ADMIN_PASSWORD 配置不完整或密码少于12位，拒绝初始化")
+        return
+
     db = SessionLocal()
     try:
-        # 检查是否已有管理员
-        admin = db.query(User).filter(User.username == "admin").first()
-        if not admin:
-            admin_user = User(
-                username="admin",
-                password_hash=get_password_hash("admin123"),
-                nickname="系统管理员",
-                is_admin=True
-            )
-            db.add(admin_user)
-            db.commit()
-            print("[admin] 默认管理员账号已创建：admin / admin123")
-        else:
-            # 确保已有admin账号有is_admin标志
+        admin = db.query(User).filter(User.username == username).first()
+        if admin:
             if not admin.is_admin:
-                admin.is_admin = True
-                db.commit()
-            print("[admin] 管理员账号已存在")
-    except Exception as e:
-        print(f"[admin] 创建管理员账号失败：{e}")
+                raise RuntimeError("管理员用户名已被普通账号占用，拒绝自动提权")
+            admin.password_hash = get_password_hash(password)
+            db.query(UserSession).filter(UserSession.user_id == admin.id).delete()
+        else:
+            db.add(
+                User(
+                    username=username,
+                    password_hash=get_password_hash(password),
+                    nickname="本地教师",
+                    is_admin=1,
+                )
+            )
+        db.commit()
+        print("[admin] 本地教师账号已就绪")
     finally:
         db.close()

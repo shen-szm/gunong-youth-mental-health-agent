@@ -2,6 +2,18 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    RELEASE_VERSION: str = "5.0.0-alpha.1"
+    DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
+    DEMO_MODE: bool = True
+    SESSION_COOKIE_NAME: str = "shengyu_session"
+    SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
+    COOKIE_SECURE: bool = False
+    AGENT_STEP_DELAY_MS: int = 180
+    # 默认禁止把聊天、语音或情绪记录发送给第三方模型；仅合成数据演示可显式开启。
+    ALLOW_EXTERNAL_AI: bool = False
+    # 守护者表单已强制合成数据确认和去标识校验，可单独启用；失败时仍显式降级。
+    ALLOW_GUARDIAN_SYNTHETIC_AI: bool = True
+
     # 讯飞语音识别(ASR)和语音合成(TTS)配置
     XUNFEI_APP_ID: str = ""
     XUNFEI_API_KEY: str = ""
@@ -19,6 +31,10 @@ class Settings(BaseSettings):
     MYSQL_DATABASE: str = "shengyu_db"
 
     BACKEND_PORT: int = 9000
+
+    # 只有显式提供强密码时才初始化本地教师账号。
+    ADMIN_USERNAME: str = ""
+    ADMIN_PASSWORD: str = ""
 
     # CORS配置 - 前端开发服务器地址
     CORS_ORIGINS: list = ["http://localhost:5173", "http://127.0.0.1:5173"]

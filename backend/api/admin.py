@@ -4,20 +4,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, MoodRecord, ChatMessage
+from models import User, MoodRecord, ChatMessage, SensitiveAccessLog
 from config import settings
+from auth import require_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-def verify_admin(user_id: int, db: Session):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_admin:
-        raise HTTPException(status_code=403, detail="需要教师权限")
-    return user
-
 @router.get("/stats")
-def get_stats(user_id: int, db: Session = Depends(get_db)):
-    verify_admin(user_id, db)
+def get_stats(user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     from datetime import datetime, timedelta
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_mood = db.query(MoodRecord).filter(MoodRecord.created_at >= today_start).count()
@@ -31,8 +25,7 @@ def get_stats(user_id: int, db: Session = Depends(get_db)):
     }
 
 @router.get("/users")
-def get_users(user_id: int, page: int = 1, size: int = 20, db: Session = Depends(get_db)):
-    verify_admin(user_id, db)
+def get_users(user_id: int | None = None, page: int = 1, size: int = 20, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     total = db.query(User).count()
     users = db.query(User).order_by(User.id.desc()).offset((page - 1) * size).limit(size).all()
     enriched_users = []
@@ -45,7 +38,6 @@ def get_users(user_id: int, page: int = 1, size: int = 20, db: Session = Depends
             "id": u.id,
             "username": u.username,
             "nickname": u.nickname,
-            "plain_password": u.plain_password or "",
             "is_admin": bool(u.is_admin),
             "created_at": str(u.created_at),
             "mood_count": mood_count,
@@ -60,8 +52,7 @@ def get_users(user_id: int, page: int = 1, size: int = 20, db: Session = Depends
     }
 
 @router.post("/set-admin/{target_user_id}")
-def set_admin(target_user_id: int, user_id: int, db: Session = Depends(get_db)):
-    verify_admin(user_id, db)
+def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -71,9 +62,8 @@ def set_admin(target_user_id: int, user_id: int, db: Session = Depends(get_db)):
     return {"msg": f"已将 {target.username} {action}"}
 
 @router.delete("/users/{target_user_id}")
-def delete_user(target_user_id: int, user_id: int, db: Session = Depends(get_db)):
-    verify_admin(user_id, db)
-    if target_user_id == user_id:
+def delete_user(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+    if target_user_id == current_admin.id:
         raise HTTPException(status_code=400, detail="不能删除自己")
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
@@ -86,8 +76,9 @@ def delete_user(target_user_id: int, user_id: int, db: Session = Depends(get_db)
     return {"msg": f"已删除用户 {target.username}"}
 
 @router.get("/chats")
-def get_chats(user_id: int, limit: int = 500, db: Session = Depends(get_db)):
-    verify_admin(user_id, db)
+def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="list_chat_content", resource_type="chat", resource_id="recent", result="allowed"))
+    db.commit()
     chats = db.query(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(limit).all()
     return [
         {
@@ -103,13 +94,13 @@ def get_chats(user_id: int, limit: int = 500, db: Session = Depends(get_db)):
 
 
 @router.get("/user-detail/{target_user_id}")
-def get_user_detail(target_user_id: int, user_id: int, days: int = 30, db: Session = Depends(get_db)):
+def get_user_detail(target_user_id: int, user_id: int | None = None, days: int = 30, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     """获取用户详情：基本信息 + 心情趋势 + 情绪分布 + 高频词"""
-    verify_admin(user_id, db)
-
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
+    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="view_user_detail", resource_type="user", resource_id=str(target_user_id), result="allowed"))
+    db.commit()
 
     from datetime import datetime, timedelta
 
@@ -194,13 +185,13 @@ def get_user_detail(target_user_id: int, user_id: int, days: int = 30, db: Sessi
 
 
 @router.get("/user-analysis/{target_user_id}")
-async def get_user_analysis(target_user_id: int, user_id: int, db: Session = Depends(get_db)):
+async def get_user_analysis(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     """AI 心理分析：总结用户心理状态并给出建议"""
-    verify_admin(user_id, db)
-
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
+    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="generate_user_analysis", resource_type="user", resource_id=str(target_user_id), result="allowed"))
+    db.commit()
 
     from datetime import datetime, timedelta
 
@@ -221,7 +212,22 @@ async def get_user_analysis(target_user_id: int, user_id: int, db: Session = Dep
         ChatMessage.created_at >= since
     ).order_by(ChatMessage.created_at.asc()).limit(30).all()
 
-    # 构造分析提示
+    from collections import Counter
+    dist = Counter(m.mood_label for m in moods)
+    dist_str = "、".join([f"{label}({count}次)" for label, count in dist.most_common()])
+    avg_score = round(sum(m.mood_score for m in moods) / len(moods), 1)
+
+    if not settings.ALLOW_EXTERNAL_AI:
+        return {
+            "analysis": (
+                f"最近30天共记录{len(moods)}次，平均自评为{avg_score}/10；分布为{dist_str}。"
+                "这是本地统计摘要，不是诊断。外部AI默认关闭，聊天正文和昵称未发送给第三方；"
+                "教师只能据此提供低压力支持和必要转介，不能据此作医学或纪律判断。"
+            ),
+            "degraded": True,
+        }
+
+    # 构造分析提示（仅在显式开启外部AI并完成相应治理后使用）
     mood_summary = "；".join([
         f"{m.created_at.strftime('%m-%d %H:%M')}：{m.mood_label}（分数{m.mood_score}，内容：{m.content[:50] if m.content else '无'}）"
         for m in moods[-15:]
@@ -229,15 +235,9 @@ async def get_user_analysis(target_user_id: int, user_id: int, db: Session = Dep
 
     chat_summary = " | ".join([f"{c.content[:60]}" for c in user_msgs[-10:]]) if user_msgs else "无对话记录"
 
-    # 情绪分布统计
-    from collections import Counter
-    dist = Counter(m.mood_label for m in moods)
-    dist_str = "、".join([f"{label}({count}次)" for label, count in dist.most_common()])
-    avg_score = round(sum(m.mood_score for m in moods) / len(moods), 1)
-
     messages = [{
         "role": "user",
-        "content": f"""你是一位专业的心理咨询师，请对以下用户的心理状态进行分析，并给出建议。
+        "content": f"""你是心理健康教育支持工具。请基于以下有限记录整理非诊断性观察摘要，并给教师提供谨慎的支持建议。
 
 用户信息：{target.nickname or target.username}，使用{moods[0].created_at.strftime('%Y-%m-%d')}至今
 平均情绪分：{avg_score}/10
@@ -250,9 +250,9 @@ async def get_user_analysis(target_user_id: int, user_id: int, db: Session = Dep
 {chat_summary}
 
 请从以下几个方面进行分析（共300字以内）：
-1. 心理状态总结：用户的整体心理状态如何？主要情绪特征是什么？
+1. 观察摘要：记录中出现了哪些情绪与行为变化？不得使用疾病标签。
 2. 关键发现：有什么需要特别关注的问题或趋势？
-3. 专业建议：作为心理咨询师，给教师的建议（如何更好地帮助该用户）"""
+3. 支持建议：给教师可执行的校内支持、最小披露和必要转介建议。必须说明AI不能替代专业评估。"""
     }]
 
     try:

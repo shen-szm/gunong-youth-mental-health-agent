@@ -24,6 +24,10 @@
       <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
+    <RouterLink v-if="!showSplash" class="guardian-workbench-entry" to="/guardian">
+      <span>守护者工作台</span>
+      <small>为家长与教师生成支持方案</small>
+    </RouterLink>
     <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
       <section class="first-run-guide" v-if="showFirstRunGuide">
@@ -2988,7 +2992,7 @@ async function saveNickname() {
 async function handleLogout() {
   if (!confirm('确定要退出登录吗？')) return
   const wasTeacher = userStore.isAdmin
-  userStore.logout()
+  await userStore.logout()
   showProfilePanel.value = false
   if (wasTeacher) {
     router.push('/teacher-login')
@@ -3329,7 +3333,7 @@ function stopRecording() {
 
 function playTTS(text) {
   if (!text) return
-  fetch('/api/chat/tts?text=' + encodeURIComponent(text))
+  fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
     .then(r => { if (!r.ok) throw new Error(); return r.blob() })
     .then(blob => {
       const url = URL.createObjectURL(blob)
@@ -5946,5 +5950,28 @@ onUnmounted(() => {
   font-size: 13px;
   color: #FFF;
   text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.guardian-workbench-entry {
+  position: fixed;
+  top: 18px;
+  right: 20px;
+  z-index: 46;
+  display: grid;
+  gap: 2px;
+  min-width: 176px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: rgba(20, 39, 34, 0.82);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 6px 8px rgba(13, 34, 29, 0.16);
+  backdrop-filter: blur(10px);
+}
+.guardian-workbench-entry span { font-size: 13px; font-weight: 800; }
+.guardian-workbench-entry small { color: rgba(255,255,255,.72); font-size: 10px; }
+.guardian-workbench-entry:focus-visible { outline: 3px solid #f4cc72; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .guardian-workbench-entry { top: 12px; right: 12px; min-width: 0; padding: 9px 11px; }
+  .guardian-workbench-entry small { display: none; }
 }
 </style>

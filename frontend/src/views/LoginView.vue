@@ -54,36 +54,13 @@
           </button>
 
           <div class="form-extras">
-            <button v-if="mode === 'login'" class="link-forgot" @click="showForgot = true">找回密码</button>
+            <p v-if="mode === 'login'" class="forgot-hint">密码不会被系统展示；需要重置时请联系教师管理员。</p>
           </div>
         </div>
       </div>
 
     </div>
 
-    <!-- 找回密码弹窗 -->
-    <Transition name="fade">
-      <div v-if="showForgot" class="forgot-modal" @click.self="showForgot = false">
-        <div class="forgot-panel">
-          <div class="forgot-header">
-            <h3>找回密码</h3>
-            <button class="forgot-close" @click="showForgot = false">✕</button>
-          </div>
-          <div class="forgot-body">
-            <p class="forgot-hint">输入你的用户名，即可查看密码</p>
-            <input v-model="forgotUsername" placeholder="请输入用户名" class="input" />
-            <p class="forgot-error" v-if="forgotError">{{ forgotError }}</p>
-            <p class="forgot-success" v-if="forgotSuccess">
-              你的密码是：<strong>{{ forgotSuccess }}</strong>
-            </p>
-            <button class="btn-primary" @click="handleForgot" :disabled="forgotLoading">
-              <span v-if="forgotLoading" class="loading-dot"></span>
-              <span v-else>查 询</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -91,7 +68,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { register, login, recoverPassword } from '../api/user'
+import { register, login } from '../api/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -105,12 +82,6 @@ const containerVisible = ref(false)
 const veilGone = ref(false)
 const bgReady = ref(false)
 
-// 找回密码
-const showForgot = ref(false)
-const forgotUsername = ref('')
-const forgotLoading = ref(false)
-const forgotError = ref('')
-const forgotSuccess = ref('')
 
 // ─── 每日一句 ──────────────────────────────────────────────────────
 const quotes = [
@@ -324,23 +295,6 @@ async function handleSubmit() {
   }
 }
 
-async function handleForgot() {
-  forgotError.value = ''
-  forgotSuccess.value = ''
-  if (!forgotUsername.value.trim()) {
-    forgotError.value = '请输入用户名'
-    return
-  }
-  forgotLoading.value = true
-  try {
-    const resp = await recoverPassword(forgotUsername.value.trim())
-    forgotSuccess.value = resp.data.password
-  } catch (e) {
-    forgotError.value = e.response?.data?.detail || '查询失败，请重试'
-  } finally {
-    forgotLoading.value = false
-  }
-}
 </script>
 
 <style scoped>

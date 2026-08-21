@@ -197,7 +197,7 @@ function stopRecording() {
 
 function playTTS(text) {
   if (!text) return
-  fetch('/api/chat/tts?text=' + encodeURIComponent(text))
+  fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
     .then(r => { if (!r.ok) throw new Error(); return r.blob() })
     .then(blob => {
       const url = URL.createObjectURL(blob)

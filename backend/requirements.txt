@@ -11,3 +11,4 @@ requests>=2.32.3
 passlib>=1.7.4
 bcrypt>=4.2.0
 httpx>=0.28.0
+reportlab>=4.2.5

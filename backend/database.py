@@ -2,10 +2,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from config import settings
 
-# SQLite连接（开发阶段零配置，后续可切换MySQL）
-DATABASE_URL = "sqlite:///./shengyu_v2.db"
+# v5 默认使用独立开发数据库，避免修改现有 v2 数据或生产备份。
+DATABASE_URL = settings.DATABASE_URL
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

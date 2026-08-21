@@ -89,7 +89,7 @@
       <div class="modal-card">
         <h4>修改密码</h4>
         <input class="modal-input" v-model="oldPwd" type="password" placeholder="请输入旧密码" />
-        <input class="modal-input" v-model="newPwd1" type="password" placeholder="请输入新密码（至少6位）" />
+        <input class="modal-input" v-model="newPwd1" type="password" placeholder="请输入新密码（至少10位）" />
         <input class="modal-input" v-model="newPwd2" type="password" placeholder="请再次输入新密码" />
         <div class="modal-btns">
           <button class="modal-cancel" @click="showPwdModal = false">取消</button>
@@ -173,7 +173,7 @@ async function saveNickname() {
 async function handleLogout() {
   if (!confirm('确定要退出登录吗？')) return
   const wasTeacher = userStore.isAdmin
-  userStore.logout()
+  await userStore.logout()
   if (wasTeacher) {
     router.push('/teacher-login')
     return
@@ -198,7 +198,7 @@ async function handleChangePwd() {
   if (!oldPwd.value) { pwdMsg.value = '请输入旧密码'; return }
   if (!newPwd1.value.trim()) { pwdMsg.value = '请输入新密码'; return }
   if (newPwd1.value !== newPwd2.value) { pwdMsg.value = '两次输入的新密码不一致'; return }
-  if (newPwd1.value.length < 6) { pwdMsg.value = '新密码至少6位'; return }
+  if (newPwd1.value.length < 10) { pwdMsg.value = '新密码至少10位'; return }
   try {
     await changePassword(Number(userStore.userId), oldPwd.value, newPwd1.value, newPwd2.value)
     pwdOk.value = true

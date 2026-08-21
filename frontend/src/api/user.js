@@ -11,15 +11,17 @@ export function login(username, password) {
 export function createDemoSession() {
   return instance.post("/demo-session");
 }
+export function getCurrentSession() {
+  return instance.get("/me");
+}
+export function closeSession() {
+  return instance.post("/logout");
+}
 export function getProfile(userId) {
   return instance.get(`/${userId}`);
 }
 export function updateProfile(userId, nickname, avatar) {
   return instance.put(`/${userId}`, null, { params: { nickname, avatar } });
-}
-
-export function recoverPassword(username) {
-  return instance.get("/recover-password", { params: { username } });
 }
 
 export function resetPassword(userId, adminId, newPassword) {

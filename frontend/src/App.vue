@@ -1,9 +1,9 @@
 <template>
-  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login' }">
+  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
     <router-view class="page-content" />
     <div class="build-badge" :title="buildTitle">v{{ appVersion }}</div>
     <!-- 房间主页和管理后台不显示底部导航 -->
-    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/teacher-login'">
+    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/teacher-login' && !route.path.startsWith('/guardian')">
       <router-link to="/" :class="{ active: route.path === '/' }" @click="router.push('/')">
         <span class="nav-icon">🏠</span>
         <span class="nav-label">首页</span>
@@ -74,6 +74,15 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   max-width: 100% !important;
   padding-bottom: 0;
   box-shadow: none !important;
+}
+.guardian-full {
+  max-width: 100% !important;
+  padding-bottom: 0;
+  box-shadow: none !important;
+  background: #f3f6f4;
+}
+.guardian-full .page-content {
+  padding: 0;
 }
 .login-full .page-content {
   padding: 0;
@@ -154,5 +163,8 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 }
 .room-full .build-badge {
   bottom: 8px;
+}
+.guardian-full .build-badge {
+  display: none;
 }
 </style>

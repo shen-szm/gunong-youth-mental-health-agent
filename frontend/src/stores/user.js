@@ -1,11 +1,12 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import { createDemoSession } from "../api/user";
+import { closeSession, createDemoSession, getCurrentSession } from "../api/user";
 
 export const useUserStore = defineStore("user", () => {
   const userId = ref(localStorage.getItem("shengyu_user_id") || "");
   const nickname = ref(localStorage.getItem("shengyu_nickname") || "");
   const isAdmin = ref(localStorage.getItem("shengyu_is_admin") === "1");
+  const sessionChecked = ref(false);
   let demoSessionPromise = null;
 
   const isLoggedIn = computed(() => !!userId.value);
@@ -19,7 +20,13 @@ export const useUserStore = defineStore("user", () => {
     localStorage.setItem("shengyu_is_admin", admin ? "1" : "0");
   }
 
-  function logout() {
+  async function logout() {
+    try { await closeSession(); } catch {}
+    clearLocalSession();
+    sessionChecked.value = false;
+  }
+
+  function clearLocalSession() {
     userId.value = "";
     nickname.value = "";
     isAdmin.value = false;
@@ -29,13 +36,20 @@ export const useUserStore = defineStore("user", () => {
   }
 
   async function ensureDemoSession() {
-    if (isLoggedIn.value) return;
+    if (sessionChecked.value && isLoggedIn.value) return;
 
     if (!demoSessionPromise) {
       demoSessionPromise = (async () => {
-        const response = await createDemoSession();
+        let response;
+        try {
+          response = await getCurrentSession();
+        } catch {
+          clearLocalSession();
+          response = await createDemoSession();
+        }
         const data = response.data;
         login(data.user_id, data.nickname, !!data.is_admin);
+        sessionChecked.value = true;
         return data;
       })().finally(() => {
         demoSessionPromise = null;

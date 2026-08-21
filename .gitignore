@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .env
 *.db
+.codex-guardian-*.log
 .vite/
 .DS_Store
 Thumbs.db

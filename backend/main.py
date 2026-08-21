@@ -2,15 +2,18 @@
 咕哝Web应用 - FastAPI 主入口
 """
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from database import init_db
 import models  # 确保模型被加载
+from validation import sanitized_validation_exception_handler
 
 # 导入路由
-from api import chat, user, mood, admin, music
+from api import chat, user, mood, admin, music, guardian
 
-app = FastAPI(title="咕哝 API", description="AI情绪健康助手", version="1.0.0")
+app = FastAPI(title="咕哝 API", description="AI心理健康教育与守护者支持工具", version=settings.RELEASE_VERSION)
+app.add_exception_handler(RequestValidationError, sanitized_validation_exception_handler)
 
 # CORS配置（允许前端跨域访问）
 app.add_middleware(
@@ -27,20 +30,28 @@ app.include_router(user.router)
 app.include_router(mood.router)
 app.include_router(admin.router)
 app.include_router(music.router)
+app.include_router(guardian.router)
 
 @app.get("/")
 async def root():
-    return {"msg": "咕哝API运行中", "version": "1.0.0", "docs": "/docs"}
+    return {"msg": "咕哝API运行中", "version": settings.RELEASE_VERSION, "docs": "/docs"}
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.RELEASE_VERSION, "demo_mode": settings.DEMO_MODE}
 
 # 启动时初始化数据库和管理员账号
 @app.on_event("startup")
 async def startup():
     print("正在初始化数据库...")
     init_db()
+    from database import SessionLocal
+    from guardian_engine import seed_evidence_sources
+    db = SessionLocal()
+    try:
+        seed_evidence_sources(db)
+    finally:
+        db.close()
     from init_admin import create_default_admin
     create_default_admin()
     print("数据库初始化完成！")
@@ -49,7 +60,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=settings.BACKEND_PORT,
         reload=True
     )

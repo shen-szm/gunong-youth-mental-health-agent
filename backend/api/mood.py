@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from database import get_db
-from models import MoodRecord
+from models import MoodRecord, User
+from auth import ensure_user_scope, get_current_user
+from config import settings
 
 router = APIRouter(prefix="/api/mood", tags=["mood"])
 
@@ -20,7 +22,8 @@ class MoodRecordInput(BaseModel):
 
 
 @router.post("/record")
-async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db)):
+async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_user_scope(data.user_id, current_user)
     """记录一条情绪"""
     record = MoodRecord(
         user_id=data.user_id,
@@ -35,7 +38,8 @@ async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db)):
 
 
 @router.get("/today")
-async def get_today_mood(user_id: int, db: Session = Depends(get_db)):
+async def get_today_mood(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_user_scope(user_id, current_user)
     """获取今日情绪记录"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     record = db.query(MoodRecord).filter(
@@ -49,7 +53,8 @@ async def get_today_mood(user_id: int, db: Session = Depends(get_db)):
     return {"label": record.mood_label, "score": record.mood_score}
 
 @router.get("/list")
-async def get_mood_list(user_id: int, days: int = 30, db: Session = Depends(get_db)):
+async def get_mood_list(user_id: int, days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_user_scope(user_id, current_user)
     """获取情绪记录列表"""
     since = datetime.now() - timedelta(days=days)
     records = db.query(MoodRecord).filter(
@@ -67,7 +72,8 @@ async def get_mood_list(user_id: int, days: int = 30, db: Session = Depends(get_
     } for r in records]
 
 @router.get("/stats")
-async def get_mood_stats(user_id: int, days: int = 7, db: Session = Depends(get_db)):
+async def get_mood_stats(user_id: int, days: int = 7, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_user_scope(user_id, current_user)
     """获取情绪统计数据"""
     since = datetime.now() - timedelta(days=days)
     records = db.query(MoodRecord).filter(
@@ -98,7 +104,8 @@ async def get_mood_stats(user_id: int, days: int = 7, db: Session = Depends(get_
     }
 
 @router.get("/insight")
-async def get_ai_insight(user_id: int, db: Session = Depends(get_db)):
+async def get_ai_insight(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_user_scope(user_id, current_user)
     """获取AI情绪洞察（调用星火生成）"""
     from xunfei.spark_api import ask_spark
     from sqlalchemy import func
@@ -113,7 +120,15 @@ async def get_ai_insight(user_id: int, db: Session = Depends(get_db)):
     if not records:
         return {"insight": "开始记录你的情绪吧，咕哝会在这里给你温暖的洞察~"}
 
-    # 构造提示
+    if not settings.ALLOW_EXTERNAL_AI:
+        labels = [record.mood_label for record in records]
+        common = max(set(labels), key=labels.count)
+        return {
+            "insight": f"过去7天共记录{len(records)}次，较常出现的是“{common}”。本地预览未把情绪内容发送给第三方模型，请结合生活事件自行回顾。",
+            "degraded": True,
+        }
+
+    # 构造提示（仅在显式开启外部AI并完成相应治理后使用）
     mood_summary = "；".join([
         f"{r.created_at.strftime('%m-%d')}：{r.mood_label}（{r.content[:30]}）"
         for r in records[-10:]
