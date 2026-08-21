@@ -62,6 +62,18 @@ export function getStudentCaseContext(studentId, requestId = null) {
   return instance.get(`/students/${studentId}/case-context`, { params: requestId ? { request_id: requestId } : {} })
 }
 
+export function getStudentWorkProduct(studentId, requestId = null) {
+  return instance.get(`/students/${studentId}/work-product`, { params: requestId ? { request_id: requestId } : {} })
+}
+
+export function decideStudentWorkProductTask(studentId, productId, taskIndex, decision, requestId = null) {
+  return instance.post(`/students/${studentId}/work-product/task-decisions`, {
+    product_id: productId,
+    task_index: taskIndex,
+    decision,
+  }, { params: requestId ? { request_id: requestId } : {} })
+}
+
 export function setTeacherStudentAssignment(teacherUserId, studentUserId, active = true) {
   return instance.post('/assignments', { teacher_user_id: teacherUserId, student_user_id: studentUserId, active })
 }

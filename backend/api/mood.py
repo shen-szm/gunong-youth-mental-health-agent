@@ -124,7 +124,7 @@ async def get_ai_insight(user_id: int, db: Session = Depends(get_db), current_us
         labels = [record.mood_label for record in records]
         common = max(set(labels), key=labels.count)
         return {
-            "insight": f"过去7天共记录{len(records)}次，较常出现的是“{common}”。本地预览未把情绪内容发送给第三方模型，请结合生活事件自行回顾。",
+            "insight": f"过去7天共记录{len(records)}次，较常出现的是“{common}”。请结合近期生活事件自行回顾，这不是心理诊断。",
             "degraded": True,
         }
 

@@ -15,7 +15,7 @@
     <main>
       <section class="guardian-container guardian-hero">
         <div class="guardian-hero-copy">
-          <div class="guardian-status-line">v{{ version }} 本地比赛预览 · 仅使用合成数据</div>
+          <div class="guardian-status-line">v{{ version }} · 青少年心理支持工作台 · 待专业人员审核</div>
           <h1>把担心，整理成<span>下一步</span></h1>
           <p class="guardian-lead">
             面向家长与教师的多 Agent 支持系统。提交一次去标识化观察后，咕哝会完成安全分流、证据检索、行动方案、资源匹配与站内回访。
@@ -32,7 +32,7 @@
             <li><b>2</b><span><strong>只面向成人守护者</strong><br>首版覆盖家长与教师，不直接提供未成年人陪聊。</span></li>
             <li><b>3</b><span><strong>安全规则优先</strong><br>危险信号会终止普通方案并切换到紧急求助路径。</span></li>
           </ul>
-          <p class="guardian-boundary-note">所有方案均标记“待专业人员审核”。本预览不能替代持证心理或精神卫生专业人员。</p>
+          <p class="guardian-boundary-note">所有方案均标记“待专业人员审核”。本工具不能替代持证心理或精神卫生专业人员。</p>
         </aside>
       </section>
 
@@ -52,7 +52,7 @@
             <article class="guardian-flow-row"><span>02 · 并行</span><h3>观察摘要 + 证据 + 资源</h3><p>不使用伪造量表分数；权威资料和东莞白名单独立检索，来源与核验日期可追溯。</p></article>
             <article class="guardian-flow-row"><span>03 · 生成</span><h3>角色化行动方案</h3><p>家长获得家庭沟通和7天行动，教师获得校内观察、最小披露和家校协作建议。</p></article>
             <article class="guardian-flow-row"><span>04 · 复核</span><h3>CrossReviewer</h3><p>检查诊断性措辞、证据覆盖和角色边界；只展示分歧摘要与裁决依据，不展示模型私有思维链。</p></article>
-            <article class="guardian-flow-row"><span>05 · 交付</span><h3>PDF + 3/7/15天回访</h3><p>生成带版本、AI标识、证据和适用边界的方案书，并建立可在本地演示的站内回访任务。</p></article>
+            <article class="guardian-flow-row"><span>05 · 交付</span><h3>PDF + 3/7/15天回访</h3><p>生成带版本、AI标识、证据和适用边界的方案书，并建立可持续跟进的站内回访任务。</p></article>
           </div>
         </div>
       </section>
@@ -60,7 +60,7 @@
       <section class="guardian-section alt">
         <div class="guardian-container">
           <div class="guardian-section-header">
-            <h2>从合成个案开始看效果</h2>
+            <h2>从一个支持个案开始</h2>
             <p>示范个案不会写入真实姓名、学校、联系方式或精确地址。你仍可在提交前逐项查看和修改。</p>
           </div>
           <div class="guardian-demo-grid">
@@ -95,7 +95,7 @@
       </section>
     </main>
 
-    <footer class="guardian-footer">咕哝 {{ version }} · AI辅助生成 · 待专业人员审核 · 本地比赛预览，不接收真实未成年人数据</footer>
+    <footer class="guardian-footer">咕哝 {{ version }} · AI辅助生成 · 待专业人员审核 · 不收集姓名、学校、电话或精确地址</footer>
   </div>
 </template>
 

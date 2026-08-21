@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
-    RELEASE_VERSION: str = "5.0.0-alpha.2"
+    RELEASE_VERSION: str = "5.0.0-alpha.3"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
     SESSION_COOKIE_NAME: str = "shengyu_session"

@@ -2,6 +2,7 @@ import sys
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from time import sleep
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -93,15 +94,19 @@ class TeacherCaseAccessTests(unittest.TestCase):
         contents = [item["content"] for item in allowed.json()["records"]]
         self.assertIn("最近早上不太想去学校", contents)
         self.assertIn("我和同学相处得有点累", contents)
+        profile_before = self.teacher_client.get(f"/api/teacher/students/{self.student_id}/profile", params={"request_id": request_id}).json()
 
         db = self.Session()
         try:
             db.add(ChatMessage(user_id=self.student_id, role="user", content="审批之后新增的内容", emotion="平静", created_at=datetime.now() + timedelta(seconds=1)))
+            db.add(MoodRecord(user_id=self.student_id, mood_score=1, mood_label="难过", content="审批之后新增的情绪记录", created_at=datetime.now() + timedelta(seconds=1)))
             db.commit()
         finally:
             db.close()
         fixed_snapshot = self.teacher_client.get(f"/api/teacher/students/{self.student_id}/case-context", params={"request_id": request_id})
         self.assertNotIn("审批之后新增的内容", [item["content"] for item in fixed_snapshot.json()["records"]])
+        profile_after = self.teacher_client.get(f"/api/teacher/students/{self.student_id}/profile", params={"request_id": request_id}).json()
+        self.assertEqual(profile_after, profile_before)
 
         db = self.Session()
         try:
@@ -140,6 +145,139 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(self.admin_client.get("/api/mood/list", params={"user_id": self.student_id}).status_code, 403)
         self.assertEqual(self.admin_client.post("/api/chat/send", json={"user_id": self.student_id, "message": "伪造学生消息"}).status_code, 403)
         self.assertEqual(self.admin_client.post("/api/mood/record", json={"user_id": self.student_id, "label": "平静", "score": 6, "content": "伪造记录"}).status_code, 403)
+        self.assertEqual(self.admin_client.get("/api/admin/chats").status_code, 410)
+
+    def test_work_product_is_audited_traceable_and_requires_same_access(self):
+        self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/work-product").status_code, 403)
+        db = self.Session()
+        try:
+            for index in range(9):
+                db.add(MoodRecord(user_id=self.student_id, mood_score=6, mood_label="平静", content=f"普通记录{index}", created_at=datetime.now() - timedelta(minutes=20 - index)))
+            db.add(ChatMessage(user_id=self.student_id, role="user", content="继父每天打我，我害怕回去", emotion="害怕", created_at=datetime.now() - timedelta(minutes=55)))
+            for index in range(51):
+                db.add(ChatMessage(user_id=self.student_id, role="user", content=f"今天完成了普通课堂活动{index}", emotion="平静", created_at=datetime.now() - timedelta(minutes=54 - index)))
+            db.commit()
+        finally:
+            db.close()
+        product = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(product.status_code, 200)
+        payload = product.json()
+        self.assertEqual(payload["access_basis"], "admin_direct")
+        self.assertEqual(payload["risk"], "urgent")
+        self.assertIn("12356", payload["decision"])
+        self.assertIn("110", payload["decision"])
+        self.assertIn("120", payload["decision"])
+        self.assertEqual([step["status"] for step in payload["pipeline"]], ["completed"] * 4)
+        self.assertGreaterEqual(len(payload["observation"]["evidence_ids"]), 1)
+        self.assertTrue(payload["observation"]["trigger_evidence_ids"])
+        self.assertTrue(any(item["content"] == "继父每天打我，我害怕回去" for item in payload["records"]))
+        self.assertTrue(set(payload["observation"]["trigger_evidence_ids"]).issubset(payload["decision_evidence_ids"]))
+        self.assertEqual(len(payload["tasks"]), 3)
+        self.assertIn("不作诊断", payload["guardrails"])
+        confirmed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/work-product/task-decisions",
+            json={"product_id": payload["case_id"], "task_index": 0, "decision": "confirmed"},
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        sleep(1.1)
+        regenerated = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product").json()
+        self.assertEqual(regenerated["case_id"], payload["case_id"])
+        self.assertIn(0, regenerated["confirmed_task_indices"])
+        forged = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/work-product/task-decisions",
+            json={"product_id": f"WP-{self.student_id}-direct-{self.admin_id}-20990101000000", "task_index": 0, "decision": "confirmed"},
+        )
+        self.assertEqual(forged.status_code, 403)
+        db = self.Session()
+        try:
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="generate_teacher_work_product", actor_user_id=self.admin_id).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="confirmed_work_product_task", actor_user_id=self.admin_id).count(), 1)
+        finally:
+            db.close()
+
+    def test_direct_snapshot_is_superseded_when_a_new_urgent_signal_arrives(self):
+        first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(first.status_code, 200)
+        first_payload = first.json()
+        self.assertNotEqual(first_payload["risk"], "urgent")
+        confirmed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/work-product/task-decisions",
+            json={"product_id": first_payload["case_id"], "task_index": 0, "decision": "confirmed"},
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        sleep(0.05)
+        db = self.Session()
+        try:
+            db.add(ChatMessage(
+                user_id=self.student_id,
+                role="user",
+                content="哥哥拿刀威胁我，我现在害怕回去",
+                emotion="害怕",
+                created_at=datetime.now(),
+            ))
+            db.commit()
+        finally:
+            db.close()
+        revised = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(revised.status_code, 200)
+        revised_payload = revised.json()
+        self.assertEqual(revised_payload["risk"], "urgent")
+        self.assertNotEqual(revised_payload["case_id"], first_payload["case_id"])
+        self.assertEqual(revised_payload["confirmed_task_indices"], [])
+        self.assertTrue(revised_payload["observation"]["trigger_evidence_ids"])
+        self.assertTrue(any(item["content"] == "哥哥拿刀威胁我，我现在害怕回去" for item in revised_payload["records"]))
+
+    def test_approved_teacher_gets_redacted_urgent_override_without_new_original(self):
+        submitted = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/access-requests",
+            json={"reason": "需要结合授权记录制定关怀计划并确认安全边界", "scope": "recent_30_days"},
+        )
+        request_id = submitted.json()["request_id"]
+        self.admin_client.post(
+            f"/api/teacher/access-requests/{request_id}/decision",
+            json={"decision": "approved", "note": "同意最小必要范围"},
+        )
+        first_payload = self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/work-product",
+            params={"request_id": request_id},
+        ).json()
+        self.assertNotEqual(first_payload["risk"], "urgent")
+        confirmed = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/work-product/task-decisions",
+            params={"request_id": request_id},
+            json={"product_id": first_payload["case_id"], "task_index": 0, "decision": "confirmed"},
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        sleep(0.05)
+        db = self.Session()
+        try:
+            db.add(ChatMessage(
+                user_id=self.student_id,
+                role="user",
+                content="哥哥拿刀威胁我，我现在害怕回去",
+                emotion="害怕",
+                created_at=datetime.now(),
+            ))
+            db.commit()
+        finally:
+            db.close()
+        revised_payload = self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/work-product",
+            params={"request_id": request_id},
+        ).json()
+        self.assertEqual(revised_payload["risk"], "urgent")
+        self.assertNotEqual(revised_payload["case_id"], first_payload["case_id"])
+        self.assertEqual(revised_payload["confirmed_task_indices"], [])
+        self.assertNotIn("哥哥拿刀威胁我", " ".join(item["content"] for item in revised_payload["records"]))
+        safety_rows = [item for item in revised_payload["records"] if item["source"] == "最少必要安全事件"]
+        self.assertEqual(len(safety_rows), 1)
+        self.assertTrue(safety_rows[0]["redacted"])
+        self.assertIn(safety_rows[0]["id"], revised_payload["observation"]["trigger_evidence_ids"])
+        context = self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/case-context",
+            params={"request_id": request_id},
+        ).json()
+        self.assertNotIn("哥哥拿刀威胁我", " ".join(item["content"] for item in context["records"]))
 
     def test_unassigned_teacher_cannot_enumerate_or_request_student(self):
         db = self.Session()
@@ -156,6 +294,8 @@ class TeacherCaseAccessTests(unittest.TestCase):
             json={"reason": "尝试申请职责范围之外的学生个案", "scope": "recent_30_days"},
         )
         self.assertEqual(request.status_code, 403)
+        self.assertEqual(self.teacher_client.get(f"/api/teacher/warning/{self.student_id}/detail").status_code, 403)
+        self.assertEqual(self.teacher_client.post(f"/api/teacher/warning/{self.student_id}/handle", json={"note": "越权处理"}).status_code, 403)
 
     def test_role_change_revokes_existing_session(self):
         student_client = TestClient(self.teacher_client.app)
@@ -216,7 +356,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 json={"username": "student_a", "password": "StudentPassword12"},
             )
             self.assertEqual(logged_in.status_code, 200)
-            for message in ("我想死", "我想结束生命", "我准备烧炭", "不是我想这样，但我不想活了"):
+            for message in ("我想死", "我想结束生命", "我准备烧炭", "不是我想这样，但我不想活了", "爸爸打我，我不敢回家", "继父每天打我，我害怕回去", "哥哥拿刀威胁我", "爸爸用皮带抽我，我很害怕", "叔叔逼我和他发生关系", "哥哥把我关在屋里不让我出去", "家里有人用烟头烫我", "家里有人把我锁在厕所不让我出去", "家里有人性侵我"):
                 response = student_client.post(
                     "/api/chat/send",
                     json={"user_id": self.student_id, "message": message},
@@ -225,6 +365,15 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 self.assertIn("12356", response.json()["reply"])
                 self.assertIn("110", response.json()["reply"])
                 self.assertEqual(response.json()["emotion"], "需要立即协助")
+                self.assertIsNone(response.json()["support"])
+
+            routine = student_client.post(
+                "/api/chat/send",
+                json={"user_id": self.student_id, "message": "小组活动让我担心说错话"},
+            )
+            self.assertEqual(routine.status_code, 200)
+            self.assertIn("同伴", routine.json()["support"]["summary"])
+            self.assertEqual(len(routine.json()["support"]["actions"]), 3)
         finally:
             student_client.close()
 

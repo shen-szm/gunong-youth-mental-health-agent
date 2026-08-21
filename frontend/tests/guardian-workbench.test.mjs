@@ -46,17 +46,17 @@ test('guardian API includes cases, SSE, report and follow-up contracts', async (
   assert.match(api, /@router\.post\("\/follow-ups\/\{followup_id\}\/simulate-due"/)
 })
 
-test('alpha release is synchronized and documented as local-only', async () => {
+test('alpha release is synchronized and business UI omits development labels', async () => {
   const pkg = JSON.parse(await source('frontend/package.json'))
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelog = await source('CHANGELOG.md')
   const backend = await source('backend/config.py')
-  assert.equal(pkg.version, '5.0.0-alpha.2')
-  assert.equal(lock.version, '5.0.0-alpha.2')
-  assert.equal(lock.packages[''].version, '5.0.0-alpha.2')
-  assert.match(changelog, /\[5\.0\.0-alpha\.2\]/)
-  assert.match(changelog, /本地比赛预览/)
-  assert.match(backend, /RELEASE_VERSION: str = "5\.0\.0-alpha\.2"/)
+  assert.equal(pkg.version, '5.0.0-alpha.3')
+  assert.equal(lock.version, '5.0.0-alpha.3')
+  assert.equal(lock.packages[''].version, '5.0.0-alpha.3')
+  assert.match(changelog, /\[5\.0\.0-alpha\.3\]/)
+  assert.match(changelog, /未部署、未推送远端/)
+  assert.match(backend, /RELEASE_VERSION: str = "5\.0\.0-alpha\.3"/)
 })
 
 test('plaintext password recovery and hard-coded weak admin are removed', async () => {

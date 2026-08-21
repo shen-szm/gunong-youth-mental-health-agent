@@ -39,7 +39,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": settings.RELEASE_VERSION, "demo_mode": settings.DEMO_MODE}
+    return {"status": "ok", "version": settings.RELEASE_VERSION}
 
 # 启动时初始化数据库和管理员账号
 @app.on_event("startup")

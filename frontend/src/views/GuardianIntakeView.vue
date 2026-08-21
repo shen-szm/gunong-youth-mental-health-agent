@@ -10,7 +10,7 @@
         <header class="guardian-form-header">
           <RouterLink class="guardian-back" to="/guardian">← 返回工作台介绍</RouterLink>
           <h1>把可观察的变化说清楚</h1>
-          <p>只填写你亲眼观察到的事实。不要填写姓名、学校全称、证件号、电话或精确地址；本预览只接受合成个案。</p>
+          <p>只填写你亲眼观察到的事实。不要填写姓名、学校全称、证件号、电话或精确地址。</p>
         </header>
 
         <div class="guardian-stepper" aria-label="表单进度">
@@ -78,13 +78,13 @@
           </section>
 
           <section v-else aria-labelledby="step-three-title">
-            <h2 id="step-three-title">确认演示数据与支持边界</h2>
+            <h2 id="step-three-title">确认隐私与支持边界</h2>
             <p class="guardian-form-intro">位置仅用于匹配东莞示范资源，不收集精确定位。</p>
 
             <label class="guardian-field"><span>东莞市区级位置</span><select v-model="form.district" class="guardian-select"><option value="">请选择</option><option v-for="district in districts" :key="district" :value="district">{{ district }}</option></select></label>
             <label class="guardian-field"><span>补充观察（选填）</span><small>只写行为、时间和场景，不写身份信息。最多500字。</small><textarea v-model="form.context" class="guardian-textarea" maxlength="500" placeholder="例如：近三周回家后常关门独处，与同伴联系减少；询问时会说很累，但仍愿意一起吃晚饭。"></textarea><small>{{ form.context.length }}/500</small></label>
-            <label class="guardian-consent guardian-safety-question"><input v-model="form.guardian_may_be_source" type="checkbox"><span><strong>家庭安全项：</strong>演示场景中存在人身威胁、暴力、性伤害、无法安全回家，或监护人可能是伤害/恐惧来源。选择后将直接进入安全路径，优先建议可信教师、其他安全成年人或110。</span></label>
-            <label class="guardian-consent"><input v-model="syntheticConfirmed" type="checkbox"><span>我确认这是比赛用合成个案，不包含真实未成年人姓名、学校、联系方式、精确地址或其他可识别信息。</span></label>
+            <label class="guardian-consent guardian-safety-question"><input v-model="form.guardian_may_be_source" type="checkbox"><span><strong>家庭安全项：</strong>存在人身威胁、暴力、性伤害、无法安全回家，或监护人可能是伤害/恐惧来源。选择后将直接进入安全路径，优先建议可信教师、其他安全成年人或110。</span></label>
+            <label class="guardian-consent"><input v-model="syntheticConfirmed" type="checkbox"><span>我确认已移除姓名、学校、联系方式、精确地址及其他可识别个人身份的信息。</span></label>
             <label class="guardian-consent"><input v-model="boundaryConfirmed" type="checkbox"><span>我理解系统只提供心理健康教育、支持建议和求助导航，不提供诊断、治疗或正式量表结论。</span></label>
           </section>
 
@@ -97,7 +97,7 @@
         </form>
       </div>
     </main>
-    <footer class="guardian-footer">只允许合成数据 · 不使用正式心理量表 · 全部输出待专业人员审核</footer>
+    <footer class="guardian-footer">不收集直接身份信息 · 不使用正式心理量表 · 全部输出待专业人员审核</footer>
   </div>
 </template>
 
@@ -154,7 +154,7 @@ function nextStep() {
 async function submitCase() {
   error.value = ''
   if (!form.district) { error.value = '请选择区级位置。'; return }
-  if (!syntheticConfirmed.value || !boundaryConfirmed.value) { error.value = '请确认合成数据和产品边界后再提交。'; return }
+  if (!syntheticConfirmed.value || !boundaryConfirmed.value) { error.value = '请确认隐私处理和产品边界后再提交。'; return }
   submitting.value = true
   try {
     const response = await createGuardianCase({ ...form, consent_version: 'guardian-demo-v1', synthetic_data_confirmed: true })

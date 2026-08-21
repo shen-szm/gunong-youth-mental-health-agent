@@ -355,7 +355,7 @@ async def simulate_followup_due(
     current_user: User = Depends(get_current_user),
 ):
     if not settings.DEMO_MODE:
-        raise HTTPException(status_code=404, detail="该接口仅用于本地演示")
+        raise HTTPException(status_code=404, detail="该接口当前不可用")
     task, _ = _owned_followup(db, followup_id, current_user)
     if task.status != "completed":
         task.due_at = datetime.now()

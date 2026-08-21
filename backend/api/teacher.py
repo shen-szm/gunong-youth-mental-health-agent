@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from auth import require_admin_teacher, require_teacher
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, User, UserSession
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
 
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
@@ -52,6 +52,13 @@ class StudentAssignmentInput(BaseModel):
     active: bool = True
 
 
+class WorkProductTaskDecisionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    product_id: str = Field(min_length=12, max_length=120, pattern=r"^WP-[A-Za-z0-9-]+$")
+    task_index: int = Field(ge=0, le=2)
+    decision: str = Field(pattern=r"^(confirmed|revoked)$")
+
+
 def _audit(db: Session, actor: User, action: str, resource_type: str, resource_id: str, result: str) -> None:
     db.add(SensitiveAccessLog(
         actor_user_id=actor.id,
@@ -65,6 +72,22 @@ def _audit(db: Session, actor: User, action: str, resource_type: str, resource_i
 
 def _is_admin_teacher(user: User) -> bool:
     return int(user.is_admin or 0) >= 2
+
+
+def _require_student_responsibility(db: Session, teacher: User, student_id: int) -> None:
+    student = db.query(User).filter(User.id == student_id, User.is_admin == 0).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    if _is_admin_teacher(teacher):
+        return
+    assigned = db.query(TeacherStudentAssignment).filter(
+        TeacherStudentAssignment.teacher_user_id == teacher.id,
+        TeacherStudentAssignment.student_user_id == student_id,
+        TeacherStudentAssignment.active == 1,
+    ).first()
+    if not assigned:
+        _audit(db, teacher, "access_student_warning", "student", str(student_id), "denied_unassigned")
+        raise HTTPException(status_code=403, detail="该学生不在当前教师职责范围内")
 
 
 def _latest_approved_request(db: Session, teacher_id: int, student_id: int) -> StudentCaseAccessRequest | None:
@@ -150,7 +173,8 @@ def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
     if not moods:
         return "low", 0.0, 0
     avg = round(sum(item.mood_score for item in moods) / len(moods), 1)
-    return ("high" if avg < 3 else "middle" if avg < 5 else "low"), avg, len(moods)
+    negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in moods)
+    return ("high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"), avg, len(moods)
 
 
 @router.get("/class-overview")
@@ -239,6 +263,7 @@ def warning_list(db: Session = Depends(get_db), teacher: User = Depends(require_
 
 @router.get("/warning/{warning_id}/detail")
 def warning_detail(warning_id: int, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+    _require_student_responsibility(db, teacher, warning_id)
     state = _student_access_state(db, teacher, warning_id)
     urgent = _has_urgent_signal(db, warning_id)
     return {
@@ -252,6 +277,7 @@ def warning_detail(warning_id: int, db: Session = Depends(get_db), teacher: User
 
 @router.post("/warning/{warning_id}/handle")
 def handle_warning(warning_id: int, payload: WarningHandleInput, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+    _require_student_responsibility(db, teacher, warning_id)
     _audit(db, teacher, "record_warning_followup", "student", str(warning_id), "allowed")
     return {"status": "handled", "note": payload.note}
 
@@ -347,11 +373,20 @@ def decide_access_request(request_id: int, payload: AccessDecisionInput, db: Ses
 @router.get("/students/{student_id}/case-context")
 def student_case_context(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
     approved = _require_student_access(db, teacher, student_id, request_id)
-    since = datetime.now() - timedelta(days=30)
     cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    return _case_context_payload(db, teacher, student_id, approved, cutoff)
+
+
+def _case_context_payload(db: Session, teacher: User, student_id: int, approved: StudentCaseAccessRequest | None, cutoff: datetime) -> dict:
+    since = cutoff - timedelta(days=30)
     moods = db.query(MoodRecord).filter(MoodRecord.user_id == student_id, MoodRecord.created_at >= since, MoodRecord.created_at <= cutoff).order_by(MoodRecord.created_at.desc()).limit(50).all()
     chats = db.query(ChatMessage).filter(ChatMessage.user_id == student_id, ChatMessage.role == "user", ChatMessage.created_at >= since, ChatMessage.created_at <= cutoff).order_by(ChatMessage.created_at.desc()).limit(50).all()
     _audit(db, teacher, "view_student_original_content", "student", str(student_id), "allowed")
+    records = [
+        *[{"id": f"mood-{row.id}", "source": "情绪记录", "content": row.content or f"选择了“{row.mood_label}”", "emotion": row.mood_label, "created_at": row.created_at.isoformat() if row.created_at else None} for row in moods],
+        *[{"id": f"chat-{row.id}", "source": "倾诉原文", "content": row.content, "emotion": row.emotion or "", "created_at": row.created_at.isoformat() if row.created_at else None} for row in chats],
+    ]
+    records.sort(key=lambda item: item.get("created_at") or "", reverse=True)
     return {
         "student_id": student_id,
         "access_basis": "admin_direct" if approved is None else "approved_request",
@@ -360,17 +395,231 @@ def student_case_context(student_id: int, request_id: int | None = None, db: Ses
         "content_cutoff": cutoff.isoformat(),
         "access_expires_at": approved.expires_at.isoformat() if approved and approved.expires_at else None,
         "notice": "原文仅用于该支持工单，不得传播，也不得作为诊断依据。",
-        "records": [
-            *[{"id": f"mood-{row.id}", "source": "情绪记录", "content": row.content or f"选择了“{row.mood_label}”", "emotion": row.mood_label, "created_at": row.created_at.isoformat() if row.created_at else None} for row in moods],
-            *[{"id": f"chat-{row.id}", "source": "倾诉原文", "content": row.content, "emotion": row.emotion or "", "created_at": row.created_at.isoformat() if row.created_at else None} for row in chats],
-        ],
+        "records": records,
     }
+
+
+@router.get("/students/{student_id}/work-product")
+def student_work_product(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+    """在同一授权边界内，把原始记录整理成教师可审核的工作成果。"""
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    redacted_safety_revision: dict | None = None
+    if approved is None:
+        day_start = cutoff.replace(hour=0, minute=0, second=0, microsecond=0)
+        existing_direct_snapshot = db.query(TeacherWorkProductSnapshot).filter(
+            TeacherWorkProductSnapshot.student_user_id == student_id,
+            TeacherWorkProductSnapshot.request_id.is_(None),
+            TeacherWorkProductSnapshot.generated_by_user_id == teacher.id,
+            TeacherWorkProductSnapshot.created_at >= day_start,
+        ).order_by(TeacherWorkProductSnapshot.created_at.desc()).first()
+        if existing_direct_snapshot:
+            incremental_cutoff = datetime.now()
+            new_moods = db.query(MoodRecord).filter(
+                MoodRecord.user_id == student_id,
+                MoodRecord.created_at > existing_direct_snapshot.content_cutoff,
+                MoodRecord.created_at <= incremental_cutoff,
+            ).all()
+            new_chats = db.query(ChatMessage).filter(
+                ChatMessage.user_id == student_id,
+                ChatMessage.role == "user",
+                ChatMessage.created_at > existing_direct_snapshot.content_cutoff,
+                ChatMessage.created_at <= incremental_cutoff,
+            ).all()
+            has_new_urgent_signal = any(_context_has_urgent_meaning(item.content or "") for item in [*new_moods, *new_chats])
+            cutoff = incremental_cutoff if has_new_urgent_signal else existing_direct_snapshot.content_cutoff
+    elif approved is not None:
+        safety_check_at = datetime.now()
+        post_approval_moods = db.query(MoodRecord).filter(
+            MoodRecord.user_id == student_id,
+            MoodRecord.created_at > cutoff,
+            MoodRecord.created_at <= safety_check_at,
+        ).all()
+        post_approval_chats = db.query(ChatMessage).filter(
+            ChatMessage.user_id == student_id,
+            ChatMessage.role == "user",
+            ChatMessage.created_at > cutoff,
+            ChatMessage.created_at <= safety_check_at,
+        ).all()
+        urgent_after_approval = [item for item in [*post_approval_moods, *post_approval_chats] if _context_has_urgent_meaning(item.content or "")]
+        if urgent_after_approval:
+            latest_urgent_at = max(item.created_at for item in urgent_after_approval if item.created_at)
+            safety_id = f"safety-{latest_urgent_at.strftime('%Y%m%d%H%M%S%f')}"
+            redacted_safety_revision = {
+                "id": safety_id,
+                "source": "最少必要安全事件",
+                "content": "审批截止后检测到新的明确危机信号。新增原文需重新申请权限；安全处置不等待审批。",
+                "emotion": "需要立即协助",
+                "created_at": latest_urgent_at.isoformat(),
+                "redacted": True,
+            }
+    context = _case_context_payload(db, teacher, student_id, approved, cutoff)
+    records = context["records"]
+    if redacted_safety_revision:
+        records.append(redacted_safety_revision)
+    scoped_cutoff = datetime.fromisoformat(context["content_cutoff"])
+    scoped_since = scoped_cutoff - timedelta(days=30)
+    all_moods = db.query(MoodRecord).filter(
+        MoodRecord.user_id == student_id,
+        MoodRecord.created_at >= scoped_since,
+        MoodRecord.created_at <= scoped_cutoff,
+    ).all()
+    all_chats = db.query(ChatMessage).filter(
+        ChatMessage.user_id == student_id,
+        ChatMessage.role == "user",
+        ChatMessage.created_at >= scoped_since,
+        ChatMessage.created_at <= scoped_cutoff,
+    ).all()
+    urgent_records = [
+        *[{"id": f"mood-{row.id}", "source": "情绪记录", "content": row.content or f"选择了“{row.mood_label}”", "emotion": row.mood_label, "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_moods if _context_has_urgent_meaning(row.content or "")],
+        *[{"id": f"chat-{row.id}", "source": "倾诉原文", "content": row.content, "emotion": row.emotion or "", "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_chats if _context_has_urgent_meaning(row.content or "")],
+    ]
+    known_ids = {item["id"] for item in records}
+    records.extend(item for item in urgent_records if item["id"] not in known_ids)
+    records.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    trigger_evidence_ids = [redacted_safety_revision["id"]] if redacted_safety_revision else []
+    trigger_evidence_ids.extend(item["id"] for item in records if _context_has_urgent_meaning(str(item.get("content") or "")))
+    trigger_evidence_ids = list(dict.fromkeys(trigger_evidence_ids))
+    urgent = bool(trigger_evidence_ids)
+    mood_records = [item for item in records if item["source"] == "情绪记录"]
+    chat_records = [item for item in records if item["source"] == "倾诉原文"]
+    evidence_ids = list(dict.fromkeys([*trigger_evidence_ids, *[item["id"] for item in records[:8]]]))
+    negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in all_moods)
+    baseline_risk = "high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"
+    if urgent:
+        decision = "立即启动校内安全流程：确认学生当下安全、不让其独处并远离危险物，联系家庭之外的可信成年人或教师并拨打12356；存在迫切危险时立即拨打110或120。"
+        next_tasks = [
+            {"title": "确认当下安全", "owner": "当前教师", "due": "立即", "status": "待确认"},
+            {"title": "联系校内心理支持负责人并拨打12356", "owner": "当前教师", "due": "立即", "status": "待执行"},
+            {"title": "记录最少必要处置结果", "owner": "当前教师", "due": "处置后", "status": "待执行"},
+        ]
+        risk = "urgent"
+    else:
+        if baseline_risk == "high":
+            decision = "当天完成一次非诊断性的关怀沟通，并由教师联系校内心理支持负责人共同评估后续支持强度。"
+            next_tasks = [
+                {"title": "当天确认学生当前状态", "owner": "当前教师", "due": "当天", "status": "待确认"},
+                {"title": "联系校内心理支持负责人", "owner": "当前教师", "due": "当天", "status": "待执行"},
+                {"title": "安排次日回看", "owner": "当前教师", "due": "次日", "status": "待执行"},
+            ]
+            risk = "professional"
+        else:
+            decision = "先进行一次低压力、非诊断性的关怀沟通，再根据学生意愿决定是否连接校内支持资源。"
+            next_tasks = [
+                {"title": "完成一次10分钟关怀沟通", "owner": "当前教师", "due": "24小时内", "status": "待确认"},
+                {"title": "记录学生愿意接受的支持", "owner": "当前教师", "due": "沟通后", "status": "待执行"},
+                {"title": "安排3日回看", "owner": "当前教师", "due": "3天后", "status": "待执行"},
+            ]
+            risk = {"middle": "watch", "low": "routine"}.get(baseline_risk, "routine")
+    latest = records[0] if records else None
+    access_token = str(context.get("request_id") or f"direct-{teacher.id}")
+    cutoff_token = scoped_cutoff.strftime("%Y%m%d%H%M%S%f")
+    revision_suffix = f"-S{redacted_safety_revision['id'].removeprefix('safety-')}" if redacted_safety_revision else ""
+    product_id = f"WP-{student_id}-{access_token}-{cutoff_token}{revision_suffix}"
+    snapshot = db.query(TeacherWorkProductSnapshot).filter(TeacherWorkProductSnapshot.product_id == product_id).first()
+    if not snapshot:
+        db.add(TeacherWorkProductSnapshot(
+            product_id=product_id,
+            student_user_id=student_id,
+            request_id=context.get("request_id"),
+            generated_by_user_id=teacher.id,
+            content_cutoff=scoped_cutoff,
+            version="teacher-work-product-v1",
+        ))
+        db.commit()
+    task_decisions = db.query(TeacherWorkProductTaskDecision).filter(
+        TeacherWorkProductTaskDecision.product_id == product_id,
+        TeacherWorkProductTaskDecision.teacher_user_id == teacher.id,
+        TeacherWorkProductTaskDecision.status == "confirmed",
+    ).all()
+    _audit(db, teacher, "generate_teacher_work_product", "work_product", product_id, "allowed")
+    return {
+        "case_id": product_id,
+        "version": "teacher-work-product-v1",
+        "generated_at": datetime.now().isoformat(),
+        "risk": risk,
+        "access_basis": context["access_basis"],
+        "request_id": context.get("request_id"),
+        "data_from": (datetime.fromisoformat(context["content_cutoff"]) - timedelta(days=30)).isoformat(),
+        "content_cutoff": context["content_cutoff"],
+        "records": records,
+        "pipeline": [
+            {"name": "安全分流", "status": "completed", "result": "发现明确紧急信号" if urgent else "未发现明确紧急信号"},
+            {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录"},
+            {"name": "证据定位", "status": "completed", "result": f"{len(evidence_ids)}条结论可回到原文"},
+            {"name": "支持草案", "status": "completed", "result": "已生成，等待教师确认"},
+        ],
+        "observation": {
+            "headline": "当前需要优先确认安全" if urgent else ("近期有值得持续关注的自愿表达" if records else "当前记录不足，建议先沟通补充"),
+            "latest_signal": latest["content"][:120] if latest else "暂无可引用记录",
+            "record_count": len(records),
+            "evidence_ids": evidence_ids,
+            "trigger_evidence_ids": trigger_evidence_ids,
+        },
+        "conflicts": [{"topic": "行动强度", "views": ["尽快介入", "先保持低压力接触"], "resolution": "安全规则优先" if urgent else "由教师结合线下观察确认", "evidence_ids": evidence_ids}],
+        "decision": decision,
+        "decision_evidence_ids": trigger_evidence_ids or evidence_ids,
+        "tasks": [{**task, "evidence_ids": trigger_evidence_ids or evidence_ids} for task in next_tasks],
+        "confirmed_task_indices": sorted(item.task_index for item in task_decisions),
+        "guardrails": ["不作诊断", "不把单条表达当作结论", "敏感触达前由教师确认", "仅使用本次授权范围内记录"],
+    }
+
+
+@router.post("/students/{student_id}/work-product/task-decisions")
+def decide_work_product_task(student_id: int, payload: WorkProductTaskDecisionInput, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    snapshot = db.query(TeacherWorkProductSnapshot).filter(
+        TeacherWorkProductSnapshot.product_id == payload.product_id,
+        TeacherWorkProductSnapshot.student_user_id == student_id,
+        TeacherWorkProductSnapshot.generated_by_user_id == teacher.id,
+    ).first()
+    expected_request_id = approved.id if approved else None
+    if not snapshot or snapshot.request_id != expected_request_id:
+        _audit(db, teacher, "decide_work_product_task", "work_product_task", payload.product_id, "denied_product_scope")
+        raise HTTPException(status_code=403, detail="工作成果不属于当前授权范围")
+    row = db.query(TeacherWorkProductTaskDecision).filter(
+        TeacherWorkProductTaskDecision.product_id == payload.product_id,
+        TeacherWorkProductTaskDecision.task_index == payload.task_index,
+        TeacherWorkProductTaskDecision.teacher_user_id == teacher.id,
+    ).first()
+    if row:
+        row.status = payload.decision
+    else:
+        db.add(TeacherWorkProductTaskDecision(
+            product_id=payload.product_id,
+            task_index=payload.task_index,
+            teacher_user_id=teacher.id,
+            status=payload.decision,
+        ))
+    db.commit()
+    resource_id = f"{payload.product_id}:{payload.task_index}"
+    _audit(db, teacher, f"{payload.decision}_work_product_task", "work_product_task", resource_id, "allowed")
+    return {"product_id": payload.product_id, "task_index": payload.task_index, "status": payload.decision, "audited": True}
 
 
 @router.get("/students/{student_id}/profile")
 def student_profile(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
-    _require_student_access(db, teacher, student_id, request_id)
-    risk, avg, count = _risk_for_student(db, student_id)
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    since = cutoff - timedelta(days=30)
+    moods = db.query(MoodRecord).filter(
+        MoodRecord.user_id == student_id,
+        MoodRecord.created_at >= since,
+        MoodRecord.created_at <= cutoff,
+    ).all()
+    avg = round(sum(item.mood_score for item in moods) / len(moods), 1) if moods else 0.0
+    negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in moods)
+    urgent = _has_urgent_signal(db, student_id, since) if approved is None else any(
+        _context_has_urgent_meaning(item.content or "")
+        for item in db.query(ChatMessage).filter(
+            ChatMessage.user_id == student_id,
+            ChatMessage.role == "user",
+            ChatMessage.created_at >= since,
+            ChatMessage.created_at <= cutoff,
+        ).all()
+    ) or any(_context_has_urgent_meaning(item.content or "") for item in moods)
+    risk = "high" if urgent or negative_count >= 4 else "middle" if negative_count >= 1 else "low"
+    count = len(moods)
     return {"avg_score": avg, "risk_level": risk, "mood_count": count, "summary": "经授权读取的近30天支持摘要，不构成诊断。", "keywords": []}
 
 

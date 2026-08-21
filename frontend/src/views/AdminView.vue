@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">咕哝 · 校园心理支持数字员工</p>
         <h2>教师支持工作台</h2>
-        <p class="hero-copy">从自愿情绪信号出发，按职责申请查看个案；获批后读取固定时间范围的原文，并可单独体验合成 Agent 任务编排。</p>
+        <p class="hero-copy">从自愿情绪信号到可执行支持任务：完成权限核验、安全分流、原文证据定位、行动草案与回看安排，关键决定始终由教师确认。</p>
       </div>
       <div class="hero-actions">
         <button class="ghost-btn" @click="handleBack">返回学生端</button>
@@ -67,16 +67,16 @@
           <div class="case-layout">
             <div class="case-roster" aria-label="学生支持对象列表">
               <button v-for="student in students" :key="student.id" :aria-pressed="caseStudent?.id === student.id" :class="['case-student', { selected: caseStudent?.id === student.id }]" @click="chooseCaseStudent(student)">
-                <span class="avatar">{{ firstChar(student.nickname) }}</span>
-                <span class="case-student-main"><strong>{{ student.nickname }}</strong><small>{{ riskText(student.risk_level) }} · {{ student.mood_count }} 条自愿记录</small></span>
+                <span class="avatar">{{ firstChar(studentName(student)) }}</span>
+                <span class="case-student-main"><strong>{{ studentName(student) }}</strong><small>{{ riskText(student.risk_level) }} · {{ student.mood_count }} 条自愿记录</small></span>
                 <em :class="['access-pill', student.access?.status]">{{ student.access?.label }}</em>
               </button>
-              <p v-if="!students.length" class="empty-state">暂无可演示学生数据。</p>
+              <p v-if="!students.length" class="empty-state">暂无需要处理的学生支持工单。</p>
             </div>
 
             <article class="case-stage" v-if="caseStudent">
               <div class="case-stage-head">
-                <div><span class="section-kicker">{{ caseStudent.nickname }}</span><h4>{{ caseStageTitle }}</h4></div>
+                <div><span class="section-kicker">{{ studentName(caseStudent) }}</span><h4>{{ caseStageTitle }}</h4></div>
                 <span class="status-pill">{{ caseStudent.access?.label }}</span>
               </div>
 
@@ -93,26 +93,41 @@
               </div>
 
               <div v-else class="authorized-case">
-                <div class="privacy-notice"><strong>授权范围：近30天原文</strong><span>仅用于本工单，不得传播，不得作为诊断依据；当前为本地合成演示。</span></div>
-                <button class="primary-btn" :disabled="contextLoading" @click="loadCaseContext">{{ contextLoading ? '正在读取…' : (caseContext ? '刷新原文' : '查看工单原文') }}</button>
+                <div class="privacy-notice"><strong>授权范围：近30天原文</strong><span>仅用于本工单，不得传播，不得作为诊断依据。所有敏感访问均记录审计。</span></div>
+                <button class="primary-btn" :disabled="contextLoading" @click="loadCaseContext">{{ contextLoading ? '数字员工正在执行…' : (workProduct ? '重新执行工单' : '执行支持工单') }}</button>
 
-                <template v-if="caseContext">
-                  <div class="agent-brief">
-                    <div><span>权限任务已完成</span><strong>按审批时点固定原文范围，并记录每次敏感访问</strong></div>
-                    <div><span>计划中的 Agent 链</span><strong>安全分流 → 原文归纳 → 证据检索 → 行动草案 → 教师确认 → 回访</strong></div>
-                    <div><span>当前裁决</span><strong>敏感触达与个案报告必须由教师确认</strong></div>
+                <template v-if="workProduct">
+                  <div class="case-command-head">
+                    <div><span class="section-kicker">{{ workProduct.case_id }}</span><h4>工单协作画布</h4></div>
+                    <span :class="['risk-decision', workProduct.risk]">{{ workProduct.risk === 'urgent' ? '立即处置' : workProduct.risk === 'professional' ? '需要专业支持' : workProduct.risk === 'watch' ? '持续关注' : '常规支持' }}</span>
                   </div>
-                  <div class="original-list" tabindex="0" aria-label="经授权的学生原文列表，可上下滚动">
-                    <div class="original-list-head"><h4>经授权的原文</h4><small>{{ caseContext.records?.length || 0 }} 条 · 每次打开均已审计</small></div>
-                    <article v-for="record in caseContext.records" :key="record.id" class="original-record">
+                  <div class="agent-pipeline" aria-label="数字员工执行进度">
+                    <article v-for="(step, index) in workProduct.pipeline" :key="step.name">
+                      <span>{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ step.name }}</strong><small>{{ step.result }}</small></div><em>已完成</em>
+                    </article>
+                  </div>
+                  <div class="work-product-grid">
+                    <section class="evidence-brief"><span class="section-kicker">观察摘要</span><h4>{{ workProduct.observation.headline }}</h4><p>{{ workProduct.observation.latest_signal }}</p><div class="evidence-links"><button v-for="id in workProduct.observation.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div></section>
+                    <section class="decision-brief"><span class="section-kicker">安全裁决</span><h4>教师需要确认的下一步</h4><p>{{ workProduct.decision }}</p><div class="evidence-links"><button v-for="id in workProduct.decision_evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div><ul><li v-for="rule in workProduct.guardrails" :key="rule">{{ rule }}</li></ul></section>
+                  </div>
+                  <section class="agent-conflict" v-if="workProduct.conflicts?.length">
+                    <span class="section-kicker">明确分歧</span>
+                    <div v-for="item in workProduct.conflicts" :key="item.topic"><strong>{{ item.topic }}</strong><p>{{ item.views.join(' / ') }}</p><em>裁决：{{ item.resolution }}</em><span class="evidence-links"><button v-for="id in item.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></span></div>
+                  </section>
+                  <section class="task-board">
+                    <div class="original-list-head"><h4>可交付支持任务</h4><small>执行前由教师逐项确认</small></div>
+                    <article v-for="(task, index) in workProduct.tasks" :key="task.title" class="task-row">
+                      <span>{{ index + 1 }}</span><div><strong>{{ task.title }}</strong><small>{{ task.owner }} · {{ task.due }}</small><span class="evidence-links"><button v-for="id in task.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></span></div>
+                      <button type="button" :disabled="taskDecisionLoading === index" :class="{ confirmed: confirmedTasks.includes(index) }" @click="toggleTask(index)">{{ taskDecisionLoading === index ? '记录中…' : confirmedTasks.includes(index) ? '已确认并审计' : '确认任务' }}</button>
+                    </article>
+                  </section>
+                    <div class="original-list" tabindex="0" aria-label="经授权的学生证据列表，可上下滚动">
+                      <div class="original-list-head"><h4>经授权的证据 · 可回溯</h4><small>{{ workProduct.records?.length || 0 }} 条 · 每次打开均已审计</small></div>
+                    <article v-for="record in workProduct.records" :id="`evidence-${record.id}`" :key="record.id" class="original-record" tabindex="-1">
                       <div><span>{{ record.source }}</span><time :datetime="record.created_at">{{ formatDateTime(record.created_at) }}</time></div>
                       <p>{{ record.content }}</p>
                     </article>
-                    <p v-if="!caseContext.records?.length" class="empty-state">近30天暂无可展示原文。</p>
-                  </div>
-                  <div class="handoff-card">
-                    <div><span class="section-kicker">合成能力演示</span><h4>体验 Agent 支持工单编排</h4><p>当前入口不会携带本页学生身份、审批号或原文，只用合成个案演示安全分流、证据检索、行动方案和回访。真实原文接入需另行授权与审计。</p></div>
-                    <RouterLink class="primary-btn link-btn" to="/guardian/new?preset=teacher-support">使用合成个案体验</RouterLink>
+                    <p v-if="!workProduct.records?.length" class="empty-state">近30天暂无可展示原文。</p>
                   </div>
                 </template>
               </div>
@@ -129,7 +144,7 @@
           <div v-else class="approval-list">
             <article v-for="item in accessRequests" :key="item.id" class="approval-card">
               <div class="approval-meta"><span>{{ item.request_code }}</span><em :class="['access-pill', item.status]">{{ accessStatusText(item.status) }}</em></div>
-              <h4>{{ item.teacher_name }} 申请查看 {{ item.student_name }}</h4>
+              <h4>{{ cleanDisplayName(item.teacher_name) }} 申请查看 {{ cleanDisplayName(item.student_name) }}</h4>
               <p>{{ item.reason }}</p>
               <small>范围：审批时点之前近30天的倾诉和情绪记录原文；授权7天有效，新增内容不自动纳入</small>
               <div v-if="item.status === 'pending' && reviewTargetId !== item.id" class="approval-actions"><button class="primary-btn" @click="prepareReview(item, 'approved')">审核并批准</button><button class="danger-btn" @click="prepareReview(item, 'rejected')">审核并拒绝</button></div>
@@ -164,7 +179,7 @@
               >
                 <span class="risk-dot"></span>
                 <span class="warning-main">
-                  <strong>{{ item.student_name || item.nickname || ('学生 ' + item.student_id) }}</strong>
+                  <strong>{{ cleanDisplayName(item.student_name || item.nickname || ('学生 ' + item.student_id)) }}</strong>
                   <small>{{ item.reason || item.summary || '需要教师关注' }}</small>
                 </span>
                 <em>{{ riskText(item.risk_level) }}</em>
@@ -177,7 +192,7 @@
                 <div class="detail-head">
                   <div>
                     <span class="status-pill">{{ riskText(selectedWarning.risk_level) }}</span>
-                    <h4>{{ selectedWarning.student_name || selectedWarning.nickname || '学生预警' }}</h4>
+                    <h4>{{ cleanDisplayName(selectedWarning.student_name || selectedWarning.nickname || '学生预警') }}</h4>
                   </div>
                   <small>{{ selectedWarning.created_at?.slice?.(0, 16) || '刚刚更新' }}</small>
                 </div>
@@ -215,15 +230,15 @@
               :class="['student-card', { selected: selectedStudent?.id === student.id }]"
               @click="selectStudent(student)"
             >
-              <span class="avatar">{{ firstChar(student.nickname || student.username || student.name) }}</span>
-              <strong>{{ student.nickname || student.username || student.name }}</strong>
+              <span class="avatar">{{ firstChar(studentName(student)) }}</span>
+              <strong>{{ studentName(student) }}</strong>
               <small>情绪 {{ formatScore(student.avg_mood_score || student.avg_score) }} · 记录 {{ student.mood_count || 0 }} 次</small>
               <em :class="['risk-label', student.risk_level || 'low']">{{ riskText(student.risk_level) }}</em>
             </button>
           </div>
           <article class="profile-card" v-if="selectedStudent">
             <div>
-              <h4>{{ selectedStudent.nickname || selectedStudent.username || selectedStudent.name }} 的关注摘要</h4>
+              <h4>{{ studentName(selectedStudent) }} 的关注摘要</h4>
               <p>{{ studentProfile.summary || '该学生暂无完整画像，建议结合近期倾诉、心情记录与线下观察综合判断。' }}</p>
             </div>
             <div class="profile-metrics">
@@ -308,13 +323,13 @@
           </div>
           <div class="account-list">
             <div v-for="u in accounts" :key="u.id" class="account-row">
-              <span class="avatar">{{ firstChar(u.nickname || u.username) }}</span>
+              <span class="avatar">{{ firstChar(cleanDisplayName(u.nickname || u.username)) }}</span>
               <div>
-                <strong>{{ u.nickname || u.username }}</strong>
+                <strong>{{ cleanDisplayName(u.nickname || u.username) }}</strong>
                 <small>ID: {{ u.id }} · {{ u.role === 'admin_teacher' ? '管理员教师' : u.role === 'teacher' ? '普通教师' : '学生' }}</small>
               </div>
               <div v-if="u.role === 'teacher'" class="assignment-control">
-                <label><span>职责学生</span><select v-model="assignmentStudentByTeacher[u.id]"><option value="">选择学生</option><option v-for="student in students" :key="student.id" :value="student.id">{{ student.nickname }}</option></select></label>
+                <label><span>职责学生</span><select v-model="assignmentStudentByTeacher[u.id]"><option value="">选择学生</option><option v-for="student in students" :key="student.id" :value="student.id">{{ studentName(student) }}</option></select></label>
                 <button class="ghost-btn" :disabled="!assignmentStudentByTeacher[u.id]" @click="assignStudent(u)">分配职责</button>
               </div>
               <button v-if="u.role !== 'admin_teacher'" class="ghost-btn" @click="toggleTeacher(u)">{{ u.is_admin ? '取消教师' : '设为教师' }}</button>
@@ -347,7 +362,8 @@ import {
   createCaseAccessRequest,
   getCaseAccessRequests,
   decideCaseAccessRequest,
-  getStudentCaseContext,
+  getStudentWorkProduct,
+  decideStudentWorkProductTask,
   setTeacherStudentAssignment,
 } from '../api/teacher'
 
@@ -376,7 +392,9 @@ const caseStudent = ref(null)
 const accessReason = ref('')
 const accessSubmitting = ref(false)
 const contextLoading = ref(false)
-const caseContext = ref(null)
+const workProduct = ref(null)
+const confirmedTasks = ref([])
+const taskDecisionLoading = ref(null)
 const caseMessage = ref('')
 const approvalLoading = ref(false)
 const approvalError = ref('')
@@ -434,6 +452,14 @@ function normalizeList(payload, keys) {
 
 function normalizeObject(payload, fallback = {}) {
   return payload?.data || payload || fallback
+}
+
+function cleanDisplayName(value) {
+  return String(value || '').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '未命名'
+}
+
+function studentName(student) {
+  return cleanDisplayName(student?.nickname || student?.username || student?.name || `学生 ${student?.id || ''}`)
 }
 
 async function loadOverview() {
@@ -494,7 +520,8 @@ async function loadAll() {
 function chooseCaseStudent(student) {
   caseStudent.value = student
   accessReason.value = ''
-  caseContext.value = null
+  workProduct.value = null
+  confirmedTasks.value = []
   caseMessage.value = ''
 }
 
@@ -518,14 +545,46 @@ async function loadCaseContext() {
   contextLoading.value = true
   caseMessage.value = ''
   try {
-    const r = await getStudentCaseContext(caseStudent.value.id, caseStudent.value.access?.request_id)
-    caseContext.value = r.data
+    const productResponse = await getStudentWorkProduct(caseStudent.value.id, caseStudent.value.access?.request_id)
+    workProduct.value = productResponse.data
+    confirmedTasks.value = Array.isArray(productResponse.data.confirmed_task_indices) ? productResponse.data.confirmed_task_indices : []
   } catch (e) {
-    caseContext.value = null
+    workProduct.value = null
     caseMessage.value = e.response?.data?.detail || '暂时无法读取个案原文。'
   } finally {
     contextLoading.value = false
   }
+}
+
+async function toggleTask(index) {
+  if (!caseStudent.value || !workProduct.value || taskDecisionLoading.value !== null) return
+  const isConfirmed = confirmedTasks.value.includes(index)
+  taskDecisionLoading.value = index
+  caseMessage.value = ''
+  try {
+    await decideStudentWorkProductTask(
+      caseStudent.value.id,
+      workProduct.value.case_id,
+      index,
+      isConfirmed ? 'revoked' : 'confirmed',
+      caseStudent.value.access?.request_id,
+    )
+    confirmedTasks.value = isConfirmed
+      ? confirmedTasks.value.filter((item) => item !== index)
+      : [...confirmedTasks.value, index]
+    caseMessage.value = isConfirmed ? '任务确认已撤销并记录审计。' : '教师确认已记录审计。'
+  } catch (e) {
+    caseMessage.value = e.response?.data?.detail || '任务确认记录失败，请重试。'
+  } finally {
+    taskDecisionLoading.value = null
+  }
+}
+
+function scrollToEvidence(id) {
+  const target = document.getElementById(`evidence-${id}`)
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  target?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
+  target?.focus({ preventScroll: true })
 }
 
 async function reviewAccess(item, decision) {
@@ -684,7 +743,7 @@ async function assignStudent(teacherAccount) {
   if (!studentId) return
   try {
     await setTeacherStudentAssignment(teacherAccount.id, Number(studentId), true)
-    caseMessage.value = `已将学生职责分配给 ${teacherAccount.nickname || teacherAccount.username}`
+    caseMessage.value = `已将学生职责分配给 ${cleanDisplayName(teacherAccount.nickname || teacherAccount.username)}`
   } catch (e) {
     error.value = e.response?.data?.detail || '职责分配失败'
   }
@@ -915,6 +974,40 @@ textarea { min-height: 96px; resize: vertical; }
 .approval-waiting, .privacy-notice { padding: 16px; border-radius: 12px; background: #fff7df; color: #654f18; }
 .privacy-notice { display: grid; gap: 5px; background: #eef5f2; color: #36554d; }
 .agent-brief { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.case-command-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 22px 0 12px; }
+.case-command-head h4 { margin: 3px 0 0; font-size: 22px; color: #203c33; }
+.risk-decision { padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #35594c; background: #e3f1eb; border: 1px solid #c9dfd5; }
+.risk-decision.urgent { color: #8c332d; background: #fff0ed; border-color: #efc2bb; }
+.risk-decision.professional { color: #714f14; background: #fff6db; border-color: #e9d390; }
+.agent-pipeline { display: grid; gap: 8px; margin-bottom: 14px; }
+.agent-pipeline article { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; background: #f5f9f7; border: 1px solid #dfebe5; }
+.agent-pipeline article > span { color: #4f6d61; font: 700 11px/1 monospace; }
+.agent-pipeline article div { display: grid; gap: 3px; }
+.agent-pipeline article strong { color: #27483d; font-size: 14px; }
+.agent-pipeline article small { color: #4d625a; }
+.agent-pipeline article em { color: #3d765f; font-style: normal; font-size: 12px; font-weight: 700; }
+.work-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.evidence-brief, .decision-brief, .agent-conflict, .task-board { padding: 16px; border: 1px solid #dfe9e4; border-radius: 16px; background: #fff; }
+.evidence-brief h4, .decision-brief h4 { margin: 5px 0 8px; color: #27483d; font-size: 17px; }
+.evidence-brief p, .decision-brief p, .agent-conflict p { color: #52675f; line-height: 1.65; }
+.evidence-brief small { color: #52675f; word-break: break-all; }
+.decision-brief ul { margin: 10px 0 0; padding-left: 18px; color: #4d625a; font-size: 12px; line-height: 1.75; }
+.evidence-links { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.evidence-links button { padding: 3px 6px; border: 1px solid #b7ccc3; border-radius: 7px; color: #345d50; background: #f2f8f5; font: 700 10px/1.2 monospace; cursor: pointer; }
+.agent-conflict { margin-top: 12px; background: #fffaf2; border-color: #ebddc2; }
+.agent-conflict div { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-top: 8px; }
+.agent-conflict strong { color: #6a4d23; }
+.agent-conflict p { margin: 0; }
+.agent-conflict em { color: #5f4b25; font-size: 12px; font-style: normal; }
+.agent-conflict .evidence-links { grid-column: 1 / -1; }
+.task-board { margin-top: 12px; }
+.task-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid #edf1ef; }
+.task-row > span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: #4f7d70; background: #edf6f2; font-weight: 800; }
+.task-row div { display: grid; gap: 3px; }
+.task-row strong { color: #2d463e; }
+.task-row small { color: #52675f; }
+.task-row button { padding: 8px 12px; border: 1px solid #b9d1c6; border-radius: 10px; color: #426b5e; background: #f4faf7; cursor: pointer; }
+.task-row button.confirmed { color: #fff; background: #4f7d70; border-color: #4f7d70; }
 .agent-brief > div { padding: 13px; border: 1px solid #e0e8e4; border-radius: 12px; background: #f8faf9; }
 .agent-brief span { display: block; margin-bottom: 6px; color: #53645e; font-size: 11px; }
 .agent-brief strong { font-size: 13px; line-height: 1.55; }
@@ -940,9 +1033,9 @@ textarea { min-height: 96px; resize: vertical; }
 .approval-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 12px; background: #f8e7e3; color: #783c34; }
 .teacher-page button:focus-visible, .teacher-page a:focus-visible, .teacher-page textarea:focus-visible, .teacher-page input:focus-visible, .original-list:focus-visible { outline: 3px solid #245f82; outline-offset: 3px; }
 .teacher-page .danger-btn { color: #813b32; background: #fae8e4; }
-@media (max-width: 1000px) { .case-layout { grid-template-columns: 1fr; } .agent-brief { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .case-layout { grid-template-columns: 1fr; } .agent-brief, .work-product-grid { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .teacher-page { padding: 14px; } .teacher-hero, .panel-title { flex-direction: column; } .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .split-layout, .lesson-layout, .emotion-sections { grid-template-columns: 1fr; } .teacher-tabs { overflow-x: auto; } }
 @media (max-width: 620px) { .case-stage-head, .original-list-head, .handoff-card { flex-direction: column; } .role-badge { align-self: stretch; text-align: center; } }
-@media (max-width: 560px) { .overview-grid, .detail-stats { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } }
+@media (max-width: 560px) { .overview-grid, .detail-stats { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } .agent-conflict div, .task-row { grid-template-columns: 1fr; } .task-row > span { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>

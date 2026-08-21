@@ -10,7 +10,7 @@
         <header class="guardian-form-header">
           <RouterLink class="guardian-back" to="/guardian">← 返回守护者工作台</RouterLink>
           <h1>站内回访</h1>
-          <p>这是本地演示调度，不会发送短信、微信或邮件。可使用“模拟到期”立即查看完整闭环。</p>
+          <p>回访任务只在站内流转，不会自动发送短信、微信或邮件。教师可在这里查看到期任务并记录结果。</p>
         </header>
 
         <div v-if="loading" class="guardian-loading"><span class="guardian-loading-dot"></span>正在读取回访任务…</div>
@@ -62,7 +62,7 @@
         </div>
       </div>
     </main>
-    <footer class="guardian-footer">站内演示调度 · 不收集联系方式 · 不发送外部通知</footer>
+    <footer class="guardian-footer">站内回访 · 不收集联系方式 · 不发送外部通知</footer>
   </div>
 </template>
 

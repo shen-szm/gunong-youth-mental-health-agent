@@ -12,7 +12,7 @@
         <div class="guardian-case-main">
           <RouterLink class="guardian-back" to="/guardian">← 返回守护者工作台</RouterLink>
           <header class="guardian-case-heading">
-            <div><h1>支持工单 {{ data.case.case_code }}</h1><p>{{ roleLabel }} · {{ data.case.age_band }}岁 · {{ data.case.district }} · 仅合成数据</p></div>
+            <div><h1>支持工单 {{ data.case.case_code }}</h1><p>{{ roleLabel }} · {{ data.case.age_band }}岁 · {{ data.case.district }}</p></div>
             <span :class="['guardian-risk-badge', data.case.risk_level]">{{ riskIcon }} {{ riskMeta.label }}</span>
           </header>
 
@@ -128,7 +128,7 @@ async function loadCase() {
     const response = await getGuardianCase(route.params.caseId)
     data.value = response.data
     if (!['completed', 'failed'].includes(response.data.case.status)) connectEvents()
-  } catch (err) { error.value = err.response?.data?.detail || '请确认本地后端已经启动。' }
+  } catch (err) { error.value = err.response?.data?.detail || '支持服务暂时不可用，请稍后重试。' }
   finally { loading.value = false }
 }
 

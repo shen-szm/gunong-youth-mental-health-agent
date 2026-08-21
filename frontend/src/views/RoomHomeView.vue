@@ -21,7 +21,7 @@
     <!-- 顶部信息栏 -->
     <div class="top-bar">
       <div class="clock">{{ currentTime }}</div>
-      <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
+      <div class="greeting-text">{{ greeting }}，{{ displayNickname }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
     <RouterLink v-if="!showSplash" class="guardian-workbench-entry" to="/teacher-login?redirect=/admin">
@@ -279,7 +279,7 @@
 
 
     <nav class="bottom-nav">
-      <button class="bnav-item" @click="goToChat">
+      <button ref="chatNavButton" class="bnav-item" @click="goToChat">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
@@ -343,8 +343,8 @@
 
           <!-- 头像区 -->
           <div class="panel-hero">
-            <div class="panel-avatar">{{ (userStore.nickname || '你')[0] }}</div>
-            <div class="panel-name">{{ userStore.nickname || '未设置昵称' }}</div>
+            <div class="panel-avatar">{{ displayNickname[0] }}</div>
+            <div class="panel-name">{{ displayNickname }}</div>
             <div class="panel-uid">ID {{ userStore.userId }}</div>
             <span v-if="userStore.isAdmin" class="panel-badge">教师</span>
             <!-- 状态 -->
@@ -1335,6 +1335,69 @@
       </div>
     </Transition>
 
+    <!-- 倾诉后的可关闭行动抽屉：保留原房间，只在一次对话完成后出现 -->
+    <Transition name="support-drawer">
+      <aside v-if="showSupportDrawer" class="student-support-drawer" role="dialog" aria-modal="false" aria-labelledby="support-drawer-title" @click.stop @keydown.esc="closeSupportDrawer">
+        <button ref="supportCloseButton" class="support-close" type="button" aria-label="关闭下一步建议" @click="closeSupportDrawer">×</button>
+
+        <template v-if="supportDrawerMode === 'plan'">
+          <p class="support-eyebrow">倾诉后的下一步</p>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是——</h2>
+          <textarea v-if="editingSupportSummary" v-model="supportDraft.summary" maxlength="160" aria-label="修改我听到的内容"></textarea>
+          <p v-else class="support-summary">{{ supportDraft.summary }}</p>
+          <div class="support-summary-actions">
+            <button type="button" @click="editingSupportSummary = !editingSupportSummary">{{ editingSupportSummary ? '保存修改' : '改一改' }}</button>
+            <button type="button" @click="editingSupportSummary = false">先这样</button>
+          </div>
+
+          <fieldset class="support-needs">
+            <legend>此刻你更希望</legend>
+            <button v-for="need in supportNeeds" :key="need" type="button" :aria-pressed="selectedSupportNeed === need" :class="{ active: selectedSupportNeed === need }" @click="selectedSupportNeed = need">{{ need }}</button>
+          </fieldset>
+
+          <section class="support-next-step" aria-live="polite">
+            <span>下一步只做这一件</span>
+            <strong>{{ currentSupportAction }}</strong>
+            <small v-if="supportFeedback">{{ supportFeedback }}</small>
+          </section>
+
+          <div class="support-decision-row">
+            <button class="support-primary" type="button" @click="acceptSupportAction">愿意试试</button>
+            <button type="button" @click="cycleSupportAction">换一个</button>
+            <button type="button" @click="declineSupportAction">现在做不到</button>
+          </div>
+          <button class="support-help-link" type="button" @click="supportDrawerMode = 'help'">我想找人帮忙</button>
+        </template>
+
+        <template v-else-if="supportDrawerMode === 'help'">
+          <p class="support-eyebrow">把支持接到真人</p>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">你希望谁先来帮忙？</h2>
+          <p class="support-summary">只说你愿意说的。你可以先选一位可信成年人，再决定是否把刚才的摘要给对方看。</p>
+          <div class="support-person-grid">
+            <button v-for="person in ['班主任或老师', '家长或监护人', '其他可信成年人']" :key="person" type="button" :aria-pressed="selectedSupportPerson === person" :class="{ active: selectedSupportPerson === person }" @click="selectedSupportPerson = person">{{ person }}</button>
+          </div>
+          <label class="support-share-toggle"><input v-model="shareSupportSummary" type="checkbox" /> 把上面的摘要写进求助卡</label>
+          <p class="support-send-boundary">系统不会自动通知任何人。确认后会生成一张求助卡，由你决定何时当面给对方看。</p>
+          <button class="support-primary support-submit-help" type="button" :disabled="!selectedSupportPerson" @click="confirmHelpRequest">生成求助卡</button>
+          <button class="support-help-link" type="button" @click="supportDrawerMode = 'plan'">返回上一步</button>
+        </template>
+
+        <template v-else>
+          <p class="support-eyebrow">可以当面展示的求助卡</p>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我想请你先听我说</h2>
+          <section class="support-card-preview">
+            <span>给 {{ currentHelpCard.person }}</span>
+            <p v-if="currentHelpCard.summary">{{ currentHelpCard.summary }}</p>
+            <p v-else>我最近遇到了一件自己不太能处理的事，希望你先听我说，再和我一起想下一步。</p>
+            <strong>你现在不用马上解决，请先陪我把话说完。</strong>
+          </section>
+          <p class="support-send-boundary">这张卡不会自动发送。你可以把当前屏幕当面给对方看。</p>
+          <button class="support-primary support-submit-help" type="button" @click="closeSupportDrawer">完成并关闭</button>
+          <button class="support-help-link" type="button" @click="supportDrawerMode = 'help'">返回修改</button>
+        </template>
+      </aside>
+    </Transition>
+
     <!-- 隐藏音频元素 -->
 
     <!-- ══ 治愈面板 ══ -->
@@ -1487,10 +1550,35 @@ import TreeHoleView from './TreeHoleView.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const splashVersion = (import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || 'local').split('+')[0]
+const displayNickname = computed(() => (userStore.nickname || '朋友').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '朋友')
 
 // ═══ 个人中心面板 ═══
 const showProfilePanel = ref(false)
 const showChatPanel = ref(false)
+const showSupportDrawer = ref(false)
+const supportCloseButton = ref(null)
+const supportModeHeading = ref(null)
+const chatNavButton = ref(null)
+const supportDrawerMode = ref('plan')
+const editingSupportSummary = ref(false)
+const selectedSupportNeed = ref('做一个小行动')
+const supportNeeds = ['先被听见', '理清这件事', '做一个小行动']
+const supportDraft = ref({ summary: '', actions: [] })
+const supportActionIndex = ref(0)
+const supportFeedback = ref('')
+const selectedSupportPerson = ref('')
+const shareSupportSummary = ref(false)
+const currentHelpCard = ref({ person: '', summary: '' })
+const currentSupportAction = computed(() => {
+  if (selectedSupportNeed.value === '先被听见') return '先不用行动，把最想被理解的一句话继续说完'
+  if (selectedSupportNeed.value === '理清这件事') return supportDraft.value.actions?.[1] || '把最困扰你的部分写成一句话'
+  return supportDraft.value.actions?.[supportActionIndex.value] || '先停一下，照顾好此刻的自己'
+})
+watch(supportDrawerMode, async () => {
+  if (!showSupportDrawer.value) return
+  await nextTick()
+  supportModeHeading.value?.focus()
+})
 const showHealingPanel = ref(false)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
@@ -3249,6 +3337,22 @@ async function sendChatMsg(text) {
     if (res.data?.reply) {
       chatMessages.value.push({ role: 'assistant', content: res.data.reply, emotion: res.data.emotion })
       completeFirstRunAfterChat(msg, res.data)
+      if (res.data.emotion !== '需要立即协助' && res.data.support) {
+        supportDraft.value = {
+          summary: res.data.support.summary,
+          actions: Array.isArray(res.data.support.actions) ? res.data.support.actions : [],
+        }
+        supportActionIndex.value = 0
+        supportFeedback.value = ''
+        selectedSupportNeed.value = '做一个小行动'
+        selectedSupportPerson.value = ''
+        shareSupportSummary.value = false
+        supportDrawerMode.value = 'plan'
+        showChatPanel.value = false
+        showSupportDrawer.value = true
+        await nextTick()
+        supportCloseButton.value?.focus()
+      }
     } else {
       chatMessages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试...' })
     }
@@ -3260,6 +3364,58 @@ async function sendChatMsg(text) {
   loadStats()
   await nextTick()
   scrollChatBottom()
+}
+
+function closeSupportDrawer() {
+  showSupportDrawer.value = false
+  editingSupportSummary.value = false
+  supportFeedback.value = ''
+  nextTick(() => chatNavButton.value?.focus())
+}
+
+function cycleSupportAction() {
+  selectedSupportNeed.value = '做一个小行动'
+  const total = supportDraft.value.actions?.length || 1
+  supportActionIndex.value = (supportActionIndex.value + 1) % total
+  supportFeedback.value = '已经换成更轻一点的选择。'
+}
+
+function acceptSupportAction() {
+  const item = { action: currentSupportAction.value, createdAt: new Date().toISOString(), status: 'accepted' }
+  const key = `shengyu_student_micro_actions_${userStore.userId}`
+  const previous = readSessionList(key)
+  sessionStorage.setItem(key, JSON.stringify([item, ...previous].slice(0, 12)))
+  supportFeedback.value = '记下了。只试这一小步就够了。'
+}
+
+function declineSupportAction() {
+  selectedSupportNeed.value = '先被听见'
+  supportFeedback.value = '可以，现在不行动也没关系。咕哝会先陪你把感受放在这里。'
+}
+
+function confirmHelpRequest() {
+  if (!selectedSupportPerson.value) return
+  const requestCard = {
+    person: selectedSupportPerson.value,
+    summary: shareSupportSummary.value ? supportDraft.value.summary : '',
+    createdAt: new Date().toISOString(),
+    status: 'ready_to_share',
+  }
+  const key = `shengyu_student_help_cards_${userStore.userId}`
+  const previous = readSessionList(key)
+  sessionStorage.setItem(key, JSON.stringify([requestCard, ...previous].slice(0, 6)))
+  currentHelpCard.value = requestCard
+  supportFeedback.value = `求助卡已生成，但不会自动发送。请在安全、方便的时候当面给${selectedSupportPerson.value}看；遇到紧急危险请立即拨打110、120或12356。`
+  supportDrawerMode.value = 'card'
+}
+
+function readSessionList(key) {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) || '[]')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
 }
 
 function scrollChatBottom() {
@@ -4349,6 +4505,81 @@ onUnmounted(() => {
   cursor: pointer; transition: all 0.2s;
 }
 .panel-close:hover { background: rgba(255,255,255,0.15); color: white; }
+
+/* 倾诉后行动抽屉：像素房间保持可见，组件沿用液态玻璃层次 */
+.student-support-drawer {
+  position: fixed;
+  z-index: 245;
+  top: 50%;
+  right: clamp(18px, 4vw, 64px);
+  width: min(410px, calc(100vw - 36px));
+  max-height: min(760px, calc(100vh - 44px));
+  overflow-y: auto;
+  transform: translateY(-50%);
+  padding: 30px 28px 24px;
+  color: #f5f0e8;
+  background: linear-gradient(150deg, rgba(18, 21, 27, .96), rgba(27, 25, 32, .94));
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(5, 7, 12, .42), inset 0 1px rgba(255, 255, 255, .08);
+  backdrop-filter: blur(26px) saturate(1.35);
+  font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+}
+.student-support-drawer::-webkit-scrollbar { width: 0; }
+.support-close {
+  position: absolute; top: 14px; right: 16px;
+  width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%;
+  color: #f5f0e8; background: rgba(255,255,255,.09); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.support-eyebrow { margin: 0 0 8px; color: #a9c8ba; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
+.student-support-drawer h2 { margin: 0 42px 12px 0; font-size: 24px; line-height: 1.25; letter-spacing: .02em; }
+.support-summary { margin: 0; color: rgba(245,240,232,.82); font-size: 15px; line-height: 1.75; }
+.student-support-drawer textarea {
+  width: 100%; min-height: 94px; box-sizing: border-box; resize: vertical;
+  padding: 13px; border: 1px solid rgba(169,200,186,.42); border-radius: 14px;
+  color: #f5f0e8; background: rgba(255,255,255,.07); font: inherit; line-height: 1.6; outline: none;
+}
+.support-summary-actions { display: flex; justify-content: flex-end; gap: 14px; margin: 8px 0 20px; }
+.support-summary-actions button, .support-help-link { border: 0; padding: 3px 0; color: rgba(245,240,232,.9); background: transparent; font-size: 12px; cursor: pointer; }
+.support-needs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; margin: 0 0 18px; padding: 0; border: 0; }
+.support-needs legend { grid-column: 1 / -1; margin-bottom: 8px; color: rgba(245,240,232,.88); font-size: 12px; }
+.support-needs button, .support-decision-row button, .support-person-grid button {
+  min-height: 40px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.11); border-radius: 12px;
+  color: rgba(245,240,232,.94); background: rgba(255,255,255,.075); font-size: 12px; cursor: pointer;
+}
+.support-needs button.active, .support-person-grid button.active { color: #fff; border-color: rgba(169,200,186,.68); background: rgba(126,164,146,.22); }
+.support-next-step { display: grid; gap: 7px; padding: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; background: rgba(8,12,16,.28); }
+.support-next-step span { color: #a9c8ba; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.support-next-step strong { font-size: 16px; line-height: 1.55; }
+.support-next-step small { color: rgba(245,240,232,.88); line-height: 1.5; }
+.support-decision-row { display: grid; grid-template-columns: 1.1fr .8fr 1fr; gap: 8px; margin-top: 14px; }
+.support-primary { color: #17231e !important; border-color: transparent !important; background: linear-gradient(135deg, #bcd9ca, #8fb9a6) !important; font-weight: 700; }
+.support-help-link { display: block; margin: 18px auto 0; color: #bcd9ca; text-decoration: underline; text-underline-offset: 4px; }
+.support-person-grid { display: grid; gap: 9px; margin: 20px 0 16px; }
+.support-share-toggle { display: flex; gap: 8px; align-items: flex-start; color: rgba(245,240,232,.92); font-size: 13px; line-height: 1.5; }
+.support-share-toggle input { margin-top: 3px; accent-color: #8fb9a6; }
+.support-send-boundary { margin: 10px 0 0; color: rgba(245,240,232,.88); font-size: 12px; line-height: 1.55; }
+.support-card-preview { display: grid; gap: 11px; margin-top: 18px; padding: 18px; border: 1px solid rgba(169,200,186,.35); border-radius: 16px; background: rgba(255,255,255,.065); }
+.support-card-preview span { color: #a9c8ba; font-size: 12px; font-weight: 700; }
+.support-card-preview p { margin: 0; color: rgba(245,240,232,.84); font-size: 15px; line-height: 1.7; }
+.support-card-preview strong { color: #fff; font-size: 13px; line-height: 1.6; }
+.support-submit-help { width: 100%; min-height: 44px; margin-top: 18px; border-radius: 13px; border: 0; cursor: pointer; }
+.support-submit-help:disabled { opacity: .45; cursor: not-allowed; }
+.support-drawer-enter-active, .support-drawer-leave-active { transition: opacity .25s ease, transform .25s ease; }
+.support-drawer-enter-from, .support-drawer-leave-to { opacity: 0; transform: translate(32px, -50%); }
+.student-support-drawer button:focus-visible,
+.student-support-drawer textarea:focus-visible,
+.student-support-drawer input:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .support-drawer-enter-active, .support-drawer-leave-active { transition: none; }
+}
+
+@media (max-width: 767px) {
+  .student-support-drawer { top: auto; right: 10px; bottom: 10px; left: 10px; width: auto; max-height: 75vh; transform: none; padding: 26px 20px 20px; border-radius: 20px; }
+  .support-drawer-enter-from, .support-drawer-leave-to { opacity: 0; transform: translateY(24px); }
+  .support-needs, .support-decision-row { grid-template-columns: 1fr; }
+}
 
 /* 头像区 */
 .panel-hero {

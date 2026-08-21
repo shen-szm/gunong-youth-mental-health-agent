@@ -78,25 +78,14 @@ def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Dep
 def delete_user(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     raise HTTPException(
         status_code=410,
-        detail="本地预览已禁用账号硬删除，请使用受审计的停用流程",
+        detail="账号硬删除已禁用，请使用受审计的停用流程",
     )
 
 @router.get("/chats")
 def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
-    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="list_chat_content", resource_type="chat", resource_id="recent", result="allowed"))
+    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="list_chat_content", resource_type="chat", resource_id="recent", result="denied_bulk_export"))
     db.commit()
-    chats = db.query(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(limit).all()
-    return [
-        {
-            "id": c.id,
-            "user_id": c.user_id,
-            "role": c.role,
-            "content": c.content,
-            "emotion": c.emotion,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-        }
-        for c in chats
-    ]
+    raise HTTPException(status_code=410, detail="批量聊天原文接口已停用，请从单个支持工单按审计范围查看")
 
 
 @router.get("/user-detail/{target_user_id}")
@@ -213,62 +202,16 @@ async def get_user_analysis(target_user_id: int, user_id: int | None = None, db:
     if not moods:
         return {"analysis": "该用户暂无足够数据进行分析。"}
 
-    # 获取用户最近的对话内容
-    user_msgs = db.query(ChatMessage).filter(
-        ChatMessage.user_id == target_user_id,
-        ChatMessage.role == "user",
-        ChatMessage.created_at >= since
-    ).order_by(ChatMessage.created_at.asc()).limit(30).all()
-
     from collections import Counter
     dist = Counter(m.mood_label for m in moods)
     dist_str = "、".join([f"{label}({count}次)" for label, count in dist.most_common()])
     avg_score = round(sum(m.mood_score for m in moods) / len(moods), 1)
 
-    if not settings.ALLOW_EXTERNAL_AI:
-        return {
-            "analysis": (
-                f"最近30天共记录{len(moods)}次，平均自评为{avg_score}/10；分布为{dist_str}。"
-                "这是本地统计摘要，不是诊断。外部AI默认关闭，聊天正文和昵称未发送给第三方；"
-                "教师只能据此提供低压力支持和必要转介，不能据此作医学或纪律判断。"
-            ),
-            "degraded": True,
-        }
-
-    # 构造分析提示（仅在显式开启外部AI并完成相应治理后使用）
-    mood_summary = "；".join([
-        f"{m.created_at.strftime('%m-%d %H:%M')}：{m.mood_label}（分数{m.mood_score}，内容：{m.content[:50] if m.content else '无'}）"
-        for m in moods[-15:]
-    ])
-
-    chat_summary = " | ".join([f"{c.content[:60]}" for c in user_msgs[-10:]]) if user_msgs else "无对话记录"
-
-    messages = [{
-        "role": "user",
-        "content": f"""你是心理健康教育支持工具。请基于以下有限记录整理非诊断性观察摘要，并给教师提供谨慎的支持建议。
-
-用户信息：{target.nickname or target.username}，使用{moods[0].created_at.strftime('%Y-%m-%d')}至今
-平均情绪分：{avg_score}/10
-情绪分布：{dist_str}
-
-最近情绪记录：
-{mood_summary}
-
-最近对话内容：
-{chat_summary}
-
-请从以下几个方面进行分析（共300字以内）：
-1. 观察摘要：记录中出现了哪些情绪与行为变化？不得使用疾病标签。
-2. 关键发现：有什么需要特别关注的问题或趋势？
-3. 支持建议：给教师可执行的校内支持、最小披露和必要转介建议。必须说明AI不能替代专业评估。"""
-    }]
-
-    try:
-        from xunfei.spark_api import ask_spark
-        analysis = await ask_spark(messages, max_tokens=500, temperature=0.7)
-        if not analysis:
-            analysis = "AI 分析暂时不可用，请稍后重试。"
-    except Exception as e:
-        analysis = f"AI 分析出错：{str(e)}"
-
-    return {"analysis": analysis}
+    return {
+        "analysis": (
+            f"最近30天共记录{len(moods)}次，情绪记录均值为{avg_score}/10；分布为{dist_str}。"
+            "这是基于现有记录的统计摘要，不是诊断。聊天正文和昵称不会通过该接口发送给第三方；"
+            "教师只能据此提供低压力支持和必要转介，不能据此作医学或纪律判断。"
+        ),
+        "degraded": True,
+    }

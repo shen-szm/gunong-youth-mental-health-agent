@@ -199,3 +199,31 @@ class TeacherStudentAssignment(Base):
     __table_args__ = (
         Index("idx_teacher_student_assignment", "teacher_user_id", "student_user_id", unique=True),
     )
+
+
+class TeacherWorkProductSnapshot(Base):
+    """绑定教师、学生、审批工单和截止时点的工作成果快照。"""
+
+    __tablename__ = "teacher_work_product_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(String(120), nullable=False, unique=True, index=True)
+    student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    request_id = Column(Integer, ForeignKey("student_case_access_requests.id"), nullable=True, index=True)
+    generated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    content_cutoff = Column(DateTime, nullable=False)
+    version = Column(String(32), nullable=False, default="teacher-work-product-v1")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class TeacherWorkProductTaskDecision(Base):
+    __tablename__ = "teacher_work_product_task_decisions"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(String(120), ForeignKey("teacher_work_product_snapshots.product_id"), nullable=False, index=True)
+    task_index = Column(Integer, nullable=False)
+    teacher_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(16), nullable=False, default="confirmed")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (Index("idx_work_product_task_decision", "product_id", "task_index", "teacher_user_id", unique=True),)

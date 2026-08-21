@@ -89,6 +89,8 @@ FORBIDDEN_CLINICAL_PATTERNS = {
     "fabricated_scale_score": r"(?:PHQ[-‑]?9|GAD[-‑]?7).{0,8}(?:得分|评分|分数|\d+分)",
 }
 EXPLICIT_URGENT = {"self_harm_sign", "death_talk"}
+HOUSEHOLD_ACTOR = r"(?:爸爸|妈妈|父亲|母亲|继父|继母|爷爷|奶奶|外公|外婆|哥哥|姐姐|弟弟|妹妹|叔叔|舅舅|阿姨|亲戚|家里人|家人|监护人|同住者)"
+POSSIBLE_HARM_ACTOR = rf"(?:{HOUSEHOLD_ACTOR}|家里有人|家中有人|有人|他|她)"
 URGENT_PATTERNS = [
     r"不想活(?:了)?",
     r"想死(?:了)?",
@@ -105,6 +107,14 @@ URGENT_PATTERNS = [
     r"永远睡过去",
     r"没有我.{0,6}更好",
     r"撑不下去",
+    rf"{POSSIBLE_HARM_ACTOR}.{{0,12}}(?:用.{{0,8}})?(?:打我|揍我|殴打我|抽我|扇我|踹我|掐我|掐我脖子|勒我|踢我|烫我|烧我|拿东西砸我|拿刀威胁我|威胁我|伤害我)",
+    r"(?:有人|他|她).{0,8}(?:打我|揍我|掐我|踢我|拿东西砸我|拿刀威胁我|伤害我)",
+    r"(?:不敢|不能|没法|不安全|害怕).{0,6}(?:回家|回去)",
+    r"(?:性侵|猥亵|性伤害|强迫我脱衣|摸我隐私部位)",
+    r"(?:逼|强迫|威胁).{0,10}(?:和.{0,4})?(?:发生性关系|发生关系|做性行为|脱衣服|脱衣|触摸隐私部位)",
+    rf"{POSSIBLE_HARM_ACTOR}.{{0,12}}(?:把我)?(?:关|锁).{{0,8}}(?:屋|房|厕所|家).{{0,12}}(?:不让|不准|禁止).{{0,6}}(?:出去|离开|上学|求助)",
+    r"(?:家里|家中).{0,8}(?:暴力|伤害|人身威胁)",
+    r"监护人.{0,8}(?:伤害我|让我害怕|是伤害来源|可能伤害我)",
 ]
 NEGATION_PREFIX = re.compile(r"(?:没有|否认|从未|并未|不是|没想过).{0,4}$")
 QUOTE_PREFIX = re.compile(r"(?:新闻|电影|课文|别人|同学说|讨论).{0,6}$")
@@ -160,7 +170,9 @@ def _context_has_urgent_meaning(context: str) -> bool:
         if not match:
             continue
         prefix = text[max(0, match.start() - 12) : match.start()]
-        if NEGATION_PREFIX.search(prefix) or QUOTE_PREFIX.search(prefix):
+        matched_text = match.group(0)
+        negated_inside = re.search(r"(?:没有|并未|不是|不会).{0,4}(?:打我|揍我|性侵|猥亵|伤害我|威胁我)", matched_text)
+        if NEGATION_PREFIX.search(prefix) or QUOTE_PREFIX.search(prefix) or negated_inside:
             continue
         return True
     return False
