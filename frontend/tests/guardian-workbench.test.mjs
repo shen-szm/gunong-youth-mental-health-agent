@@ -51,12 +51,12 @@ test('alpha release is synchronized and documented as local-only', async () => {
   const lock = JSON.parse(await source('frontend/package-lock.json'))
   const changelog = await source('CHANGELOG.md')
   const backend = await source('backend/config.py')
-  assert.equal(pkg.version, '5.0.0-alpha.1')
-  assert.equal(lock.version, '5.0.0-alpha.1')
-  assert.equal(lock.packages[''].version, '5.0.0-alpha.1')
-  assert.match(changelog, /\[5\.0\.0-alpha\.1\]/)
+  assert.equal(pkg.version, '5.0.0-alpha.2')
+  assert.equal(lock.version, '5.0.0-alpha.2')
+  assert.equal(lock.packages[''].version, '5.0.0-alpha.2')
+  assert.match(changelog, /\[5\.0\.0-alpha\.2\]/)
   assert.match(changelog, /本地比赛预览/)
-  assert.match(backend, /RELEASE_VERSION: str = "5\.0\.0-alpha\.1"/)
+  assert.match(backend, /RELEASE_VERSION: str = "5\.0\.0-alpha\.2"/)
 })
 
 test('plaintext password recovery and hard-coded weak admin are removed', async () => {

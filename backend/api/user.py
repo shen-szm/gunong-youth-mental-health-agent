@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from auth import clear_session, establish_session, get_current_user, require_admin
+from auth import clear_session, establish_session, get_current_user, require_admin_teacher
 from config import settings
 from database import get_db
 from models import User, UserSession
@@ -50,10 +50,13 @@ class UserResp(BaseModel):
 
 
 def _payload(user: User) -> dict:
+    level = int(user.is_admin or 0)
     return {
         "user_id": user.id,
         "nickname": user.nickname or user.username,
-        "is_admin": bool(user.is_admin),
+        "is_admin": level >= 1,
+        "is_super_admin": level >= 2,
+        "role": "admin_teacher" if level >= 2 else "teacher" if level == 1 else "student",
     }
 
 
@@ -152,7 +155,7 @@ async def reset_password(
     target_user_id: int,
     req: AdminResetPasswordReq,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin),
+    current_admin: User = Depends(require_admin_teacher),
 ):
     user = db.query(User).filter(User.id == target_user_id).first()
     if not user:
@@ -185,7 +188,7 @@ async def get_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if user_id != current_user.id and not current_user.is_admin:
+    if user_id != current_user.id and int(current_user.is_admin or 0) < 2:
         raise HTTPException(status_code=403, detail="无权查看该资料")
     target = db.query(User).filter(User.id == user_id).first()
     if not target:

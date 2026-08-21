@@ -22,6 +22,7 @@ def create_default_admin() -> None:
         if admin:
             if not admin.is_admin:
                 raise RuntimeError("管理员用户名已被普通账号占用，拒绝自动提权")
+            admin.is_admin = 2
             admin.password_hash = get_password_hash(password)
             db.query(UserSession).filter(UserSession.user_id == admin.id).delete()
         else:
@@ -30,7 +31,7 @@ def create_default_admin() -> None:
                     username=username,
                     password_hash=get_password_hash(password),
                     nickname="本地教师",
-                    is_admin=1,
+                    is_admin=2,
                 )
             )
         db.commit()

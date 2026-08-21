@@ -280,7 +280,7 @@ async function handleSubmit() {
     if (mode.value === 'login') {
       const resp = await login(form.value.username, form.value.password)
       const data = resp.data
-      userStore.login(data.user_id, data.nickname, !!data.is_admin)
+      userStore.login(data.user_id, data.nickname, !!data.is_admin, !!data.is_super_admin, data.role)
       const redirect = route.query.redirect
       router.push(data.is_admin ? (redirect || '/admin') : '/')
     } else {

@@ -21,7 +21,7 @@ test('user API and store expose demo-session initialization', async () => {
   assert.match(store, /if \(sessionChecked\.value && isLoggedIn\.value\) return/)
   assert.match(store, /await getCurrentSession\(\)/)
   assert.match(store, /await createDemoSession\(\)/)
-  assert.match(store, /login\(data\.user_id, data\.nickname, !!data\.is_admin\)/)
+  assert.match(store, /login\(data\.user_id, data\.nickname, !!data\.is_admin, !!data\.is_super_admin, data\.role\)/)
   assert.match(store, /ensureDemoSession/)
 })
 

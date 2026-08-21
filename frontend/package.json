@@ -1,6 +1,6 @@
 {
   "name": "shengyu-web",
-  "version": "5.0.0-alpha.1",
+  "version": "5.0.0-alpha.2",
   "private": true,
   "type": "module",
   "scripts": {

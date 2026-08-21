@@ -10,7 +10,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     nickname = Column(String(50), nullable=True)
     avatar = Column(String(255), nullable=True)
-    is_admin = Column(Integer, default=0, nullable=False)  # 0=普通用户, 1=管理员
+    # 0=学生，1=普通教师，2=管理员教师。保留字段名以兼容既有数据库。
+    is_admin = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
 class MoodRecord(Base):
@@ -157,3 +158,44 @@ class SensitiveAccessLog(Base):
     resource_id = Column(String(64), nullable=False)
     result = Column(String(24), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class StudentCaseAccessRequest(Base):
+    """教师查看学生个案原文的申请工单。"""
+
+    __tablename__ = "student_case_access_requests"
+
+    id = Column(Integer, primary_key=True)
+    request_code = Column(String(32), nullable=False, unique=True, index=True)
+    teacher_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reason = Column(Text, nullable=False)
+    scope = Column(String(32), nullable=False, default="recent_30_days")
+    status = Column(String(16), nullable=False, default="pending", index=True)
+    reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_note = Column(Text, nullable=False, default="")
+    reviewed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_case_access_teacher_student", "teacher_user_id", "student_user_id", "status"),
+    )
+
+
+class TeacherStudentAssignment(Base):
+    """普通教师可发起支持申请的学生职责范围。"""
+
+    __tablename__ = "teacher_student_assignments"
+
+    id = Column(Integer, primary_key=True)
+    teacher_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    active = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_teacher_student_assignment", "teacher_user_id", "student_user_id", unique=True),
+    )

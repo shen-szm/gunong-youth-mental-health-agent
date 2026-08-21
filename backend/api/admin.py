@@ -4,9 +4,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, MoodRecord, ChatMessage, SensitiveAccessLog
+from models import User, MoodRecord, ChatMessage, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, UserSession
 from config import settings
-from auth import require_admin
+from auth import require_admin, require_admin_teacher
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -25,7 +25,7 @@ def get_stats(user_id: int | None = None, db: Session = Depends(get_db), current
     }
 
 @router.get("/users")
-def get_users(user_id: int | None = None, page: int = 1, size: int = 20, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+def get_users(user_id: int | None = None, page: int = 1, size: int = 20, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     total = db.query(User).count()
     users = db.query(User).order_by(User.id.desc()).offset((page - 1) * size).limit(size).all()
     enriched_users = []
@@ -52,31 +52,37 @@ def get_users(user_id: int | None = None, page: int = 1, size: int = 20, db: Ses
     }
 
 @router.post("/set-admin/{target_user_id}")
-def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if int(target.is_admin or 0) >= 2:
+        raise HTTPException(status_code=400, detail="不能通过兼容接口修改管理员教师")
+    before = int(target.is_admin or 0)
     target.is_admin = 1 if not target.is_admin else 0
+    # 角色变化后必须重新认证，避免旧学生会话在提权后立即继承教师权限。
+    db.query(UserSession).filter(UserSession.user_id == target.id).delete(synchronize_session=False)
+    if not target.is_admin:
+        db.query(TeacherStudentAssignment).filter(TeacherStudentAssignment.teacher_user_id == target.id).update({"active": 0})
+        db.query(StudentCaseAccessRequest).filter(
+            StudentCaseAccessRequest.teacher_user_id == target.id,
+            StudentCaseAccessRequest.status.in_(["pending", "approved"]),
+        ).update({"status": "revoked", "expires_at": None, "review_note": "教师角色已撤销"}, synchronize_session=False)
+    db.commit()
+    db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="update_account_role", resource_type="user", resource_id=str(target.id), result=f"allowed_{before}_to_{target.is_admin}"))
     db.commit()
     action = "设为教师" if target.is_admin else "取消教师"
     return {"msg": f"已将 {target.username} {action}"}
 
 @router.delete("/users/{target_user_id}")
-def delete_user(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
-    if target_user_id == current_admin.id:
-        raise HTTPException(status_code=400, detail="不能删除自己")
-    target = db.query(User).filter(User.id == target_user_id).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    # 删除关联数据
-    db.query(ChatMessage).filter(ChatMessage.user_id == target_user_id).delete()
-    db.query(MoodRecord).filter(MoodRecord.user_id == target_user_id).delete()
-    db.delete(target)
-    db.commit()
-    return {"msg": f"已删除用户 {target.username}"}
+def delete_user(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
+    raise HTTPException(
+        status_code=410,
+        detail="本地预览已禁用账号硬删除，请使用受审计的停用流程",
+    )
 
 @router.get("/chats")
-def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="list_chat_content", resource_type="chat", resource_id="recent", result="allowed"))
     db.commit()
     chats = db.query(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(limit).all()
@@ -94,11 +100,13 @@ def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depend
 
 
 @router.get("/user-detail/{target_user_id}")
-def get_user_detail(target_user_id: int, user_id: int | None = None, days: int = 30, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+def get_user_detail(target_user_id: int, user_id: int | None = None, days: int = 30, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     """获取用户详情：基本信息 + 心情趋势 + 情绪分布 + 高频词"""
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if int(target.is_admin or 0) >= 2:
+        raise HTTPException(status_code=400, detail="不能删除管理员教师")
     db.add(SensitiveAccessLog(actor_user_id=current_admin.id, action="view_user_detail", resource_type="user", resource_id=str(target_user_id), result="allowed"))
     db.commit()
 
@@ -185,7 +193,7 @@ def get_user_detail(target_user_id: int, user_id: int | None = None, days: int =
 
 
 @router.get("/user-analysis/{target_user_id}")
-async def get_user_analysis(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
+async def get_user_analysis(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     """AI 心理分析：总结用户心理状态并给出建议"""
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:

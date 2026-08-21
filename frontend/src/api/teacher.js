@@ -46,6 +46,26 @@ export function requestSensitiveContext(studentId, userId, reason) {
   return instance.post(`/students/${studentId}/sensitive-context/access`, { reason }, { params: params(userId) })
 }
 
+export function createCaseAccessRequest(studentId, reason) {
+  return instance.post(`/students/${studentId}/access-requests`, { reason, scope: 'recent_30_days' })
+}
+
+export function getCaseAccessRequests() {
+  return instance.get('/access-requests')
+}
+
+export function decideCaseAccessRequest(requestId, decision, note = '') {
+  return instance.post(`/access-requests/${requestId}/decision`, { decision, note })
+}
+
+export function getStudentCaseContext(studentId, requestId = null) {
+  return instance.get(`/students/${studentId}/case-context`, { params: requestId ? { request_id: requestId } : {} })
+}
+
+export function setTeacherStudentAssignment(teacherUserId, studentUserId, active = true) {
+  return instance.post('/assignments', { teacher_user_id: teacherUserId, student_user_id: studentUserId, active })
+}
+
 export function getTeacherAccounts(userId) {
   return instance.get('/accounts', { params: params(userId) })
 }

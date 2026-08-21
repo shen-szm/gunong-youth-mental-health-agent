@@ -47,7 +47,7 @@ def _owned_case(db: Session, case_code: str, user: User) -> GuardianCase:
     case = db.query(GuardianCase).filter(GuardianCase.case_code == case_code).first()
     if not case:
         raise HTTPException(status_code=404, detail="工单不存在")
-    if case.owner_user_id != user.id and not user.is_admin:
+    if case.owner_user_id != user.id and int(user.is_admin or 0) < 2:
         raise HTTPException(status_code=403, detail="无权访问该工单")
     return case
 
@@ -297,7 +297,7 @@ def _owned_followup(db: Session, followup_id: int, user: User) -> tuple[FollowUp
     if not row:
         raise HTTPException(status_code=404, detail="回访任务不存在")
     task, case = row
-    if case.owner_user_id != user.id and not user.is_admin:
+    if case.owner_user_id != user.id and int(user.is_admin or 0) < 2:
         raise HTTPException(status_code=403, detail="无权访问该回访")
     return task, case
 

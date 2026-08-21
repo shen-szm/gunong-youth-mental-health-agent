@@ -18,9 +18,9 @@ test('frontend presents privileged users and tools as teacher-facing', async () 
 
   assert.match(room, /教师/)
   assert.match(profile, /教师/)
-  assert.match(portal, /<h2>教师端<\/h2>/)
+  assert.match(portal, /<h2>教师支持工作台<\/h2>/)
   assert.match(portal, /请用教师账号登录/)
-  assert.match(portal, /u\.is_admin \? '教师' : '普通用户'/)
+  assert.match(portal, /u\.role === 'admin_teacher' \? '管理员教师'/)
   assert.match(portal, /u\.is_admin \? '取消教师' : '设为教师'/)
 
   assert.doesNotMatch(portal, /管理员后台/)
@@ -30,7 +30,7 @@ test('teacher portal restores warning handling and lesson-plan workflow', async 
   const portal = await source('frontend/src/views/AdminView.vue')
   const api = await source('frontend/src/api/teacher.js')
 
-  assert.match(portal, /教师端工作台/)
+  assert.match(portal, /校园心理支持数字员工/)
   assert.match(portal, /情绪预警/)
   assert.match(portal, /预警详情/)
   assert.match(portal, /处理记录/)

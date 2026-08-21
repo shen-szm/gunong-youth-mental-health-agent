@@ -62,6 +62,19 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+def require_teacher(current_user: User = Depends(get_current_user)) -> User:
+    if int(current_user.is_admin or 0) < 1:
+        raise HTTPException(status_code=403, detail="需要教师权限")
+    return current_user
+
+
+def require_admin_teacher(current_user: User = Depends(get_current_user)) -> User:
+    if int(current_user.is_admin or 0) < 2:
+        raise HTTPException(status_code=403, detail="需要管理员教师权限")
+    return current_user
+
+
 def ensure_user_scope(requested_user_id: int, current_user: User) -> None:
-    if requested_user_id != current_user.id and not current_user.is_admin:
+    # 学生端旧接口始终仅限本人。教师跨用户读取必须走带审批/审计的教师工作台接口。
+    if requested_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权访问该用户数据")

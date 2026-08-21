@@ -9,6 +9,7 @@ from database import get_db
 from models import ChatMessage, MoodRecord, User
 from auth import ensure_user_scope, get_current_user
 from config import settings
+from guardian_engine import _context_has_urgent_meaning
 from xunfei.spark_api import ask_spark
 from xunfei.asr_api import speech_to_text
 from xunfei.tts_api import text_to_speech
@@ -142,12 +143,7 @@ def _detect_emotion(text: str) -> str:
 
 
 def _detect_crisis(text: str) -> bool:
-    normalized = text.replace(" ", "")
-    urgent_words = ["想自杀", "准备跳楼", "准备割腕", "已经吞药", "写好遗书", "不想活了", "永远睡过去"]
-    negations = ["没有想", "从未想", "否认", "不是我", "新闻里", "电影里"]
-    if any(prefix in normalized for prefix in negations):
-        return False
-    return any(word in normalized for word in urgent_words)
+    return _context_has_urgent_meaning(text)
 
 
 @router.get("/history")

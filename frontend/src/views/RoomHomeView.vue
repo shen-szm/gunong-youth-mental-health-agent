@@ -24,9 +24,9 @@
       <div class="greeting-text">{{ greeting }}，{{ userStore.nickname || '朋友' }}</div>
       <div class="greeting-sub">今天过得怎么样？</div>
     </div>
-    <RouterLink v-if="!showSplash" class="guardian-workbench-entry" to="/guardian">
-      <span>守护者工作台</span>
-      <small>为家长与教师生成支持方案</small>
+    <RouterLink v-if="!showSplash" class="guardian-workbench-entry" to="/teacher-login?redirect=/admin">
+      <span>教师支持工作台</span>
+      <small>申请个案权限并启动 Agent 工单</small>
     </RouterLink>
     <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
