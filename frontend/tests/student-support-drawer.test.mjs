@@ -5,15 +5,17 @@ import test from 'node:test'
 const room = fs.readFileSync(new URL('../src/views/RoomHomeView.vue', import.meta.url), 'utf8')
 const chatApi = fs.readFileSync(new URL('../../backend/api/chat.py', import.meta.url), 'utf8')
 
-test('student support drawer is additive and follows a safe chat reply', () => {
+test('student support drawer appears only after confirmed conversation completion', () => {
   assert.match(room, /student-support-drawer/)
   assert.match(room, /我听到的是——/)
-  assert.match(room, /先被听见/)
-  assert.match(room, /理清这件事/)
-  assert.match(room, /做一个小行动/)
+  assert.match(room, /结束本次倾诉/)
+  assert.match(room, /showEndConfirmation/)
+  assert.match(room, /completeConversation/)
+  assert.match(room, /student-summary-orb/)
   assert.match(room, /我想找人帮忙/)
-  assert.match(room, /res\.data\.emotion !== '需要立即协助'/)
-  assert.match(chatApi, /_build_student_support/)
+  assert.match(room, /showEndConfirmation\.value = res\.data\.conversation_signal === 'end_candidate'/)
+  assert.match(chatApi, /conversation_signal="urgent"/)
+  assert.match(chatApi, /_run_student_agent_workflow/)
 })
 
 test('student action can be edited, cycled, declined and stored', () => {

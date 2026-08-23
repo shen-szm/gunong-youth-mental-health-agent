@@ -34,6 +34,7 @@ class ChatMessage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=True, index=True)
     role = Column(String(10), nullable=False)  # user / assistant
     content = Column(Text, nullable=False)
     emotion = Column(String(20), nullable=True)  # 识别出的情绪
@@ -42,6 +43,46 @@ class ChatMessage(Base):
     __table_args__ = (
         Index("idx_user_time", "user_id", "created_at"),
     )
+
+
+class StudentChatSession(Base):
+    """学生一次连续倾诉的边界；不向教师端自动开放。"""
+
+    __tablename__ = "student_chat_sessions"
+
+    id = Column(Integer, primary_key=True)
+    session_code = Column(String(40), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    continued_from_session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    risk_level = Column(String(16), nullable=False, default="routine")
+    external_ai_consent_version = Column(String(32), nullable=True)
+    summary_deleted_at = Column(DateTime, nullable=True)
+    processing_started_at = Column(DateTime, nullable=True)
+    processing_token = Column(String(64), nullable=True)
+    started_at = Column(DateTime, server_default=func.now(), nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (Index("idx_student_session_user_status", "user_id", "status"),)
+
+
+class StudentConversationSummary(Base):
+    """非诊断性的倾诉后小结，最多保留30天。"""
+
+    __tablename__ = "student_conversation_summaries"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    summary_json = Column(Text, nullable=False)
+    model_name = Column(String(80), nullable=False, default="deterministic-student-summary")
+    prompt_version = Column(String(32), nullable=False, default="student-summary-v1")
+    degraded = Column(Integer, nullable=False, default=0)
+    message_count = Column(Integer, nullable=False, default=0)
+    generated_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (Index("idx_student_summary_user_expiry", "user_id", "expires_at"),)
 
 
 class UserSession(Base):

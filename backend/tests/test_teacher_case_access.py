@@ -365,15 +365,15 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 self.assertIn("12356", response.json()["reply"])
                 self.assertIn("110", response.json()["reply"])
                 self.assertEqual(response.json()["emotion"], "需要立即协助")
-                self.assertIsNone(response.json()["support"])
+                self.assertEqual(response.json()["conversation_signal"], "urgent")
 
             routine = student_client.post(
                 "/api/chat/send",
                 json={"user_id": self.student_id, "message": "小组活动让我担心说错话"},
             )
             self.assertEqual(routine.status_code, 200)
-            self.assertIn("同伴", routine.json()["support"]["summary"])
-            self.assertEqual(len(routine.json()["support"]["actions"]), 3)
+            self.assertEqual(routine.json()["conversation_signal"], "continue")
+            self.assertNotIn("support", routine.json())
         finally:
             student_client.close()
 

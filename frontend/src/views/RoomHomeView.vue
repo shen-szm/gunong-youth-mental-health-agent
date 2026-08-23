@@ -28,6 +28,14 @@
       <span>教师支持工作台</span>
       <small>申请个案权限并启动 Agent 工单</small>
     </RouterLink>
+    <StudentAgentRail
+      v-if="!showSplash"
+      :open="showAgentRail"
+      :state="studentAgentState"
+      :steps="studentAgentSteps"
+      @toggle="showAgentRail = !showAgentRail"
+      @close="showAgentRail = false"
+    />
     <!-- 复访引导：每日仪式 + 首次教学 -->
     <div class="engagement-stack" v-if="!showSplash">
       <section class="first-run-guide" v-if="showFirstRunGuide">
@@ -1237,11 +1245,11 @@
       <div v-if="showChatPanel" class="profile-overlay" @click="showChatPanel = false">
         <div class="profile-panel chat-panel" @click.stop>
           <!-- 关闭按钮 -->
-          <div class="panel-close" @click="showChatPanel = false">
+          <button class="panel-close" type="button" aria-label="关闭倾诉面板" @click="showChatPanel = false">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 18L18 6M6 6l12 12"/>
             </svg>
-          </div>
+          </button>
 
           <!-- 顶部 -->
           <div class="chat-header">
@@ -1255,6 +1263,12 @@
                 </div>
               </div>
             </div>
+            <button
+              class="chat-end-button"
+              type="button"
+              :disabled="chatLoading || !chatMessages.some(item => item.role === 'user')"
+              @click="requestConversationEnd"
+            >结束本次倾诉</button>
           </div>
 
           <!-- 消息列表 -->
@@ -1293,6 +1307,17 @@
               </div>
             </div>
           </div>
+
+          <section v-if="showEndConfirmation" class="chat-end-confirm" role="status" aria-live="polite">
+            <div>
+              <strong>要结束本次倾诉并生成小结吗？</strong>
+              <span>会整理整段对话；这不是诊断或量表结果。</span>
+            </div>
+            <div class="chat-end-actions">
+              <button type="button" @click="cancelConversationEnd">继续聊</button>
+              <button class="chat-end-primary" type="button" @click="completeConversation">生成小结</button>
+            </div>
+          </section>
 
           <!-- 快捷按钮 -->
           <div class="quick-wrap">
@@ -1335,38 +1360,81 @@
       </div>
     </Transition>
 
+    <!-- 倾诉结束后才出现：像素房间中的液态玻璃小结入口 -->
+    <Transition name="summary-orb">
+      <button
+        v-if="summaryStatus !== 'idle'"
+        ref="summaryOrbButton"
+        class="student-summary-orb"
+        :class="[`is-${summaryStatus}`, { 'has-unread': summaryUnread }]"
+        type="button"
+        :disabled="summaryStatus === 'processing'"
+        :aria-label="summaryOrbLabel"
+        :aria-expanded="showSupportDrawer"
+        @click="openSummaryDrawer"
+      >
+        <span class="summary-orb-pixel" aria-hidden="true">
+          <img src="/images/logo.jpg" alt="" />
+        </span>
+        <span class="summary-orb-copy">
+          <strong>{{ summaryStatus === 'processing' ? '正在整理' : summaryStatus === 'error' ? '整理失败' : '倾诉小结' }}</strong>
+          <small>{{ summaryStatus === 'ready' ? `${conversationSummary?.dominant_emotion || '情绪'} · ${conversationSummary?.intensity || ''}` : summaryStatus === 'error' ? '点此重试' : '请稍候' }}</small>
+        </span>
+        <span v-if="summaryUnread" class="summary-unread-dot" aria-hidden="true"></span>
+      </button>
+    </Transition>
+    <p class="summary-live-region" aria-live="polite" aria-atomic="true">{{ summaryStatus === 'ready' && summaryUnread ? '本次倾诉小结已经整理完成' : '' }}</p>
+
     <!-- 倾诉后的可关闭行动抽屉：保留原房间，只在一次对话完成后出现 -->
     <Transition name="support-drawer">
       <aside v-if="showSupportDrawer" class="student-support-drawer" role="dialog" aria-modal="false" aria-labelledby="support-drawer-title" @click.stop @keydown.esc="closeSupportDrawer">
-        <button ref="supportCloseButton" class="support-close" type="button" aria-label="关闭下一步建议" @click="closeSupportDrawer">×</button>
+        <button ref="supportCloseButton" class="support-close" type="button" aria-label="关闭倾诉小结" @click="closeSupportDrawer">×</button>
 
-        <template v-if="supportDrawerMode === 'plan'">
-          <p class="support-eyebrow">倾诉后的下一步</p>
+        <template v-if="supportDrawerMode === 'plan' && summaryStatus === 'ready' && conversationSummary">
+          <p class="support-eyebrow">本次倾诉小结</p>
           <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是——</h2>
-          <textarea v-if="editingSupportSummary" v-model="supportDraft.summary" maxlength="160" aria-label="修改我听到的内容"></textarea>
-          <p v-else class="support-summary">{{ supportDraft.summary }}</p>
-          <div class="support-summary-actions">
-            <button type="button" @click="editingSupportSummary = !editingSupportSummary">{{ editingSupportSummary ? '保存修改' : '改一改' }}</button>
-            <button type="button" @click="editingSupportSummary = false">先这样</button>
+          <div class="support-emotion-state" :data-level="conversationSummary.intensity">
+            <span class="support-emotion-icon" aria-hidden="true">{{ getEmotionEmoji(conversationSummary.dominant_emotion) }}</span>
+            <div><small>主要情绪</small><strong>{{ conversationSummary.dominant_emotion }} · {{ conversationSummary.intensity }}</strong></div>
           </div>
+          <p class="support-summary">{{ conversationSummary.summary }}</p>
 
-          <fieldset class="support-needs">
-            <legend>此刻你更希望</legend>
-            <button v-for="need in supportNeeds" :key="need" type="button" :aria-pressed="selectedSupportNeed === need" :class="{ active: selectedSupportNeed === need }" @click="selectedSupportNeed = need">{{ need }}</button>
-          </fieldset>
+          <section class="support-evidence" aria-labelledby="support-evidence-title">
+            <h3 id="support-evidence-title">我为什么这样理解</h3>
+            <ul><li v-for="signal in conversationSummary.signals" :key="signal.message_id">{{ signal.observation }}</li></ul>
+          </section>
+
+          <section class="support-need-block">
+            <span>你现在可能更需要</span>
+            <strong>{{ conversationSummary.support_need }}</strong>
+          </section>
+
+          <section v-if="conversationSummary.risk_level === 'professional'" class="support-professional-note" role="note">
+            <strong>建议尽快接入真人专业支持</strong>
+            <p>这些影响已经不适合只靠自己扛着。今天请告诉一位可信成年人，并请对方协助联系学校心理老师、12356或正规医疗机构。</p>
+          </section>
 
           <section class="support-next-step" aria-live="polite">
-            <span>下一步只做这一件</span>
-            <strong>{{ currentSupportAction }}</strong>
+            <span>倾诉后的下一步</span>
+            <ol><li v-for="(action, index) in conversationSummary.next_steps" :key="action" :class="{ primary: index === 0 }">{{ action }}</li></ol>
             <small v-if="supportFeedback">{{ supportFeedback }}</small>
           </section>
 
-          <div class="support-decision-row">
-            <button class="support-primary" type="button" @click="acceptSupportAction">愿意试试</button>
-            <button type="button" @click="cycleSupportAction">换一个</button>
-            <button type="button" @click="declineSupportAction">现在做不到</button>
+          <p class="support-boundary">{{ conversationSummary.boundary }}</p>
+          <div class="support-summary-controls">
+            <button class="support-primary" type="button" @click="continueAfterSummary">继续倾诉</button>
+            <button type="button" @click="startNewConversation">开始新话题</button>
           </div>
           <button class="support-help-link" type="button" @click="supportDrawerMode = 'help'">我想找人帮忙</button>
+          <button class="support-delete-link" type="button" @click="removeConversationSummary">删除本次小结</button>
+        </template>
+
+        <template v-else-if="supportDrawerMode === 'plan'">
+          <p class="support-eyebrow">倾诉后的下一步</p>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">这次没有整理完成</h2>
+          <p class="support-summary">聊天内容还在。你可以继续倾诉，或重新尝试生成小结。</p>
+          <button class="support-primary support-submit-help" type="button" @click="completeConversation">重新整理</button>
+          <button class="support-help-link" type="button" @click="continueAfterSummary">继续倾诉</button>
         </template>
 
         <template v-else-if="supportDrawerMode === 'help'">
@@ -1543,9 +1611,17 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
 import { getMoodStats, getMoodInsight } from '../api/mood'
-import { getChatHistory, sendMessage } from '../api/chat'
+import {
+  completeChatSession,
+  deleteChatSummary,
+  getChatHistory,
+  getLatestChatSummary,
+  sendMessage,
+  startChatSession,
+} from '../api/chat'
 import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
+import StudentAgentRail from '../components/StudentAgentRail.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1559,6 +1635,45 @@ const showSupportDrawer = ref(false)
 const supportCloseButton = ref(null)
 const supportModeHeading = ref(null)
 const chatNavButton = ref(null)
+const summaryOrbButton = ref(null)
+const chatSessionId = ref('')
+const summarySessionId = ref('')
+const showEndConfirmation = ref(false)
+const summaryStatus = ref('idle')
+const summaryUnread = ref(false)
+const conversationSummary = ref(null)
+const showAgentRail = ref(false)
+const studentAgentState = reactive({
+  status: 'standby',
+  phase: 'waiting',
+  riskLevel: 'routine',
+  signal: 'continue',
+  emotion: '',
+  verifiedSteps: [],
+  messageCount: 0,
+  lastEvent: '等待你开始表达，聊天期间不会打断你',
+})
+const studentAgentSteps = computed(() => {
+  const phase = studentAgentState.phase
+  const urgent = studentAgentState.status === 'urgent'
+  const summaryError = studentAgentState.status === 'error' && phase === 'summary'
+  const chatError = phase === 'chat_error'
+  const verified = new Set(studentAgentState.verifiedSteps.map(step => step.id))
+  const workflowStep = id => studentAgentState.verifiedSteps.find(step => step.id === id)
+  const steps = [
+    { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待后端核对本轮表达', status: chatError ? 'error' : verified.has('observation') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
+    { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || '检查危机、伤害与需要成人介入的线索', status: urgent ? 'attention' : verified.has('safety') ? 'completed' : 'waiting' },
+    { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '由后端返回本轮可确认的情绪标签', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
+    { id: 'next_step', label: '支持回应编排', summary: phase === 'end_candidate' ? '本轮回应已完成，等待你确认是否生成完整小结' : workflowStep('response')?.summary || '等待安全检查后生成支持回应', status: urgent ? 'blocked' : phase === 'end_candidate' ? 'attention' : verified.has('response') ? 'completed' : 'waiting' },
+    { id: 'summary', label: '倾诉后小结', summary: summaryError ? '上次整理未完成，可以安全重试' : '结束后整合完整会话并进行输出审查', status: urgent ? 'blocked' : summaryError ? 'error' : phase === 'summary' ? 'running' : phase === 'complete' ? 'completed' : 'waiting' },
+  ]
+  return steps
+})
+const summaryOrbLabel = computed(() => {
+  if (summaryStatus.value === 'processing') return '正在整理本次倾诉'
+  if (summaryStatus.value === 'error') return '倾诉小结整理失败，打开后可以重试'
+  return `打开本次倾诉小结，主要情绪${conversationSummary.value?.dominant_emotion || ''}${conversationSummary.value?.intensity || ''}`
+})
 const supportDrawerMode = ref('plan')
 const editingSupportSummary = ref(false)
 const selectedSupportNeed = ref('做一个小行动')
@@ -1574,10 +1689,13 @@ const currentSupportAction = computed(() => {
   if (selectedSupportNeed.value === '理清这件事') return supportDraft.value.actions?.[1] || '把最困扰你的部分写成一句话'
   return supportDraft.value.actions?.[supportActionIndex.value] || '先停一下，照顾好此刻的自己'
 })
+function focusWithoutScroll(target) {
+  target?.focus?.({ preventScroll: true })
+}
 watch(supportDrawerMode, async () => {
   if (!showSupportDrawer.value) return
   await nextTick()
-  supportModeHeading.value?.focus()
+  focusWithoutScroll(supportModeHeading.value)
 })
 const showHealingPanel = ref(false)
 const showTreeHolePanel = ref(false)
@@ -1970,13 +2088,13 @@ function focusGuideTarget() {
   const selector = guideStage.value === 'confession' ? '.chat-panel .input-wrap input' : '.zone-monitor'
   const target = document.querySelector(selector)
   target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-  if (guideStage.value === 'confession') inputEl.value?.focus()
+  if (guideStage.value === 'confession') focusWithoutScroll(inputEl.value)
 }
 function handleGuideChatTarget() {
   goToChat()
   if (showFirstRunGuide.value && guideStage.value === 'computer') {
     guideStage.value = 'confession'
-    nextTick(() => inputEl.value?.focus())
+    nextTick(() => focusWithoutScroll(inputEl.value))
   }
 }
 function openTreeHoleFromMoodCard() {
@@ -3200,9 +3318,8 @@ const bgImage = computed(() => {
     if (timeOfDay.value === 'evening') return '/images/电脑端-傍晚.jpg'
     return '/images/电脑端-夜晚.jpg'
   }
-  if (timeOfDay.value === 'day') return '/images/手机版-白天.jpg'
-  if (timeOfDay.value === 'evening') return '/images/手机版-傍晚.jpg'
-  return '/images/手机版-夜晚.jpg'
+  if (timeOfDay.value === 'day') return '/images/白天.png'
+  return '/images/夜晚.png'
 })
 
 const greeting = computed(() => {
@@ -3327,38 +3444,57 @@ async function sendChatMsg(text) {
   const msg = text || chatInput.value.trim()
   if (!msg || chatLoading.value) return
   chatInput.value = ''
+  showEndConfirmation.value = false
   chatMessages.value.push({ role: 'user', content: msg })
+  studentAgentState.status = 'running'
+  studentAgentState.phase = 'chat'
+  studentAgentState.verifiedSteps = []
+  studentAgentState.messageCount = chatMessages.value.filter(item => item.role === 'user').length
+  studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
   await nextTick()
   scrollChatBottom()
   chatLoading.value = true
   try {
-    const res = await sendMessage(Number(userStore.userId), msg)
+    if (!chatSessionId.value) {
+      const session = await startChatSession(false)
+      chatSessionId.value = session.data.session_id
+    }
+    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value)
     await nextTick()
     if (res.data?.reply) {
       chatMessages.value.push({ role: 'assistant', content: res.data.reply, emotion: res.data.emotion })
+      chatSessionId.value = res.data.session_id || chatSessionId.value
       completeFirstRunAfterChat(msg, res.data)
-      if (res.data.emotion !== '需要立即协助' && res.data.support) {
-        supportDraft.value = {
-          summary: res.data.support.summary,
-          actions: Array.isArray(res.data.support.actions) ? res.data.support.actions : [],
-        }
-        supportActionIndex.value = 0
-        supportFeedback.value = ''
-        selectedSupportNeed.value = '做一个小行动'
-        selectedSupportPerson.value = ''
-        shareSupportSummary.value = false
-        supportDrawerMode.value = 'plan'
-        showChatPanel.value = false
-        showSupportDrawer.value = true
-        await nextTick()
-        supportCloseButton.value?.focus()
+      showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
+      studentAgentState.signal = res.data.conversation_signal || 'continue'
+      studentAgentState.emotion = res.data.emotion || ''
+      studentAgentState.riskLevel = res.data.risk_level || 'routine'
+      studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
+      if (studentAgentState.signal === 'urgent') {
+        studentAgentState.status = 'urgent'
+        studentAgentState.phase = 'urgent'
+        studentAgentState.riskLevel = 'urgent'
+        studentAgentState.lastEvent = '普通分析已停止，当前优先显示安全协助路径'
+        showAgentRail.value = false
+      } else {
+        studentAgentState.status = 'ready'
+        studentAgentState.phase = showEndConfirmation.value ? 'end_candidate' : 'responded'
+        studentAgentState.lastEvent = showEndConfirmation.value
+          ? '已完成本轮理解，正在等你决定继续聊还是生成小结'
+          : '本轮理解与安全检查已完成，可以继续倾诉'
       }
     } else {
       chatMessages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试...' })
+      studentAgentState.status = 'error'
+      studentAgentState.phase = 'chat_error'
+      studentAgentState.lastEvent = '本轮没有获得有效结果，聊天内容已保留，可以稍后重试'
     }
   } catch (err) {
     console.error('发送失败:', err)
     chatMessages.value.push({ role: 'assistant', content: '网络异常，请检查连接后重试...' })
+    studentAgentState.status = 'error'
+    studentAgentState.phase = 'chat_error'
+    studentAgentState.lastEvent = '本轮协作未完成，聊天内容已保留，可以稍后重试'
   }
   chatLoading.value = false
   loadStats()
@@ -3366,11 +3502,164 @@ async function sendChatMsg(text) {
   scrollChatBottom()
 }
 
+function requestConversationEnd() {
+  if (!chatMessages.value.some(item => item.role === 'user') || chatLoading.value) return
+  showEndConfirmation.value = true
+  studentAgentState.phase = 'end_candidate'
+  studentAgentState.lastEvent = '等待你确认是否结束；未确认前不会生成分析小结'
+  nextTick(() => scrollChatBottom())
+}
+
+function cancelConversationEnd() {
+  showEndConfirmation.value = false
+  studentAgentState.phase = 'responded'
+  studentAgentState.lastEvent = '已继续倾诉，本次会话仍保持打开'
+  nextTick(() => focusWithoutScroll(inputEl.value))
+}
+
+function applySummaryResponse(data, unread = true) {
+  if (data?.status !== 'ready' || !data.summary) return false
+  summarySessionId.value = data.session_id
+  conversationSummary.value = data.summary
+  supportDraft.value = {
+    summary: data.summary.summary,
+    actions: Array.isArray(data.summary.next_steps) ? data.summary.next_steps : [],
+  }
+  supportFeedback.value = ''
+  supportDrawerMode.value = 'plan'
+  summaryStatus.value = 'ready'
+  summaryUnread.value = unread
+  return true
+}
+
+async function completeConversation() {
+  if (!chatSessionId.value || summaryStatus.value === 'processing') return
+  showEndConfirmation.value = false
+  showChatPanel.value = false
+  showSupportDrawer.value = false
+  summaryStatus.value = 'processing'
+  studentAgentState.status = 'running'
+  studentAgentState.phase = 'summary'
+  studentAgentState.lastEvent = '正在整合完整会话、生成下一步并复核输出安全性'
+  showAgentRail.value = true
+  summaryUnread.value = false
+  try {
+    const res = await completeChatSession(chatSessionId.value)
+    if (res.data?.status === 'urgent') {
+      summaryStatus.value = 'idle'
+      showAgentRail.value = false
+      showChatPanel.value = true
+      studentAgentState.status = 'urgent'
+      studentAgentState.phase = 'urgent'
+      studentAgentState.riskLevel = 'urgent'
+      studentAgentState.lastEvent = '小结生成已停止，当前优先执行安全协助流程'
+      return
+    }
+    if (!applySummaryResponse(res.data, true)) throw new Error('invalid summary response')
+    studentAgentState.status = 'ready'
+    studentAgentState.phase = 'complete'
+    studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
+    studentAgentState.emotion = res.data.summary?.dominant_emotion || studentAgentState.emotion
+    studentAgentState.messageCount = res.data.metadata?.message_count || studentAgentState.messageCount
+    studentAgentState.verifiedSteps = [
+      { id: 'observation', status: 'completed', summary: '已整合完整会话中的事件与表达' },
+      { id: 'safety', status: 'completed', summary: '已完成整段会话安全复核' },
+      { id: 'emotion', status: 'completed', summary: '已完成完整会话情绪线索归纳' },
+      { id: 'response', status: 'completed', summary: '已生成并复核支持方案' },
+    ]
+    studentAgentState.lastEvent = res.data.metadata?.degraded
+      ? '小结已通过规则化安全模板完成并可查看'
+      : '完整会话小结与下一步已经生成并通过输出复核'
+  } catch (err) {
+    console.error('小结生成失败:', err)
+    summaryStatus.value = 'error'
+    studentAgentState.status = 'error'
+    studentAgentState.phase = 'summary'
+    studentAgentState.lastEvent = '小结整理未完成，聊天记录仍然保留，可以重试'
+  }
+}
+
+async function openSummaryDrawer() {
+  if (summaryStatus.value === 'processing') return
+  showAgentRail.value = false
+  showSupportDrawer.value = true
+  supportDrawerMode.value = 'plan'
+  summaryUnread.value = false
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  await nextTick()
+  focusWithoutScroll(supportCloseButton.value)
+}
+
 function closeSupportDrawer() {
   showSupportDrawer.value = false
   editingSupportSummary.value = false
   supportFeedback.value = ''
-  nextTick(() => chatNavButton.value?.focus())
+  nextTick(() => {
+    if (summaryOrbButton.value) focusWithoutScroll(summaryOrbButton.value)
+    else focusWithoutScroll(chatNavButton.value)
+  })
+}
+
+async function beginFreshConversation() {
+  const res = await startChatSession(true)
+  chatSessionId.value = res.data.session_id
+  chatMessages.value = []
+  chatInput.value = ''
+  showEndConfirmation.value = false
+  showSupportDrawer.value = false
+  showChatPanel.value = true
+  resetStudentAgentState()
+  await nextTick()
+  focusWithoutScroll(inputEl.value)
+}
+
+async function continueAfterSummary() {
+  try {
+    if (!chatMessages.value.length && summarySessionId.value) {
+      const history = await getChatHistory(Number(userStore.userId), summarySessionId.value)
+      chatMessages.value = Array.isArray(history.data) ? history.data : []
+    }
+    const res = await startChatSession(true, summarySessionId.value || null)
+    chatSessionId.value = res.data.session_id
+    chatInput.value = ''
+    showEndConfirmation.value = false
+    showSupportDrawer.value = false
+    showChatPanel.value = true
+    await nextTick()
+    scrollChatBottom()
+    focusWithoutScroll(inputEl.value)
+  } catch {
+    showChatPanel.value = true
+  }
+}
+
+async function startNewConversation() {
+  try { await beginFreshConversation() } catch { showChatPanel.value = true }
+}
+
+function resetStudentAgentState() {
+  Object.assign(studentAgentState, {
+    status: 'standby', phase: 'waiting', riskLevel: 'routine', signal: 'continue', emotion: '',
+    messageCount: 0, lastEvent: '等待你开始表达，聊天期间不会打断你',
+    verifiedSteps: [],
+  })
+}
+
+async function removeConversationSummary() {
+  if (!summarySessionId.value || !window.confirm('删除后将无法再次查看这份小结。聊天原文不会因此删除，确认删除吗？')) return
+  try {
+    await deleteChatSummary(summarySessionId.value)
+    showSupportDrawer.value = false
+    summaryStatus.value = 'idle'
+    summaryUnread.value = false
+    conversationSummary.value = null
+    summarySessionId.value = ''
+    await nextTick()
+    focusWithoutScroll(chatNavButton.value)
+  } catch (err) {
+    console.error('删除小结失败:', err)
+    supportFeedback.value = '暂时无法删除，请稍后再试。'
+  }
 }
 
 function cycleSupportAction() {
@@ -3479,7 +3768,8 @@ function stopRecording() {
   for (const chunk of audioChunks) { merged.set(new Int16Array(chunk), offset); offset += chunk.byteLength / 2 }
   const wavBuffer = encodeWav(merged.buffer, 16000)
   chatLoading.value = true
-  fetch('/api/chat/asr', { method: 'POST', body: new Blob([wavBuffer], { type: 'audio/wav' }), headers: { 'Content-Type': 'audio/wav' } })
+  const asrUrl = `/api/chat/asr?session_id=${encodeURIComponent(chatSessionId.value || '')}`
+  fetch(asrUrl, { method: 'POST', body: new Blob([wavBuffer], { type: 'audio/wav' }), headers: { 'Content-Type': 'audio/wav' } })
     .then(r => r.json())
     .then(data => { if (data.text) sendChatMsg(data.text); else chatMessages.value.push({ role: 'assistant', content: '没有听清，请再说一次~' }) })
     .catch(() => chatMessages.value.push({ role: 'assistant', content: '语音识别失败，请重试...' }))
@@ -3489,7 +3779,7 @@ function stopRecording() {
 
 function playTTS(text) {
   if (!text) return
-  fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+  fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: chatSessionId.value || null }) })
     .then(r => { if (!r.ok) throw new Error(); return r.blob() })
     .then(blob => {
       const url = URL.createObjectURL(blob)
@@ -3504,13 +3794,36 @@ async function openChatPanel() {
   showChatPanel.value = true
   chatInput.value = ''
   try {
-    const res = await getChatHistory(Number(userStore.userId))
+    const session = await startChatSession(false)
+    chatSessionId.value = session.data.session_id
+    const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     if (res.data?.length) chatMessages.value = res.data
+    else chatMessages.value = []
     scrollChatBottom()
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions(); startPetAnimation() })
+async function loadLatestConversationSummary() {
+  try {
+    const res = await getLatestChatSummary()
+    if (applySummaryResponse(res.data, false)) {
+      studentAgentState.status = 'ready'
+      studentAgentState.phase = 'complete'
+      studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
+      studentAgentState.emotion = res.data.summary?.dominant_emotion || ''
+      studentAgentState.messageCount = res.data.metadata?.message_count || 0
+      studentAgentState.verifiedSteps = [
+        { id: 'observation', status: 'completed', summary: '已整合完整会话中的事件与表达' },
+        { id: 'safety', status: 'completed', summary: '已完成整段会话安全复核' },
+        { id: 'emotion', status: 'completed', summary: '已完成完整会话情绪线索归纳' },
+        { id: 'response', status: 'completed', summary: '已生成并复核支持方案' },
+      ]
+      studentAgentState.lastEvent = '最近一次倾诉小结可再次查看'
+    }
+  } catch {}
+}
+
+onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions(); startPetAnimation(); loadLatestConversationSummary() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (petAnimationTimer) clearInterval(petAnimationTimer)
@@ -4499,12 +4812,38 @@ onUnmounted(() => {
 /* 关闭按钮 */
 .panel-close {
   position: absolute; top: 14px; right: 18px;
-  width: 32px; height: 32px; border-radius: 50%;
+  z-index: 4; width: 44px; height: 44px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.08); color: rgba(200,200,200,0.6);
+  border: 0; background: rgba(255,255,255,0.08); color: rgba(200,200,200,0.6);
   cursor: pointer; transition: all 0.2s;
 }
 .panel-close:hover { background: rgba(255,255,255,0.15); color: white; }
+
+/* 倾诉结束后的小结入口：像素品牌素材 + 可读的液态玻璃 */
+.student-summary-orb {
+  position: fixed; z-index: 238; top: 50%; right: clamp(18px, 3vw, 42px);
+  display: flex; align-items: center; gap: 10px; min-width: 146px; min-height: 58px;
+  padding: 8px 13px 8px 9px; transform: translateY(-50%);
+  border: 1px solid rgba(255,255,255,.22); border-radius: 14px;
+  color: #f5f0e8; background: rgba(19,23,29,.9); backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 5px 8px rgba(5,7,12,.28); cursor: pointer;
+  transition: transform .2s cubic-bezier(.22,1,.36,1), background .2s ease;
+}
+.student-summary-orb:hover { transform: translateY(-50%) translateX(-3px); background: rgba(25,31,36,.96); }
+.student-summary-orb:focus-visible { outline: 3px solid #c8ead9; outline-offset: 4px; }
+.summary-orb-pixel { width: 40px; height: 40px; padding: 3px; border-radius: 9px 9px 9px 3px; background: rgba(188,217,202,.18); }
+.summary-orb-pixel img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; image-rendering: pixelated; }
+.summary-orb-copy { display: grid; gap: 2px; text-align: left; }
+.summary-orb-copy strong { font-size: 13px; line-height: 1.2; }
+.summary-orb-copy small { color: rgba(245,240,232,.74); font-size: 10px; }
+.summary-unread-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 2px; background: #f2d083; box-shadow: 0 0 0 2px rgba(19,23,29,.9); }
+.student-summary-orb.is-processing .summary-orb-pixel { animation: summary-pixel-pulse 1.2s ease-in-out infinite; }
+.student-summary-orb.is-error { border-color: rgba(242,191,171,.55); }
+.student-summary-orb:disabled { cursor: progress; }
+@keyframes summary-pixel-pulse { 50% { opacity: .58; transform: scale(.94); } }
+.summary-orb-enter-active, .summary-orb-leave-active { transition: opacity .2s ease, transform .2s cubic-bezier(.22,1,.36,1); }
+.summary-orb-enter-from, .summary-orb-leave-to { opacity: 0; transform: translate(16px, -50%); }
+.summary-live-region { position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 /* 倾诉后行动抽屉：像素房间保持可见，组件沿用液态玻璃层次 */
 .student-support-drawer {
@@ -4528,12 +4867,28 @@ onUnmounted(() => {
 .student-support-drawer::-webkit-scrollbar { width: 0; }
 .support-close {
   position: absolute; top: 14px; right: 16px;
-  width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%;
+  width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%;
   color: #f5f0e8; background: rgba(255,255,255,.09); font-size: 22px; line-height: 1; cursor: pointer;
 }
 .support-eyebrow { margin: 0 0 8px; color: #a9c8ba; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
 .student-support-drawer h2 { margin: 0 42px 12px 0; font-size: 24px; line-height: 1.25; letter-spacing: .02em; }
 .support-summary { margin: 0; color: rgba(245,240,232,.82); font-size: 15px; line-height: 1.75; }
+.support-emotion-state { display: flex; align-items: center; gap: 11px; margin: 0 0 14px; padding: 12px 13px; border-radius: 12px; background: rgba(143,185,166,.12); }
+.support-emotion-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.08); font-size: 20px; }
+.support-emotion-state div { display: grid; gap: 2px; }
+.support-emotion-state small { color: rgba(245,240,232,.72); font-size: 11px; }
+.support-emotion-state strong { color: #fff; font-size: 15px; }
+.support-evidence { margin: 19px 0 0; }
+.support-evidence h3 { margin: 0 0 8px; color: #dcebe3; font-size: 13px; }
+.support-evidence ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.support-evidence li { position: relative; padding-left: 16px; color: rgba(245,240,232,.8); font-size: 13px; line-height: 1.55; }
+.support-evidence li::before { content: ''; position: absolute; top: .62em; left: 2px; width: 6px; height: 6px; border-radius: 2px; background: #a9c8ba; }
+.support-need-block { display: grid; gap: 5px; margin: 18px 0; padding: 13px 14px; border-radius: 12px; background: rgba(255,255,255,.065); }
+.support-need-block span { color: #a9c8ba; font-size: 11px; font-weight: 700; }
+.support-need-block strong { font-size: 14px; line-height: 1.6; }
+.support-professional-note { margin: 0 0 18px; padding: 14px; border-radius: 12px; color: #fff3dc; background: rgba(157,105,54,.24); }
+.support-professional-note strong { font-size: 14px; }
+.support-professional-note p { margin: 6px 0 0; color: rgba(255,243,220,.88); font-size: 12px; line-height: 1.65; }
 .student-support-drawer textarea {
   width: 100%; min-height: 94px; box-sizing: border-box; resize: vertical;
   padding: 13px; border: 1px solid rgba(169,200,186,.42); border-radius: 14px;
@@ -4552,6 +4907,12 @@ onUnmounted(() => {
 .support-next-step span { color: #a9c8ba; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
 .support-next-step strong { font-size: 16px; line-height: 1.55; }
 .support-next-step small { color: rgba(245,240,232,.88); line-height: 1.5; }
+.support-next-step ol { display: grid; gap: 8px; margin: 0; padding-left: 22px; color: rgba(245,240,232,.78); font-size: 13px; line-height: 1.55; }
+.support-next-step li.primary { color: #fff; font-weight: 700; }
+.support-boundary { margin: 12px 0 0; color: rgba(245,240,232,.68); font-size: 11px; line-height: 1.55; }
+.support-summary-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.support-summary-controls button { min-height: 44px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.13); border-radius: 11px; color: #f5f0e8; background: rgba(255,255,255,.07); cursor: pointer; }
+.support-delete-link { display: block; min-height: 44px; margin: 8px auto 0; padding: 10px; border: 0; color: rgba(245,240,232,.68); background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .support-decision-row { display: grid; grid-template-columns: 1.1fr .8fr 1fr; gap: 8px; margin-top: 14px; }
 .support-primary { color: #17231e !important; border-color: transparent !important; background: linear-gradient(135deg, #bcd9ca, #8fb9a6) !important; font-weight: 700; }
 .support-help-link { display: block; margin: 18px auto 0; color: #bcd9ca; text-decoration: underline; text-underline-offset: 4px; }
@@ -4572,13 +4933,21 @@ onUnmounted(() => {
 .student-support-drawer input:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .support-drawer-enter-active, .support-drawer-leave-active { transition: none; }
+  .support-drawer-enter-active, .support-drawer-leave-active, .summary-orb-enter-active, .summary-orb-leave-active { transition: none; }
+  .student-summary-orb, .student-summary-orb.is-processing .summary-orb-pixel { transition: none; animation: none; }
 }
 
 @media (max-width: 767px) {
-  .student-support-drawer { top: auto; right: 10px; bottom: 10px; left: 10px; width: auto; max-height: 75vh; transform: none; padding: 26px 20px 20px; border-radius: 20px; }
+  .student-summary-orb { top: auto; right: 14px; bottom: calc(76px + env(safe-area-inset-bottom)); min-width: 58px; transform: none; padding: 8px; }
+  .student-summary-orb:hover { transform: translateY(-2px); }
+  .summary-orb-copy { display: none; }
+  .summary-orb-enter-from, .summary-orb-leave-to { opacity: 0; transform: translateY(12px); }
+  .student-support-drawer { top: auto; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; width: auto; max-height: 75vh; transform: none; padding: 26px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 20px; }
   .support-drawer-enter-from, .support-drawer-leave-to { opacity: 0; transform: translateY(24px); }
   .support-needs, .support-decision-row { grid-template-columns: 1fr; }
+  .chat-end-confirm { align-items: stretch; flex-direction: column; }
+  .chat-end-actions { justify-content: flex-end; }
+  .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
 }
 
 /* 头像区 */
@@ -5273,6 +5642,15 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
+.chat-panel .chat-end-button {
+  position: absolute; right: 70px; min-height: 44px; padding: 9px 11px;
+  border: 1px solid rgba(188,217,202,.34); border-radius: 10px;
+  color: #dcebe3; background: rgba(143,185,166,.12); font-size: 12px; cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, opacity .18s ease;
+}
+.chat-panel .chat-end-button:hover:not(:disabled) { background: rgba(143,185,166,.22); border-color: rgba(188,217,202,.58); }
+.chat-panel .chat-end-button:disabled { opacity: .38; cursor: not-allowed; }
+.chat-panel .chat-end-button:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
 .chat-panel .header-center { display: flex; align-items: center; gap: 10px; }
 .chat-panel .ai-avatar { font-size: 28px; }
 .chat-panel .ai-name { font-size: 15px; font-weight: 600; color: #E8E2D8; }
@@ -5293,6 +5671,24 @@ onUnmounted(() => {
   scroll-behavior: smooth; background: transparent;
 }
 .chat-panel .chat-messages::-webkit-scrollbar { width: 0; }
+.chat-end-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin: 0 16px 10px; padding: 12px 14px;
+  border: 1px solid rgba(188,217,202,.32); border-radius: 12px;
+  color: #f5f0e8; background: rgba(35,43,44,.94);
+}
+.chat-end-confirm > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.chat-end-confirm strong { font-size: 13px; line-height: 1.4; }
+.chat-end-confirm span { color: rgba(245,240,232,.76); font-size: 11px; line-height: 1.45; }
+.chat-end-actions { display: flex; gap: 7px; flex-shrink: 0; }
+.chat-end-actions button { min-height: 44px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; color: #f5f0e8; background: rgba(255,255,255,.07); cursor: pointer; }
+.chat-end-actions .chat-end-primary { color: #17231e; border-color: #bcd9ca; background: #bcd9ca; font-weight: 700; }
+.chat-end-actions button:focus-visible { outline: 3px solid #c8ead9; outline-offset: 2px; }
+@media (max-width: 767px) {
+  .chat-end-confirm { align-items: stretch; flex-direction: column; }
+  .chat-end-actions { justify-content: flex-end; }
+  .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
+}
 
 /* 欢迎消息 */
 .chat-panel .welcome-wrap { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
@@ -6204,5 +6600,129 @@ onUnmounted(() => {
 @media (max-width: 640px) {
   .guardian-workbench-entry { top: 12px; right: 12px; min-width: 0; padding: 9px 11px; }
   .guardian-workbench-entry small { display: none; }
+}
+
+/* v5.1 房间界面骨架：像素场景是主角，玻璃只承载状态和导航。 */
+.room {
+  --room-surface: rgba(16, 22, 28, .88);
+  --room-surface-soft: rgba(22, 28, 35, .76);
+  --room-ink: #f7f4ed;
+  --room-muted: rgba(247, 244, 237, .74);
+  --room-accent: #b8d7c7;
+  color: var(--room-ink);
+}
+.top-bar {
+  top: 14px;
+  left: 50%;
+  right: auto;
+  width: max-content;
+  min-width: 214px;
+  padding: 9px 18px 10px;
+  transform: translateX(-50%);
+  border-radius: 14px;
+  background: rgba(15, 20, 26, .72);
+  box-shadow: 0 4px 8px rgba(5, 8, 12, .22);
+  backdrop-filter: blur(16px) saturate(1.14);
+}
+.clock { margin: 0; color: rgba(247, 244, 237, .72); font-size: 11px; text-shadow: none; }
+.greeting-text { color: var(--room-ink); font-size: 15px; letter-spacing: 0; text-shadow: none; }
+.greeting-sub { color: rgba(247, 244, 237, .68); font-size: 10px; text-shadow: none; }
+.engagement-stack { top: 102px; left: 20px; width: min(292px, calc(100vw - 40px)); gap: 9px; }
+.daily-return-card,
+.first-run-guide {
+  border: 0;
+  border-radius: 14px;
+  background: var(--room-surface);
+  box-shadow: 0 6px 8px rgba(5, 8, 12, .25);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+.daily-return-card { padding: 13px; }
+.ritual-glow,
+.pet-companion-card::before { display: none; }
+.ritual-orb { width: 36px; height: 36px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .09); font-size: 18px; }
+.ritual-title { font-size: 15px; }
+.ritual-copy { color: var(--room-muted); font-size: 12px; }
+.daily-check-pill { border: 0; background: rgba(255, 255, 255, .08); color: rgba(247, 244, 237, .78); }
+.daily-check-pill:hover,
+.daily-check-pill.active { background: #e9d59b; color: #2f2615; }
+.ritual-action { min-height: 38px; border-radius: 10px; background: #e9d59b; }
+.pet-companion-card {
+  top: auto;
+  right: 20px;
+  bottom: 104px;
+  width: min(292px, calc(100vw - 40px));
+  grid-template-columns: 62px 1fr;
+  gap: 11px;
+  padding: 13px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--room-surface);
+  box-shadow: 0 6px 8px rgba(5, 8, 12, .25);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+.pet-orb { width: 62px; height: 62px; border: 0; border-radius: 12px; }
+.pet-frame { width: 68px; height: 68px; }
+.pet-body { gap: 4px; }
+.pet-body p { color: var(--room-muted); font-size: 11px; }
+.pet-actions { margin-top: 4px; }
+.pet-actions .pet-open-btn { min-width: 0; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; box-shadow: none; }
+.bottom-nav { bottom: calc(18px + env(safe-area-inset-bottom)); }
+.bottom-nav::before {
+  border: 0;
+  border-radius: 15px;
+  background: rgba(16, 22, 28, .78) !important;
+  box-shadow: 0 6px 8px rgba(5, 8, 12, .25) !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
+}
+.nav-label { font-size: 10px; }
+.student-summary-orb { right: 20px; }
+.student-support-drawer {
+  border: 0;
+  border-radius: 16px;
+  background: rgba(17, 22, 29, .96);
+  box-shadow: 0 7px 8px rgba(5, 8, 12, .34);
+}
+.support-eyebrow { letter-spacing: .04em; }
+.support-primary { background: #bcd9ca !important; }
+.guardian-workbench-entry {
+  top: 14px;
+  right: 20px;
+  border-radius: 12px;
+  background: rgba(15, 20, 26, .82);
+  box-shadow: 0 4px 8px rgba(5, 8, 12, .22);
+  backdrop-filter: blur(16px) saturate(1.14);
+}
+
+@media (max-width: 899px) {
+  .top-bar { left: 12px; min-width: 0; padding: 8px 11px; transform: none; align-items: flex-start; text-align: left; }
+  .greeting-sub { display: none; }
+  .guardian-workbench-entry { top: 12px; right: 12px; }
+  .engagement-stack { top: 76px; bottom: auto; left: 12px; right: auto; width: min(246px, calc(100vw - 24px)); }
+  .daily-return-card { padding: 11px; }
+  .daily-return-card .ritual-copy:first-of-type { display: none; }
+  .pet-companion-card { display: none; }
+  .student-summary-orb { right: 154px; bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .student-support-drawer { border-radius: 16px; }
+}
+
+@media (max-width: 520px) {
+  .engagement-stack { top: 76px; bottom: auto; left: 12px; right: auto; width: min(226px, calc(100vw - 24px)); }
+  .daily-check-row { margin-bottom: 8px; }
+  .ritual-copy { margin-block: 5px 8px; }
+  .student-summary-orb { right: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room *,
+  .room *::before,
+  .room *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+  .room-roaming-pet,
+  .room-roaming-pet img,
+  .splash-fade-leave-active { transition: none; animation: none; }
 }
 </style>

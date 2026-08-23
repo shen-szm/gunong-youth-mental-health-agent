@@ -1,8 +1,12 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Literal
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    RELEASE_VERSION: str = "5.0.0-alpha.3"
+    APP_ENV: Literal["development", "test", "production"] = "development"
+    RELEASE_VERSION: str = "5.1.0-alpha.1"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
     SESSION_COOKIE_NAME: str = "shengyu_session"
@@ -11,6 +15,8 @@ class Settings(BaseSettings):
     AGENT_STEP_DELAY_MS: int = 180
     # 默认禁止把聊天、语音或情绪记录发送给第三方模型；仅合成数据演示可显式开启。
     ALLOW_EXTERNAL_AI: bool = False
+    # 学生自由倾诉包含高度敏感信息；除总开关外，必须单独启用并取得逐会话明确同意。
+    ALLOW_STUDENT_EXTERNAL_AI: bool = False
     # 守护者表单已强制合成数据确认和去标识校验，可单独启用；失败时仍显式降级。
     ALLOW_GUARDIAN_SYNTHETIC_AI: bool = True
 
@@ -40,6 +46,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @model_validator(mode="after")
+    def enforce_production_session_security(self):
+        if self.APP_ENV == "production" and (self.DEMO_MODE or not self.COOKIE_SECURE):
+            raise ValueError("production requires DEMO_MODE=false and COOKIE_SECURE=true")
+        return self
 
 @lru_cache()
 def get_settings():
