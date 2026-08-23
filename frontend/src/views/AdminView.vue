@@ -1,59 +1,65 @@
 <template>
   <div class="teacher-page">
-    <header class="teacher-hero">
-      <div>
-        <p class="eyebrow">咕哝 · 校园心理支持数字员工</p>
-        <h2>教师支持工作台</h2>
-        <p class="hero-copy">从自愿情绪信号到可执行支持任务：完成权限核验、安全分流、原文证据定位、行动草案与回看安排，关键决定始终由教师确认。</p>
+    <aside class="teacher-sidebar" aria-label="教师工作台导航">
+      <div class="teacher-brand">
+        <span aria-hidden="true">咕</span>
+        <div><strong>咕哝教师端</strong><small>校园支持数字员工 · v{{ teacherVersion }}</small><em>{{ userStore.isSuperAdmin ? '管理员教师' : '普通教师' }}</em></div>
       </div>
-      <div class="hero-actions">
-        <button class="ghost-btn" @click="handleBack">返回学生端</button>
-        <button class="danger-btn" @click="handleLogout">退出</button>
-      </div>
-    </header>
-
-    <div v-if="error" class="error-screen">
-      <p>{{ error }}</p>
-      <button class="primary-btn" @click="loadAll">重新加载</button>
-    </div>
-
-    <template v-else>
-      <section class="overview-grid" data-guide="overview">
-        <article class="metric-card strong">
-          <span>班级学生</span>
-          <strong>{{ overview.total_students ?? '--' }}</strong>
-          <small>今日活跃 {{ overview.today_active ?? 0 }} 人</small>
-        </article>
-        <article class="metric-card warning">
-          <span>待处理预警</span>
-          <strong>{{ overview.pending_warnings ?? warningList.length }}</strong>
-          <small>优先处理高风险学生</small>
-        </article>
-        <article class="metric-card">
-          <span>本周平均情绪</span>
-          <strong>{{ formatScore(overview.week_avg_score) }}</strong>
-          <small :class="trendClass">{{ formatChange(overview.week_change) }}</small>
-        </article>
-        <article class="risk-card">
-          <span>风险分布</span>
-          <div class="risk-bars">
-            <b class="risk-low">低 {{ riskCounts.low || 0 }}</b>
-            <b class="risk-mid">中 {{ riskCounts.middle || 0 }}</b>
-            <b class="risk-high">高 {{ riskCounts.high || 0 }}</b>
-          </div>
-        </article>
-      </section>
-
-      <nav class="teacher-tabs" data-guide="tabs">
-        <button :class="{ active: tab === 'cases' }" @click="openTab('cases')">支持工单</button>
-        <button :class="{ active: tab === 'warnings' }" @click="openTab('warnings')">情绪预警</button>
-        <button v-if="userStore.isSuperAdmin" :class="{ active: tab === 'students' }" @click="openTab('students')">学生画像</button>
-        <button :class="{ active: tab === 'lesson' }" @click="openTab('lesson')">AI 班会</button>
-        <button v-if="userStore.isSuperAdmin" :class="{ active: tab === 'approvals' }" @click="openTab('approvals')">权限审批 <span v-if="pendingApprovalCount">{{ pendingApprovalCount }}</span></button>
-        <button v-if="userStore.isSuperAdmin" :class="{ active: tab === 'accounts' }" @click="openTab('accounts')">账号管理</button>
+      <nav ref="teacherNav" class="teacher-nav" data-guide="tabs">
+        <button
+          v-for="item in visibleNavItems"
+          :key="item.id"
+          :data-nav-id="item.id"
+          type="button"
+          :class="{ active: tab === item.id }"
+          :aria-current="tab === item.id ? 'page' : undefined"
+          @click="openTab(item.id)"
+        >
+          <span aria-hidden="true">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+          <em v-if="item.id === 'approvals' && pendingApprovalCount">{{ pendingApprovalCount }}</em>
+        </button>
       </nav>
+      <small class="teacher-nav-hint">左右滑动查看更多职责入口</small>
+      <div class="teacher-sidebar-footer">
+        <span :class="['role-badge', userStore.isSuperAdmin ? 'admin' : 'teacher']">{{ userStore.isSuperAdmin ? '管理员教师' : '普通教师' }}</span>
+        <button type="button" @click="handleBack">返回学生端</button>
+        <button type="button" @click="handleLogout">退出登录</button>
+      </div>
+    </aside>
 
-      <main class="workspace">
+    <div class="teacher-shell">
+      <header class="teacher-topbar">
+        <div>
+          <p>教师支持工作台 / {{ currentTabMeta.group }}</p>
+          <h1>{{ currentTabMeta.label }}</h1>
+        </div>
+        <label class="teacher-search">
+          <span class="sr-only">搜索学生</span>
+          <input ref="teacherSearchInput" v-model="teacherQuery" type="search" placeholder="搜索当前职责范围内的学生" />
+          <kbd>Ctrl/⌘ K</kbd>
+        </label>
+      </header>
+
+      <div v-if="error" class="error-screen">
+        <p>{{ error }}</p>
+        <button class="primary-btn" @click="loadAll">重新加载</button>
+      </div>
+
+      <template v-else>
+        <main class="workspace">
+          <TeacherTodayDashboard
+            v-if="tab === 'today'"
+            :warnings="filteredWarnings"
+            :students="filteredStudents"
+            :approvals="accessRequests"
+            :super-admin="userStore.isSuperAdmin"
+            :refreshing="workspaceRefreshing"
+            @refresh="refreshWorkspace"
+            @open-tab="openTab"
+            @open-item="openTodayItem"
+            @open-student="openTodayStudent"
+          />
         <section v-if="tab === 'cases'" class="panel case-workbench">
           <div class="panel-title">
             <div>
@@ -66,12 +72,12 @@
 
           <div class="case-layout">
             <div class="case-roster" aria-label="学生支持对象列表">
-              <button v-for="student in students" :key="student.id" :aria-pressed="caseStudent?.id === student.id" :class="['case-student', { selected: caseStudent?.id === student.id }]" @click="chooseCaseStudent(student)">
+              <button v-for="student in filteredStudents" :key="student.id" :aria-pressed="caseStudent?.id === student.id" :class="['case-student', { selected: caseStudent?.id === student.id }]" @click="chooseCaseStudent(student)">
                 <span class="avatar">{{ firstChar(studentName(student)) }}</span>
                 <span class="case-student-main"><strong>{{ studentName(student) }}</strong><small>{{ riskText(student.risk_level) }} · {{ student.mood_count }} 条自愿记录</small></span>
                 <em :class="['access-pill', student.access?.status]">{{ student.access?.label }}</em>
               </button>
-              <p v-if="!students.length" class="empty-state">暂无需要处理的学生支持工单。</p>
+              <p v-if="!filteredStudents.length" class="empty-state">当前筛选下暂无支持工单。</p>
             </div>
 
             <article class="case-stage" v-if="caseStudent">
@@ -172,7 +178,7 @@
           <div class="split-layout">
             <div class="warning-list">
               <button
-                v-for="item in warningList"
+                v-for="item in filteredWarnings"
                 :key="item.id"
                 :class="['warning-item', item.risk_level, { selected: selectedWarning?.id === item.id }]"
                 @click="selectWarning(item)"
@@ -184,7 +190,7 @@
                 </span>
                 <em>{{ riskText(item.risk_level) }}</em>
               </button>
-              <p v-if="!warningList.length" class="empty-state">暂无预警。系统检测到风险后会显示在这里。</p>
+              <p v-if="!filteredWarnings.length" class="empty-state">当前筛选下暂无预警。</p>
             </div>
 
             <aside class="detail-card" data-guide="warning-detail"><span class="section-kicker">预警详情</span>
@@ -196,10 +202,10 @@
                   </div>
                   <small>{{ selectedWarning.created_at?.slice?.(0, 16) || '刚刚更新' }}</small>
                 </div>
-                <p class="detail-copy">{{ selectedWarning.detail || selectedWarning.reason || selectedWarning.summary || '该学生近期情绪波动明显，建议尽快查看画像并完成一次跟进。' }}</p>
+                <p class="detail-copy">{{ selectedWarning.detail || selectedWarning.reason || selectedWarning.summary || '近期出现需要教师核对的主动记录，建议结合线下观察完成一次跟进。' }}</p>
                 <div class="suggestion-box">
                   <strong>处理建议</strong>
-                  <p>{{ selectedWarning.suggestion || '先查看近 7 天情绪趋势，再进行一次线下关怀或班主任沟通记录。' }}</p>
+                  <p>{{ selectedWarning.suggestion || '先查看近 7 天主动记录变化，再进行一次低压力的线下关怀并记录学生意愿。' }}</p>
                 </div>
                 <label class="handle-box">
                   <span>处理记录</span>
@@ -207,7 +213,7 @@
                 </label>
                 <div class="detail-actions">
                   <button class="primary-btn" @click="handleWarning">标记已处理</button>
-                  <button class="ghost-btn" @click="openStudentFromWarning">查看学生画像</button>
+                  <button class="ghost-btn" @click="openStudentFromWarning">进入学生记录</button>
                 </div>
               </template>
               <div v-else class="empty-state tall">点击左侧任意预警，查看详情与处理建议。</div>
@@ -215,34 +221,34 @@
           </div>
         </section>
 
-        <section v-if="tab === 'students'" class="panel" data-guide="student-profile">
+        <section v-if="tab === 'students' && userStore.isSuperAdmin" class="panel" data-guide="student-profile">
           <div class="panel-title">
             <div>
-              <h3>学生画像</h3>
-              <p>集中查看学生情绪、活跃度与近期关键词，用于判断是否需要干预。</p>
+              <h3>学生支持记录</h3>
+              <p>查看学生主动记录、标签变化与支持历史。这里只做描述性整理，不作心理测评或诊断。</p>
             </div>
             <button class="ghost-btn" @click="loadStudents">刷新学生</button>
           </div>
           <div class="student-grid">
             <button
-              v-for="student in students"
+              v-for="student in filteredStudents"
               :key="student.id"
               :class="['student-card', { selected: selectedStudent?.id === student.id }]"
               @click="selectStudent(student)"
             >
               <span class="avatar">{{ firstChar(studentName(student)) }}</span>
               <strong>{{ studentName(student) }}</strong>
-              <small>情绪 {{ formatScore(student.avg_mood_score || student.avg_score) }} · 记录 {{ student.mood_count || 0 }} 次</small>
+              <small>{{ student.mood_count || 0 }} 条自愿记录 · {{ riskText(student.risk_level) }}</small>
               <em :class="['risk-label', student.risk_level || 'low']">{{ riskText(student.risk_level) }}</em>
             </button>
           </div>
           <article class="profile-card" v-if="selectedStudent">
             <div>
               <h4>{{ studentName(selectedStudent) }} 的关注摘要</h4>
-              <p>{{ studentProfile.summary || '该学生暂无完整画像，建议结合近期倾诉、心情记录与线下观察综合判断。' }}</p>
+              <p>{{ studentProfile.summary || '当前记录覆盖不足，建议结合学生意愿、近期主动记录与线下观察综合判断。' }}</p>
             </div>
             <div class="profile-metrics">
-              <span>平均情绪 <b>{{ formatScore(studentProfile.avg_score || selectedStudent.avg_mood_score) }}</b></span>
+              <span>数据范围 <b>近30天主动记录</b></span>
               <span>高频词 <b>{{ profileKeywords }}</b></span>
               <span>最近活跃 <b>{{ studentProfile.last_active || selectedStudent.last_active || '--' }}</b></span>
             </div>
@@ -251,22 +257,22 @@
           <section class="emotion-detail-panel" v-if="selectedStudent" data-guide="emotion-detail">
             <div class="panel-title compact">
               <div>
-                <h3>学生情绪细节</h3>
-                <p>恢复原教师端细致视图：趋势、分布、高频词与 AI 心理分析。</p>
+                <h3>学生记录详情</h3>
+                <p>趋势、标签和文本整理仅描述已有记录，不能代表学生整体心理状态。</p>
               </div>
-              <button class="ghost-btn" :disabled="analysisLoading" @click="loadAnalysis">{{ analysisLoading ? '分析中...' : '重新 AI 分析' }}</button>
+              <button class="ghost-btn" :disabled="analysisLoading" @click="loadAnalysis">{{ analysisLoading ? '整理中...' : '重新整理记录' }}</button>
             </div>
             <div class="detail-stats">
               <div class="detail-stat"><p class="ds-value">{{ detail.stats.total_moods ?? 0 }}</p><p class="ds-label">情绪记录</p></div>
               <div class="detail-stat"><p class="ds-value">{{ detail.stats.total_chats ?? 0 }}</p><p class="ds-label">对话次数</p></div>
               <div class="detail-stat"><p class="ds-value">{{ detail.stats.use_days ?? 0 }}</p><p class="ds-label">使用天数</p></div>
-              <div class="detail-stat"><p class="ds-value" :style="{ color: getScoreColor(detail.stats.avg_score) }">{{ formatScore(detail.stats.avg_score) }}</p><p class="ds-label">平均情绪分</p></div>
+              <div class="detail-stat"><p class="ds-value">{{ dominantRecordLabel }}</p><p class="ds-label">常见记录标签</p></div>
             </div>
             <div class="emotion-sections">
-              <div class="chart-section"><h4>📈 心情趋势（近30天）</h4><div class="trend-chart" v-if="detail.trend?.length"><div class="trend-area"><div class="trend-grid" style="top:25%"></div><div class="trend-grid" style="top:50%"></div><div class="trend-grid" style="top:75%"></div><div v-for="d in detail.trend" :key="d.date" class="trend-col"><span class="trend-val">{{ d.avg }}</span><div class="trend-track"><div class="trend-bar" :style="{ height: Math.max(4, Number(d.avg || 0) * 10) + '%', background: getScoreColor(d.avg) }"></div></div><span class="trend-date">{{ String(d.date).slice(5) }}</span></div></div></div><p v-else class="empty-state">暂无趋势数据</p></div>
-              <div class="chart-section"><h4>🎯 情绪分布</h4><div class="dist-bars" v-if="detail.distribution && Object.keys(detail.distribution).length"><div v-for="(count, label) in sortedDist" :key="label" class="dist-row"><span class="dist-emoji">{{ getEmoji(label) }}</span><span class="dist-label">{{ label }}</span><div class="dist-track"><div class="dist-fill" :style="{ width: getDistPct(count) + '%', background: getMoodColor(label) }"></div></div><span class="dist-count">{{ count }}次</span></div></div><p v-else class="empty-state">暂无分布数据</p></div>
+              <div class="chart-section"><h4>主动记录次数（近30天）</h4><div class="trend-chart" v-if="detail.trend?.length"><div class="trend-area"><div class="trend-grid" style="top:25%"></div><div class="trend-grid" style="top:50%"></div><div class="trend-grid" style="top:75%"></div><div v-for="d in detail.trend" :key="d.date" class="trend-col"><span class="trend-count">{{ d.count }}条</span><div class="trend-track"><div class="trend-bar" :style="{ height: Math.max(8, Number(d.count || 0) / maxTrendCount * 100) + '%', background: getMoodColor(d.dominant_label) }"></div></div><span class="trend-date">{{ String(d.date) }}</span></div></div></div><p v-else class="empty-state">近30天暂无主动记录</p></div>
+              <div class="chart-section"><h4>记录标签分布</h4><div class="dist-bars" v-if="detail.distribution && Object.keys(detail.distribution).length"><div v-for="(count, label) in sortedDist" :key="label" class="dist-row"><span class="dist-emoji">{{ getEmoji(label) }}</span><span class="dist-label">{{ label }}</span><div class="dist-track"><div class="dist-fill" :style="{ width: getDistPct(count) + '%', background: getMoodColor(label) }"></div></div><span class="dist-count">{{ count }}次</span></div></div><p v-else class="empty-state">暂无分布数据</p></div>
               <div class="chart-section"><h4>💬 高频词汇</h4><div class="word-cloud-wrap" v-if="normalizedWordCloud.length"><div class="normal-word-cloud"><span v-for="(item, index) in normalizedWordCloud" :key="item.word + index" :class="['word-cloud-item', 'level-' + item.level, 'pos-' + (index % 18)]" :style="{ '--word-size': item.size + 'px', '--word-opacity': item.opacity }">{{ item.word }}</span></div></div><p v-else class="empty-state">暂无词云数据</p></div>
-              <div class="chart-section"><h4>🤖 AI 心理分析</h4><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><div v-else-if="analysisSections.length" class="analysis-sections"><article v-for="section in analysisSections" :key="section.title" :class="['analysis-block', section.kind]"><span>{{ section.label }}</span><h5>{{ section.title }}</h5><ul><li v-for="(item, index) in section.items" :key="index">{{ item }}</li></ul></article></div><p v-else class="analysis-empty">选择学生后会自动生成心理分析建议。</p></div></div>
+              <div class="chart-section"><div class="analysis-title"><h4>{{ analysisHeading }}</h4><small v-if="analysisMeta.generatedAt">{{ analysisMeta.degraded ? '规则注册表' : analysisMeta.source }} · {{ analysisMeta.version }} · {{ formatDateTime(analysisMeta.generatedAt) }}</small></div><div class="analysis-card"><div v-if="analysisLoading" class="analysis-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><div v-else-if="analysisSections.length" class="analysis-sections"><p v-if="analysisMeta.degraded" class="analysis-source">当前为规则化记录整理，不表示外部模型已完成分析。</p><article v-for="section in analysisSections" :key="section.title" :class="['analysis-block', section.kind]"><span>{{ section.label }}</span><h5>{{ section.title }}</h5><ul><li v-for="(item, index) in section.items" :key="index">{{ item }}</li></ul></article></div><p v-else class="analysis-empty">选择学生后会整理已有记录；结果需结合线下观察确认，不作诊断。</p></div></div>
             </div>
           </section>
         </section>
@@ -313,7 +319,7 @@
           </article>
         </section>
 
-        <section v-if="tab === 'accounts'" class="panel">
+        <section v-if="tab === 'accounts' && userStore.isSuperAdmin" class="panel">
           <div class="panel-title">
             <div>
               <h3>账号管理</h3>
@@ -340,14 +346,17 @@
         </section>
       </main>
     </template>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import axios from 'axios'
+import TeacherTodayDashboard from '../components/TeacherTodayDashboard.vue'
+import pkg from '../../package.json'
 import {
   getTeacherOverview,
   getTeacherStudents,
@@ -371,8 +380,13 @@ import {
 const router = useRouter()
 const userStore = useUserStore()
 
-const tab = ref('cases')
+const tab = ref('today')
+const teacherVersion = pkg.version
 const error = ref('')
+const teacherQuery = ref('')
+const teacherSearchInput = ref(null)
+const teacherNav = ref(null)
+const workspaceRefreshing = ref(false)
 const overview = ref({})
 const students = ref([])
 const warningList = ref([])
@@ -381,6 +395,7 @@ const selectedStudent = ref(null)
 const studentProfile = ref({})
 const detail = ref({ stats: {}, trend: [], distribution: {}, word_cloud: [] })
 const analysis = ref('')
+const analysisMeta = ref({ degraded: true, source: '', version: '', generatedAt: '' })
 const analysisLoading = ref(false)
 const templates = ref([])
 const accounts = ref([])
@@ -404,8 +419,26 @@ const reviewNote = ref('')
 const reviewSubmitting = ref(false)
 const assignmentStudentByTeacher = ref({})
 const lessonForm = ref({ template: '', topic: '考前减压与情绪调节', context: '' })
-const riskCounts = computed(() => overview.value.risk_counts || {})
-const trendClass = computed(() => Number(overview.value.week_change || 0) >= 0 ? 'up' : 'down')
+const teacherNavItems = [
+  { id: 'today', label: '今日工作台', icon: '⌂', group: '工作' },
+  { id: 'cases', label: '支持工单', icon: '▣', group: '工作' },
+  { id: 'warnings', label: '情绪预警', icon: '!', group: '工作' },
+  { id: 'students', label: '学生记录', icon: '◎', group: '工作', adminOnly: true },
+  { id: 'lesson', label: 'AI 班会', icon: '◇', group: '工具' },
+  { id: 'approvals', label: '权限审批', icon: '✓', group: '管理', adminOnly: true },
+  { id: 'accounts', label: '账号职责', icon: '⌘', group: '管理', adminOnly: true },
+]
+const visibleNavItems = computed(() => teacherNavItems.filter(item => !item.adminOnly || userStore.isSuperAdmin))
+const currentTabMeta = computed(() => visibleNavItems.value.find(item => item.id === tab.value) || teacherNavItems[0])
+const normalizedTeacherQuery = computed(() => teacherQuery.value.trim().toLowerCase())
+const filteredStudents = computed(() => {
+  if (!normalizedTeacherQuery.value) return students.value
+  return students.value.filter(student => studentName(student).toLowerCase().includes(normalizedTeacherQuery.value))
+})
+const filteredWarnings = computed(() => {
+  if (!normalizedTeacherQuery.value) return warningList.value
+  return warningList.value.filter(item => cleanDisplayName(item.student_name || item.nickname || `学生 ${item.student_id}`).toLowerCase().includes(normalizedTeacherQuery.value))
+})
 const pendingApprovalCount = computed(() => accessRequests.value.filter((item) => item.status === 'pending').length)
 const caseStageTitle = computed(() => {
   const status = caseStudent.value?.access?.status
@@ -418,6 +451,9 @@ const profileKeywords = computed(() => {
   if (!words.length) return '--'
   return words.slice(0, 4).map((w) => w.word || w).join('、')
 })
+const dominantRecordLabel = computed(() => Object.keys(sortedDist.value)[0] || '--')
+const maxTrendCount = computed(() => Math.max(1, ...(detail.value.trend || []).map(item => Number(item.count || 0))))
+const analysisHeading = computed(() => analysisMeta.value.degraded ? '规则化记录整理' : 'Agent 记录整理')
 
 const normalizedWordCloud = computed(() => {
   const raw = Array.isArray(detail.value.word_cloud) ? detail.value.word_cloud : []
@@ -514,6 +550,45 @@ async function loadAll() {
     await Promise.all([loadOverview(), loadWarnings(), loadStudents(), loadTemplates(), loadAccounts(), loadAccessRequests()])
   } catch (e) {
     error.value = '教师端数据加载失败，请确认后端 /api/teacher 服务正常。'
+  }
+}
+
+async function refreshWorkspace() {
+  workspaceRefreshing.value = true
+  try { await loadAll() } finally { workspaceRefreshing.value = false }
+}
+
+async function openTodayItem(item) {
+  if (item.type === 'warning') {
+    tab.value = 'warnings'
+    await selectWarning(item.payload)
+    return
+  }
+  if (item.type === 'approval') {
+    tab.value = 'approvals'
+    prepareReview(item.payload, 'approved')
+    return
+  }
+  if (item.type === 'case') {
+    tab.value = 'cases'
+    chooseCaseStudent(item.payload)
+  }
+}
+
+function openTodayStudent(student) {
+  if (userStore.isSuperAdmin) {
+    tab.value = 'students'
+    selectStudent(student)
+    return
+  }
+  tab.value = 'cases'
+  chooseCaseStudent(student)
+}
+
+function focusTeacherSearch(event) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    teacherSearchInput.value?.focus({ preventScroll: true })
   }
 }
 
@@ -632,6 +707,7 @@ async function selectWarning(item) {
 async function selectStudent(student) {
   selectedStudent.value = student
   analysis.value = ''
+  analysisMeta.value = { degraded: true, source: '', version: '', generatedAt: '' }
   detail.value = { stats: {}, trend: [], distribution: {}, word_cloud: [] }
   try {
     const r = await getStudentProfile(student.id || student.student_id, userStore.userId)
@@ -660,9 +736,16 @@ async function loadAnalysis() {
   analysisLoading.value = true
   try {
     const r = await axios.get(`/api/admin/user-analysis/${studentId}`, { params: { user_id: userStore.userId } })
-    analysis.value = r.data?.analysis || '暂无 AI 分析结果。'
+    analysis.value = r.data?.analysis || '暂无记录整理结果。'
+    analysisMeta.value = {
+      degraded: r.data?.degraded !== false,
+      source: r.data?.source || 'deterministic_record_registry',
+      version: r.data?.version || 'teacher-record-summary-v1',
+      generatedAt: r.data?.generated_at || '',
+    }
   } catch {
-    analysis.value = 'AI 分析暂时不可用，请稍后重试。'
+    analysis.value = '记录整理暂时不可用，请稍后重试。'
+    analysisMeta.value = { degraded: true, source: '', version: '', generatedAt: '' }
   } finally {
     analysisLoading.value = false
   }
@@ -675,11 +758,11 @@ function parseAnalysisSections(text = '') {
     .replace(/#{1,6}\s*/g, '')
     .replace(/\r/g, '')
     .trim()
-  if (!cleaned || cleaned.includes('暂无 AI 分析结果') || cleaned.includes('暂时不可用')) return []
+  if (!cleaned || cleaned.includes('暂无记录整理结果') || cleaned.includes('暂时不可用')) return []
   const markers = [
-    { key: 'summary', label: '状态总览', title: '心理状态总结', words: ['心理状态总结', '状态总结', '整体情绪'] },
-    { key: 'finding', label: '重点发现', title: '关键发现', words: ['关键发现', '发现'] },
-    { key: 'advice', label: '跟进建议', title: '专业建议', words: ['专业建议', '建议'] },
+    { key: 'summary', label: '记录摘要', title: '已有记录呈现了什么', words: ['心理状态总结', '状态总结', '整体情绪', '记录摘要'] },
+    { key: 'finding', label: '需要核对', title: '需要结合线下观察的变化', words: ['关键发现', '发现', '需要核对'] },
+    { key: 'advice', label: '行动草案', title: '可由教师确认的下一步', words: ['专业建议', '建议', '行动草案'] },
   ]
   const sentences = cleaned
     .split(/(?=\d+\.|[。；;]|\n+)/)
@@ -750,6 +833,7 @@ async function assignStudent(teacherAccount) {
 }
 
 async function openTab(name) {
+  if (!visibleNavItems.value.some(item => item.id === name)) return
   tab.value = name
   if (name === 'approvals' && userStore.isSuperAdmin) await loadAccessRequests()
   if (name === 'cases') await loadStudents()
@@ -779,12 +863,6 @@ function getDistPct(count) {
   return total ? (Number(count || 0) / total) * 100 : 0
 }
 
-function formatScore(score) {
-  if (score === undefined || score === null || score === '') return '--'
-  const n = Number(score)
-  return Number.isFinite(n) ? n.toFixed(1) : '--'
-}
-
 function getEmoji(label) {
   return { 开心: '😊', 平静: '😌', 焦虑: '😟', 难过: '😢', 愤怒: '😠' }[label] || '🙂'
 }
@@ -793,33 +871,23 @@ function getMoodColor(label) {
   return { 开心: '#5f9f75', 平静: '#6d9f93', 焦虑: '#d3a13f', 难过: '#769fbd', 愤怒: '#c76558' }[label] || '#7b9088'
 }
 
-function getScoreColor(score) {
-  const n = Number(score || 0)
-  if (n >= 7) return '#5f9f75'
-  if (n >= 5) return '#6d9f93'
-  if (n >= 3) return '#d3a13f'
-  return '#c76558'
-}
-
-
-
-function formatChange(value) {
-  const n = Number(value || 0)
-  if (!n) return '与上周持平'
-  return (n > 0 ? '较上周 +' : '较上周 ') + n.toFixed(1)
-}
-
 function riskText(level = 'low') {
   return { high: '高风险', middle: '中风险', medium: '中风险', low: '低风险', handled: '已处理' }[level] || '待关注'
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', focusTeacherSearch)
   if (!userStore.isAdmin) {
     error.value = '请用教师账号登录'
     return
   }
   loadAll()
 })
+watch(tab, async (activeTab) => {
+  await nextTick()
+  teacherNav.value?.querySelector(`[data-nav-id="${activeTab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', focusTeacherSearch))
 </script>
 
 <style scoped>
@@ -1038,4 +1106,161 @@ textarea { min-height: 96px; resize: vertical; }
 @media (max-width: 620px) { .case-stage-head, .original-list-head, .handoff-card { flex-direction: column; } .role-badge { align-self: stretch; text-align: center; } }
 @media (max-width: 560px) { .overview-grid, .detail-stats { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } .agent-conflict div, .task-row { grid-template-columns: 1fr; } .task-row > span { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* v5.1 教师工作台应用壳：稳定导航承载高密度任务，玻璃仅用于粘性工具栏。 */
+.teacher-page {
+  --teacher-sidebar: #18312a;
+  --teacher-sidebar-2: #214038;
+  --teacher-canvas: #eef2f0;
+  --teacher-surface: #ffffff;
+  --teacher-ink: #22342e;
+  --teacher-muted: #5f716a;
+  --teacher-line: #d9e2de;
+  --teacher-accent: #315e51;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 100dvh;
+  padding: 0;
+  color: var(--teacher-ink);
+  background: var(--teacher-canvas);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.teacher-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: 18px 14px;
+  color: #eff6f3;
+  background: var(--teacher-sidebar);
+}
+.teacher-brand { display: flex; gap: 11px; align-items: center; padding: 4px 7px 20px; }
+.teacher-brand > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #18312a; background: #d9ca94; font: 900 16px/1 ui-monospace, Consolas, monospace; }
+.teacher-brand div { min-width: 0; display: grid; gap: 2px; }
+.teacher-brand strong { font-size: 14px; }
+.teacher-brand small { color: rgba(239, 246, 243, .62); font-size: 10px; }
+.teacher-brand em { color: #d9ca94; font-size: 9px; font-style: normal; }
+.teacher-nav-hint { display: none; }
+.teacher-nav { display: grid; gap: 4px; }
+.teacher-nav button {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  color: rgba(239, 246, 243, .72);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.teacher-nav button > span:first-child { display: grid; place-items: center; width: 24px; height: 24px; color: rgba(239, 246, 243, .72); font: 800 13px/1 ui-monospace, Consolas, monospace; }
+.teacher-nav button:hover { color: #fff; background: rgba(255,255,255,.07); }
+.teacher-nav button.active { color: #fff; background: var(--teacher-sidebar-2); }
+.teacher-nav button.active > span:first-child { color: #d9ca94; }
+.teacher-nav em { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; color: #492e28; background: #e6b6aa; font-size: 10px; font-style: normal; font-weight: 900; }
+.teacher-sidebar-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.1); }
+.teacher-sidebar-footer .role-badge { grid-column: 1 / -1; margin-bottom: 3px; color: #d9ebe4; background: rgba(255,255,255,.08); text-align: center; }
+.teacher-sidebar-footer button { min-height: 36px; padding: 7px; border: 0; border-radius: 8px; color: rgba(239,246,243,.75); background: rgba(255,255,255,.06); font: inherit; font-size: 11px; cursor: pointer; }
+.teacher-sidebar-footer button:hover { color: #fff; background: rgba(255,255,255,.11); }
+.teacher-shell { min-width: 0; }
+.teacher-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  min-height: 76px;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(207, 219, 214, .92);
+  background: rgba(247, 249, 248, .9);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.teacher-topbar p, .teacher-topbar h1 { margin: 0; }
+.teacher-topbar p { color: #64756f; font-size: 11px; }
+.teacher-topbar h1 { margin-top: 3px; color: #20342e; font-size: 20px; letter-spacing: -.02em; }
+.teacher-search { position: relative; width: min(340px, 42vw); }
+.teacher-search input { width: 100%; min-height: 42px; padding: 9px 58px 9px 13px; border: 1px solid #cbd9d3; border-radius: 10px; color: #273a34; background: #fff; font: inherit; font-size: 13px; }
+.teacher-search input::placeholder { color: #61736c; }
+.teacher-search kbd { position: absolute; top: 50%; right: 9px; padding: 3px 6px; border: 1px solid #cbd7d2; border-radius: 6px; color: #5a6e67; background: #f3f6f4; font: 700 10px/1.2 ui-monospace, Consolas, monospace; transform: translateY(-50%); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.workspace { width: min(1480px, 100%); margin: 0 auto; padding: 22px 24px 38px; }
+.workspace > .panel { padding: 20px; border: 0; border-radius: 14px; background: var(--teacher-surface); box-shadow: 0 4px 8px rgba(34, 55, 48, .07); }
+.panel-title { margin-bottom: 16px; }
+.panel-title h3 { margin: 0 0 5px; color: #243a33; font-size: 19px; letter-spacing: -.015em; }
+.panel-title p { max-width: 72ch; margin: 0; color: var(--teacher-muted); font-size: 13px; line-height: 1.55; }
+.section-kicker { margin-bottom: 7px; padding: 3px 7px; border-radius: 6px; color: #3f665a; background: #edf4f1; font-size: 10px; }
+.primary-btn, .ghost-btn, .danger-btn { min-height: 40px; border-radius: 9px; }
+.primary-btn { background: var(--teacher-accent); }
+.ghost-btn { color: #345a4f; background: #edf4f1; }
+.danger-btn { color: #813b32; background: #fae8e4; }
+.primary-btn:hover, .ghost-btn:hover, .danger-btn:hover { transform: none; filter: brightness(.97); }
+.case-layout { grid-template-columns: minmax(250px, .7fr) minmax(460px, 1.3fr); }
+.case-roster { max-height: calc(100dvh - 170px); padding-right: 4px; overflow-y: auto; }
+.case-student, .warning-item, .student-card, .account-row { border-color: #dde6e2; border-radius: 11px; background: #f6f8f7; }
+.case-student.selected, .warning-item.selected, .student-card.selected { border-color: #4f7d70; background: #edf4f1; box-shadow: none; }
+.case-stage { border-color: #dbe4e0; border-radius: 12px; }
+.agent-pipeline article { border: 0; border-radius: 10px; background: #f3f7f5; }
+.evidence-brief, .decision-brief, .agent-conflict, .task-board, .approval-card { border-radius: 12px; }
+.detail-card, .profile-card, .lesson-result, .emotion-detail-panel { border-radius: 12px; }
+.word-cloud-wrap { min-height: 220px; }
+.analysis-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.analysis-title h4 { margin: 0; }
+.analysis-title small, .analysis-source { color: #61736c; font-size: 10px; }
+.analysis-source { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: #f1f5f3; line-height: 1.5; }
+.trend-count { color: #536b63; font-size: 9px; }
+.teacher-page button:focus-visible,
+.teacher-page a:focus-visible,
+.teacher-page textarea:focus-visible,
+.teacher-page input:focus-visible,
+.teacher-page select:focus-visible,
+.original-list:focus-visible { outline: 3px solid #245f82; outline-offset: 2px; }
+
+@media (max-width: 980px) {
+  .teacher-page { grid-template-columns: 196px minmax(0, 1fr); }
+  .teacher-sidebar { padding-inline: 10px; }
+  .workspace { padding-inline: 18px; }
+  .case-layout { grid-template-columns: 1fr; }
+  .case-roster { max-height: 300px; }
+}
+@media (max-width: 760px) {
+  .teacher-page { display: block; }
+  .teacher-sidebar { position: sticky; height: auto; padding: 9px 10px; }
+  .teacher-brand { padding: 0 2px 8px; }
+  .teacher-brand > span { width: 32px; height: 32px; }
+  .teacher-nav { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; }
+  .teacher-nav button { flex: 0 0 auto; grid-template-columns: 20px auto auto; min-height: 44px; width: auto; white-space: nowrap; }
+  .teacher-nav button > span:first-child { width: 20px; }
+  .teacher-nav-hint { display: block; padding: 3px 4px 0; color: rgba(239,246,243,.58); font-size: 9px; }
+  .teacher-sidebar-footer { position: absolute; top: 8px; right: 10px; display: flex; margin: 0; padding: 0; border: 0; }
+  .teacher-sidebar-footer .role-badge { display: none; }
+  .teacher-sidebar-footer button { min-height: 44px; padding-inline: 9px; }
+  .teacher-topbar { top: 114px; min-height: auto; padding: 11px 14px; }
+  .teacher-topbar p { display: none; }
+  .teacher-topbar h1 { font-size: 18px; }
+  .teacher-search { width: min(260px, 56vw); }
+  .workspace { padding: 16px 12px 28px; }
+  .workspace > .panel { padding: 15px; }
+}
+@media (max-width: 520px) {
+  .teacher-topbar { align-items: stretch; flex-direction: column; gap: 8px; }
+  .teacher-search { width: 100%; }
+  .teacher-search input { min-height: 44px; }
+  .panel-title { align-items: stretch; }
+  .panel-title > button { width: 100%; }
+  .case-stage { padding: 14px; }
+  .work-product-grid, .emotion-sections, .detail-stats { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .teacher-page *, .teacher-page *::before, .teacher-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
 </style>

@@ -18,7 +18,9 @@ test('frontend presents privileged users and tools as teacher-facing', async () 
 
   assert.match(room, /教师/)
   assert.match(profile, /教师/)
-  assert.match(portal, /<h2>教师支持工作台<\/h2>/)
+  assert.match(portal, /咕哝教师端/)
+  assert.match(portal, /校园支持数字员工/)
+  assert.match(portal, /今日工作台/)
   assert.match(portal, /请用教师账号登录/)
   assert.match(portal, /u\.role === 'admin_teacher' \? '管理员教师'/)
   assert.match(portal, /u\.is_admin \? '取消教师' : '设为教师'/)
@@ -30,12 +32,12 @@ test('teacher portal restores warning handling and lesson-plan workflow', async 
   const portal = await source('frontend/src/views/AdminView.vue')
   const api = await source('frontend/src/api/teacher.js')
 
-  assert.match(portal, /校园心理支持数字员工/)
+  assert.match(portal, /校园支持数字员工/)
   assert.match(portal, /情绪预警/)
   assert.match(portal, /预警详情/)
   assert.match(portal, /处理记录/)
   assert.match(portal, /标记已处理/)
-  assert.match(portal, /学生画像/)
+  assert.match(portal, /学生支持记录/)
   assert.match(portal, /AI 班会生成/)
   assert.match(portal, /生成班会方案/)
   assert.match(portal, /账号管理/)
@@ -48,7 +50,7 @@ test('teacher portal restores warning handling and lesson-plan workflow', async 
   assert.match(api, /\/students\/\$\{studentId\}\/profile/)
 })
 
-test('teacher portal keeps detailed student emotion analytics', async () => {
+test('teacher portal keeps descriptive student record analytics', async () => {
   const portal = await source('frontend/src/views/AdminView.vue')
 
   assert.match(portal, /emotion-detail-panel/)
@@ -63,6 +65,9 @@ test('teacher portal keeps detailed student emotion analytics', async () => {
   assert.match(portal, /detail\.trend/)
   assert.match(portal, /detail\.distribution/)
   assert.match(portal, /normalizedWordCloud/)
+  assert.match(portal, /主动记录次数（近30天）/)
+  assert.doesNotMatch(portal, /平均情绪/)
+  assert.doesNotMatch(portal, /情绪记录均值/)
 })
 
 test('teacher onboarding guide is removed from the portal', async () => {

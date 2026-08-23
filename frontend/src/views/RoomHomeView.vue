@@ -6769,7 +6769,7 @@ onUnmounted(() => {
   .splash-fade-leave-active { transition: none; animation: none; }
 }
 
-/* v5.1.0-alpha.2：主界面减法系统。场景承担导航，控制层只保留一个状态条和按需操作条。 */
+/* v5.1.0-alpha.3：主界面减法系统。场景承担导航，控制层只保留一个状态条和按需操作条。 */
 .room-status-bar {
   position: fixed;
   top: 14px;

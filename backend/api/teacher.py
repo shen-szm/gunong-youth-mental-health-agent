@@ -1,4 +1,4 @@
-"""教师工作台 API：最小画像、个案查看申请、审批与原文审计访问。"""
+"""教师工作台 API：最小支持摘要、个案查看申请、审批与原文审计访问。"""
 
 from datetime import datetime, timedelta
 import secrets
@@ -66,6 +66,7 @@ def _audit(db: Session, actor: User, action: str, resource_type: str, resource_i
         resource_type=resource_type,
         resource_id=resource_id,
         result=result,
+        created_at=datetime.now(),
     ))
     db.commit()
 
@@ -164,6 +165,26 @@ def _has_urgent_signal(db: Session, student_id: int, since: datetime | None = No
     return any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
 
 
+def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tuple[str, datetime | None]:
+    """A handled warning stays handled until the student creates a newer record."""
+    latest_mood = db.query(MoodRecord).filter(MoodRecord.user_id == student_id).order_by(MoodRecord.created_at.desc()).first()
+    latest_chat = db.query(ChatMessage).filter(
+        ChatMessage.user_id == student_id,
+        ChatMessage.role == "user",
+    ).order_by(ChatMessage.created_at.desc()).first()
+    signal_times = [item.created_at for item in (latest_mood, latest_chat) if item and item.created_at]
+    latest_signal_at = max(signal_times) if signal_times else None
+    latest_followup = db.query(SensitiveAccessLog).filter(
+        SensitiveAccessLog.actor_user_id == teacher.id,
+        SensitiveAccessLog.action == "record_warning_followup",
+        SensitiveAccessLog.resource_type == "student",
+        SensitiveAccessLog.resource_id == str(student_id),
+        SensitiveAccessLog.result == "allowed",
+    ).order_by(SensitiveAccessLog.created_at.desc()).first()
+    handled = bool(latest_followup and (latest_signal_at is None or latest_followup.created_at >= latest_signal_at))
+    return ("handled" if handled else "pending"), latest_signal_at
+
+
 def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
     since = datetime.now() - timedelta(days=30)
     moods = db.query(MoodRecord).filter(MoodRecord.user_id == student_id, MoodRecord.created_at >= since).all()
@@ -202,8 +223,6 @@ def class_overview(db: Session = Depends(get_db), teacher: User = Depends(requir
         "today_active": 0,
         "pending_warnings": sum(level in {"high", "middle"} for level in risks),
         "pending_access_requests": pending if _is_admin_teacher(teacher) else 0,
-        "week_avg_score": 0,
-        "week_change": 0,
         "risk_counts": {level: risks.count(level) for level in ("low", "middle", "high")},
         "teacher_role": "admin_teacher" if _is_admin_teacher(teacher) else "teacher",
     }
@@ -220,7 +239,7 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
         )
         student_query = student_query.filter(User.id.in_(assigned_ids))
     for student in student_query.order_by(User.id).all():
-        risk, avg, count = _risk_for_student(db, student.id)
+        risk, _, count = _risk_for_student(db, student.id)
         chat_count = db.query(ChatMessage).filter(ChatMessage.user_id == student.id, ChatMessage.role == "user").count()
         if student.username.startswith("demo_") and student.username != "demo_student_case" and count + chat_count == 0:
             continue
@@ -228,7 +247,6 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
             "id": student.id,
             "nickname": student.nickname or f"学生{student.id}",
             "risk_level": risk,
-            "avg_mood_score": avg,
             "mood_count": count,
             "access": _student_access_state(db, teacher, student.id),
         })
@@ -249,6 +267,7 @@ def warning_list(db: Session = Depends(get_db), teacher: User = Depends(require_
         risk, _, count = _risk_for_student(db, student.id)
         if risk in {"high", "middle"}:
             urgent = _has_urgent_signal(db, student.id)
+            status, latest_signal_at = _warning_followup_state(db, teacher, student.id)
             rows.append({
                 "id": student.id,
                 "student_id": student.id,
@@ -256,6 +275,8 @@ def warning_list(db: Session = Depends(get_db), teacher: User = Depends(require_
                 "risk_level": risk,
                 "reason": "检测到需要立即核实安全的危机表达" if urgent else f"近30天自愿情绪记录呈{('明显' if risk == 'high' else '一定')}波动（{count}条）",
                 "urgent": urgent,
+                "status": status,
+                "updated_at": latest_signal_at.isoformat() if latest_signal_at else None,
                 "access": _student_access_state(db, teacher, student.id),
             })
     return {"warnings": rows}
@@ -612,7 +633,6 @@ def student_profile(student_id: int, request_id: int | None = None, db: Session 
         MoodRecord.created_at >= since,
         MoodRecord.created_at <= cutoff,
     ).all()
-    avg = round(sum(item.mood_score for item in moods) / len(moods), 1) if moods else 0.0
     negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in moods)
     urgent = _has_urgent_signal(db, student_id, since) if approved is None else any(
         _context_has_urgent_meaning(item.content or "")
@@ -625,7 +645,14 @@ def student_profile(student_id: int, request_id: int | None = None, db: Session 
     ) or any(_context_has_urgent_meaning(item.content or "") for item in moods)
     risk = "high" if urgent or negative_count >= 4 else "middle" if negative_count >= 1 else "low"
     count = len(moods)
-    return {"avg_score": avg, "risk_level": risk, "mood_count": count, "summary": "经授权读取的近30天支持摘要，不构成诊断。", "keywords": []}
+    _audit(db, teacher, "view_student_support_profile", "student", str(student_id), "allowed")
+    return {
+        "risk_level": risk,
+        "mood_count": count,
+        "summary": "经授权整理的近30天主动记录摘要；只描述已有材料，不构成心理测评或诊断。",
+        "keywords": [],
+        "record_window_days": 30,
+    }
 
 
 @router.get("/lesson-plan/templates")

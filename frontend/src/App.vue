@@ -179,4 +179,7 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 .guardian-full .build-badge {
   display: none;
 }
+.admin-full .build-badge {
+  display: none;
+}
 </style>

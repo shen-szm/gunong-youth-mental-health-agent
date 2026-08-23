@@ -63,12 +63,15 @@ class TeacherCaseAccessTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_db
         self.teacher_client = TestClient(app)
         self.admin_client = TestClient(app)
+        self.student_client = TestClient(app)
         self.teacher_client.post("/api/user/login", json={"username": "teacher_a", "password": "TeacherPassword12"})
         self.admin_client.post("/api/user/login", json={"username": "admin_a", "password": "AdminTeacherPassword12"})
+        self.student_client.post("/api/user/login", json={"username": "student_a", "password": "StudentPassword12"})
 
     def tearDown(self):
         self.teacher_client.close()
         self.admin_client.close()
+        self.student_client.close()
         self.engine.dispose()
 
     def test_teacher_requires_approval_before_original_text(self):
@@ -112,6 +115,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
         try:
             self.assertEqual(db.query(StudentCaseAccessRequest).filter_by(id=request_id, status="approved").count(), 1)
             self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="view_student_original_content", actor_user_id=self.teacher_id).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="view_student_support_profile", actor_user_id=self.teacher_id).count(), 2)
             request = db.query(StudentCaseAccessRequest).filter_by(id=request_id).one()
             request.expires_at = datetime.now() - timedelta(seconds=1)
             db.commit()
@@ -123,6 +127,20 @@ class TeacherCaseAccessTests(unittest.TestCase):
         direct = self.admin_client.get(f"/api/teacher/students/{self.student_id}/case-context")
         self.assertEqual(direct.status_code, 200)
         self.assertEqual(direct.json()["access_basis"], "admin_direct")
+        direct_profile = self.admin_client.get(f"/api/teacher/students/{self.student_id}/profile")
+        self.assertEqual(direct_profile.status_code, 200)
+        self.assertNotIn("avg_score", direct_profile.json())
+        descriptive_detail = self.admin_client.get(f"/api/admin/user-detail/{self.student_id}", params={"days": 30})
+        self.assertEqual(descriptive_detail.status_code, 200)
+        self.assertTrue(all("avg" not in item for item in descriptive_detail.json()["trend"]))
+        self.assertTrue(all({"date", "count", "dominant_label"}.issubset(item) for item in descriptive_detail.json()["trend"]))
+        self.assertEqual(self.admin_client.get(f"/api/admin/user-detail/{self.student_id}", params={"days": 31}).status_code, 422)
+        record_summary = self.admin_client.get(f"/api/admin/user-analysis/{self.student_id}")
+        self.assertEqual(record_summary.status_code, 200)
+        self.assertTrue(record_summary.json()["degraded"])
+        self.assertEqual(record_summary.json()["source"], "deterministic_record_registry")
+        self.assertTrue(record_summary.json()["version"])
+        self.assertTrue(record_summary.json()["generated_at"])
 
         submitted = self.teacher_client.post(
             f"/api/teacher/students/{self.student_id}/access-requests",
@@ -146,6 +164,49 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(self.admin_client.post("/api/chat/send", json={"user_id": self.student_id, "message": "伪造学生消息"}).status_code, 403)
         self.assertEqual(self.admin_client.post("/api/mood/record", json={"user_id": self.student_id, "label": "平静", "score": 6, "content": "伪造记录"}).status_code, 403)
         self.assertEqual(self.admin_client.get("/api/admin/chats").status_code, 410)
+
+        db = self.Session()
+        try:
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="view_student_support_profile", actor_user_id=self.admin_id).count(), 1)
+        finally:
+            db.close()
+
+    def test_warning_followup_persists_until_a_new_student_record(self):
+        initial = self.teacher_client.get("/api/teacher/warning-list")
+        self.assertEqual(initial.status_code, 200)
+        item = next(row for row in initial.json()["warnings"] if row["student_id"] == self.student_id)
+        self.assertEqual(item["status"], "pending")
+
+        handled = self.teacher_client.post(
+            f"/api/teacher/warning/{self.student_id}/handle",
+            json={"note": "已完成一次低压力线下关怀并记录学生意愿"},
+        )
+        self.assertEqual(handled.status_code, 200)
+        refreshed = self.teacher_client.get("/api/teacher/warning-list").json()["warnings"]
+        self.assertEqual(next(row for row in refreshed if row["student_id"] == self.student_id)["status"], "handled")
+
+        new_record = self.student_client.post("/api/mood/record", json={
+            "user_id": self.student_id,
+            "label": "焦虑",
+            "score": 3,
+            "content": "新增的主动记录",
+        })
+        self.assertEqual(new_record.status_code, 200)
+        after_new_signal = self.teacher_client.get("/api/teacher/warning-list").json()["warnings"]
+        self.assertEqual(next(row for row in after_new_signal if row["student_id"] == self.student_id)["status"], "pending")
+        handled_again = self.teacher_client.post(
+            f"/api/teacher/warning/{self.student_id}/handle",
+            json={"note": "已核对刚产生的主动记录并安排后续关注"},
+        )
+        self.assertEqual(handled_again.status_code, 200)
+        immediate_refresh = self.teacher_client.get("/api/teacher/warning-list").json()["warnings"]
+        self.assertEqual(next(row for row in immediate_refresh if row["student_id"] == self.student_id)["status"], "handled")
+
+    def test_teacher_student_list_does_not_expose_emotion_average(self):
+        response = self.teacher_client.get("/api/teacher/student-list")
+        self.assertEqual(response.status_code, 200)
+        item = next(row for row in response.json()["students"] if row["id"] == self.student_id)
+        self.assertNotIn("avg_mood_score", item)
 
     def test_work_product_is_audited_traceable_and_requires_same_access(self):
         self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/work-product").status_code, 403)

@@ -30,6 +30,7 @@ async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), curr
         mood_label=data.label,
         mood_score=data.score,
         content=data.content,
+        created_at=datetime.now(),
     )
     db.add(record)
     db.commit()

@@ -89,7 +89,7 @@ def get_chats(user_id: int | None = None, limit: int = 500, db: Session = Depend
 
 
 @router.get("/user-detail/{target_user_id}")
-def get_user_detail(target_user_id: int, user_id: int | None = None, days: int = 30, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
+def get_user_detail(target_user_id: int, user_id: int | None = None, days: int = Query(30, ge=1, le=30), db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
     """获取用户详情：基本信息 + 心情趋势 + 情绪分布 + 高频词"""
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
@@ -109,7 +109,7 @@ def get_user_detail(target_user_id: int, user_id: int | None = None, days: int =
     if first_chat:
         use_days = (datetime.now() - first_chat.created_at).days + 1
 
-    # ── 心情趋势（按日平均分） ──
+    # ── 主动记录变化（按日次数与常见标签，不输出分数） ──
     since = datetime.now() - timedelta(days=days)
     moods = db.query(MoodRecord).filter(
         MoodRecord.user_id == target_user_id,
@@ -119,8 +119,17 @@ def get_user_detail(target_user_id: int, user_id: int | None = None, days: int =
     daily = {}
     for m in moods:
         day = m.created_at.strftime("%m-%d")
-        daily.setdefault(day, []).append(m.mood_score)
-    trend = [{"date": d, "avg": round(sum(s) / len(s), 1)} for d, s in sorted(daily.items())]
+        bucket = daily.setdefault(day, {"count": 0, "labels": {}})
+        bucket["count"] += 1
+        bucket["labels"][m.mood_label] = bucket["labels"].get(m.mood_label, 0) + 1
+    trend = [
+        {
+            "date": day,
+            "count": bucket["count"],
+            "dominant_label": max(bucket["labels"], key=bucket["labels"].get),
+        }
+        for day, bucket in sorted(daily.items())
+    ]
 
     # ── 情绪分布 ──
     dist = {}
@@ -173,7 +182,7 @@ def get_user_detail(target_user_id: int, user_id: int | None = None, days: int =
             "total_moods": total_moods,
             "total_chats": total_chats,
             "use_days": use_days,
-            "avg_score": round(sum(m.mood_score for m in moods) / len(moods), 1) if moods else 0,
+            "record_window_days": days,
         },
         "trend": trend,
         "distribution": dist,
@@ -183,7 +192,7 @@ def get_user_detail(target_user_id: int, user_id: int | None = None, days: int =
 
 @router.get("/user-analysis/{target_user_id}")
 async def get_user_analysis(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
-    """AI 心理分析：总结用户心理状态并给出建议"""
+    """整理已有主动记录，供管理员教师结合线下观察复核。"""
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -200,18 +209,26 @@ async def get_user_analysis(target_user_id: int, user_id: int | None = None, db:
     ).order_by(MoodRecord.created_at.asc()).all()
 
     if not moods:
-        return {"analysis": "该用户暂无足够数据进行分析。"}
+        return {
+            "analysis": "近30天暂无足够主动记录。当前不能形成可靠摘要，建议以学生意愿和线下观察为准。",
+            "degraded": True,
+            "source": "deterministic_record_registry",
+            "version": "teacher-record-summary-v1",
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+        }
 
     from collections import Counter
     dist = Counter(m.mood_label for m in moods)
     dist_str = "、".join([f"{label}({count}次)" for label, count in dist.most_common()])
-    avg_score = round(sum(m.mood_score for m in moods) / len(moods), 1)
-
     return {
         "analysis": (
-            f"最近30天共记录{len(moods)}次，情绪记录均值为{avg_score}/10；分布为{dist_str}。"
-            "这是基于现有记录的统计摘要，不是诊断。聊天正文和昵称不会通过该接口发送给第三方；"
-            "教师只能据此提供低压力支持和必要转介，不能据此作医学或纪律判断。"
+            f"记录摘要：近30天共存在{len(moods)}次学生主动记录，已记录标签分布为{dist_str}。"
+            "需要核对：这些内容只覆盖学生主动留下的片段，不能代表其完整心理状态，需要与学生意愿和线下观察相互印证。"
+            "行动草案：先进行一次低压力关怀并询问学生希望获得的支持；如出现明确安全风险，立即按校园危机流程升级。"
+            "不得据此作医学、纪律或人格判断。聊天正文和昵称不会通过该接口发送给第三方。"
         ),
         "degraded": True,
+        "source": "deterministic_record_registry",
+        "version": "teacher-record-summary-v1",
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
