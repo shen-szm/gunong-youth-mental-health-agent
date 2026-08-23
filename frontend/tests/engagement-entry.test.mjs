@@ -5,9 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const GUIDE_TITLE = '\u8ddf\u7740\u63d0\u793a\u70b9\u4e24\u4e0b\uff0c\u9a6c\u4e0a\u4f1a\u7528\u5495\u54dd'
-const CLICK_COMPUTER = '\u8bf7\u70b9\u51fb\u623f\u95f4\u91cc\u7684\u7535\u8111'
-const CLICK_TREEHOLE = '\u8bf7\u70b9\u51fb\u5e95\u90e8\u5bfc\u822a\u7684\u6811\u6d1e'
+const GUIDE_TITLE = '\u5148\u4ece\u623f\u95f4\u91cc\u7684\u7535\u8111\u5f00\u59cb'
 const FIRST_CONFESSION_PROMPT = '\u628a\u4eca\u5929\u6700\u60f3\u8bf4\u7684\u4e00\u53e5\u8bdd\u4e22\u7ed9\u6211'
 const MOOD_CARD_TITLE = '\u4eca\u65e5\u5fc3\u60c5\u5361'
 const DAILY_RETURN_TITLE = '\u4eca\u5929\u4e5f\u7ed9\u81ea\u5df1\u7559\u4e00\u5206\u949f'
@@ -32,7 +30,7 @@ function functionBody(src, name) {
 test('room home offers first-run teaching for new visitors', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /first-run-guide/)
+  assert.match(room, /room-onboarding-cue/)
   assert.match(room, new RegExp(GUIDE_TITLE))
   assert.match(room, /handleGuideChatTarget/)
   assert.match(room, /handleGuideTreeholeTarget/)
@@ -67,11 +65,14 @@ test('v4.3 first-run mood card directs users to tree hole resonance', async () =
   assert.match(room, /localStorage\.setItem\(FIRST_RUN_MOOD_CARD_KEY/)
 })
 
-test('v4.3 daily return card includes task check-in and companionship streak', async () => {
+test('daily check-in is consolidated into the room status and action system', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
+  const actionBar = await source('frontend/src/components/RoomActionBar.vue')
 
-  assert.match(room, /daily-return-card/)
   assert.match(room, new RegExp(DAILY_RETURN_TITLE))
+  assert.match(room, /room-status-checkin/)
+  assert.match(room, /selectRoomFeature\('daily', \$event\)/)
+  assert.match(actionBar, /room-action-moods/)
   assert.match(room, /dailyCheckInOptions/)
   assert.match(room, /selectDailyMood/)
   assert.match(room, /completeDailyTask/)
@@ -88,39 +89,39 @@ test('v4.3 daily return card includes task check-in and companionship streak', a
   assert.match(completeTaskBody, /updateCompanionshipStreak\(\)/)
 })
 
-test('room home replaces the old daily ritual with a daily return card', async () => {
+test('room home removes the old daily card while preserving its task loop', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /daily-return-card" v-else/)
+  assert.doesNotMatch(room.slice(0, room.indexOf('<script setup>')), /daily-return-card/)
   assert.match(room, /dailyReturnTask/)
   assert.match(room, /dailyReturnTasks/)
   assert.match(room, /completeDailyTask/)
-  assert.match(room, /showTreeHolePanel.value = true/)
+  assert.match(room, /openWorkspacePanel\('treehole'\)/)
   assert.doesNotMatch(room, /daily-ritual-card" v-else/)
   assert.doesNotMatch(room, /dailyRitualSeed/)
   assert.doesNotMatch(room, /openDailyRitualAction/)
   assert.doesNotMatch(room, /shengyu_daily_ritual_seen/)
 })
 
-test('engagement cards are responsive and do not block core room interactions', async () => {
+test('one responsive action bar replaces stacked engagement cards', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
+  const actionBar = await source('frontend/src/components/RoomActionBar.vue')
 
-  assert.match(room, /\.engagement-stack/)
-  assert.match(room, /pointer-events:\s*none/)
-  assert.match(room, /\.daily-return-card,[\s\S]*?\.first-run-guide[\s\S]*?pointer-events:\s*auto/)
-  assert.match(room, /@media \(max-width: 520px\)[\s\S]*?\.engagement-stack/)
+  assert.match(room, /<RoomActionBar/)
+  assert.match(room, /selectedRoomFeature/)
+  assert.match(room, /runSelectedRoomFeature/)
+  assert.match(actionBar, /bottom:\s*calc\(112px \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(actionBar, /bottom:\s*calc\(100px \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(actionBar, /@media \(max-width: 640px\)/)
 })
 
 test('onboarding highlights the exact room target users should click', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /guide-target-hint/)
-  assert.match(room, new RegExp(CLICK_COMPUTER))
-  assert.match(room, new RegExp(CLICK_TREEHOLE))
   assert.match(room, /:class="\['hot-zone zone-monitor'/)
   assert.match(room, /guideStage === 'computer'/)
   assert.match(room, /'is-guide-target': showFirstRunGuide && guideStage === 'computer'/)
-  assert.match(room, /@click="handleGuideChatTarget"/)
+  assert.match(room, /@click\.stop="selectRoomFeature\('chat', \$event\)"/)
   assert.match(room, /@click="handleGuideTreeholeTarget"/)
   assert.match(room, /guide-target-badge/)
 })
@@ -139,8 +140,7 @@ test('air-conditioner and TV mini tools are removed completely', async () => {
 test('student room includes mood-aware pet companion loop', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /pet-companion-card/)
-  assert.match(room, /咕哝小伙伴/)
+  assert.doesNotMatch(room.slice(0, room.indexOf('<script setup>')), /pet-companion-card/)
   assert.match(room, /PET_COMPANION_STATE_KEY/)
   assert.match(room, /petCompanionState/)
   assert.match(room, /petMoodStatus/)
@@ -157,15 +157,11 @@ test('student room includes mood-aware pet companion loop', async () => {
   assert.match(room, /openPetPlayground/)
   assert.match(room, /pet-playground-stage/)
   assert.match(room, /ROOM_PET_POSITION_KEY/)
-  assert.match(room, /进入宠物互动/)
-  assert.match(room, /@click\.stop="openPetPlayground"/)
+  assert.match(room, /@click\.stop="selectRoomFeature\('pet', \$event\)"/)
   assert.match(room, /@click\.stop="petPetting"/)
   assert.match(room, /@click\.stop="feedPetSnack"/)
   assert.match(room, /@click\.stop="talkWithPet"/)
-  assert.match(room, /\.pet-companion-card \{[\s\S]*?position:\s*fixed/)
-  assert.match(room, /\.pet-companion-card \{[\s\S]*?right:\s*24px/)
-  assert.match(room, /\.pet-actions button \{[\s\S]*?min-width:\s*74px/)
-  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.pet-companion-card \{[\s\S]*?left:\s*12px/)
+  assert.match(room, /id: 'pet'[\s\S]*?actionLabel: '\u548c\u5b83\u5f85\u4e00\u4f1a'/)
   assert.match(room, /PET_COMPANION_PROFILES/)
   assert.match(room, /petCompanionActive/)
   assert.match(room, /pet-companion-list/)

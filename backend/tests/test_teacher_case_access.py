@@ -20,7 +20,7 @@ from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
 
 
@@ -159,6 +159,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
             db.commit()
         finally:
             db.close()
+
         product = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
         self.assertEqual(product.status_code, 200)
         payload = product.json()
@@ -194,6 +195,28 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="confirmed_work_product_task", actor_user_id=self.admin_id).count(), 1)
         finally:
             db.close()
+
+    def test_direct_work_product_uses_business_cutoff_across_utc_date_boundary(self):
+        first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(first.status_code, 200)
+        payload = first.json()
+        db = self.Session()
+        try:
+            snapshot = db.query(TeacherWorkProductSnapshot).filter_by(product_id=payload["case_id"]).one()
+            snapshot.created_at = datetime.now() - timedelta(days=1)
+            db.commit()
+        finally:
+            db.close()
+
+        confirmed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/work-product/task-decisions",
+            json={"product_id": payload["case_id"], "task_index": 0, "decision": "confirmed"},
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        regenerated = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(regenerated.status_code, 200)
+        self.assertEqual(regenerated.json()["case_id"], payload["case_id"])
+        self.assertIn(0, regenerated.json()["confirmed_task_indices"])
 
     def test_direct_snapshot_is_superseded_when_a_new_urgent_signal_arrives(self):
         first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")

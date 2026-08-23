@@ -27,7 +27,7 @@ test('agent rail communicates urgent, failure and accessible states', () => {
   assert.match(room, /普通分析已停止/)
   assert.match(room, /status === 'urgent'[\s\S]*?showAgentRail\.value = false/)
   assert.match(room, /studentAgentState\.status = 'error'/)
-  assert.match(room, /async function openSummaryDrawer\(\)[\s\S]*?showAgentRail\.value = false/)
+  assert.match(room, /async function openSummaryDrawer\(\)[\s\S]*?closeRoomWorkspaces\('support'\)/)
   assert.match(rail, /aria-live="polite"/)
   assert.match(rail, /aria-expanded="open"/)
   assert.match(rail, /收起咕哝智能体进度/)

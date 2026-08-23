@@ -21,14 +21,14 @@ test('first-run guide requires a chat confession before completion', async () =>
   assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
 })
 
-test('daily ritual card has richer visual hierarchy and action categories', async () => {
+test('daily return is available through the unified status and action system', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
+  const actionBar = await source('frontend/src/components/RoomActionBar.vue')
 
-  assert.match(room, /ritual-orb/)
-  assert.match(room, /ritual-meta-row/)
-  assert.match(room, /ritual-chip/)
+  assert.match(room, /room-status-checkin/)
+  assert.match(room, /RoomActionBar/)
+  assert.match(actionBar, /room-action-moods/)
   assert.match(room, /倾诉/)
-  assert.match(room, /共鸣/)
   assert.match(room, /治愈/)
 })
 
@@ -38,7 +38,7 @@ test('window hotspot label is hidden until hover and uses subtle copy', async ()
   assert.doesNotMatch(room, />出去看看</)
   assert.doesNotMatch(room, /<h2>[^<]*出去看看<\/h2>/)
   assert.doesNotMatch(room, />窗外有新风景</)
-  assert.match(room, />看看窗外</)
+  assert.match(room, /看看窗外/)
   assert.match(room, /\.window-label \{[\s\S]*?opacity:\s*0/)
   assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
 })
@@ -51,9 +51,9 @@ test('patch release continues from latest baseline and records changelog', async
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '5.1.0-alpha.1')
-  assert.equal(lock.version, '5.1.0-alpha.1')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.1')
+  assert.equal(pkg.version, '5.1.0-alpha.2')
+  assert.equal(lock.version, '5.1.0-alpha.2')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.2')
   assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
   assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)
   assert.match(changelog, /4\.5\.2 -> 4\.5\.3/)

@@ -91,6 +91,12 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 .room-full .page-content {
   padding: 0;
 }
+.app-container.room-full {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-bottom: 0;
+  overflow: hidden;
+}
 .page-content {
   padding: 16px;
 }
@@ -163,6 +169,12 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 }
 .room-full .build-badge {
   bottom: 8px;
+}
+@media (max-width: 760px) {
+  .room-full .build-badge {
+    right: 8px;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
 }
 .guardian-full .build-badge {
   display: none;

@@ -18,135 +18,61 @@
       <img class="room-bg" :src="bgImage" alt="温馨房间" />
     </div>
 
-    <!-- 顶部信息栏 -->
-    <div class="top-bar">
-      <div class="clock">{{ currentTime }}</div>
-      <div class="greeting-text">{{ greeting }}，{{ displayNickname }}</div>
-      <div class="greeting-sub">今天过得怎么样？</div>
-    </div>
-    <RouterLink v-if="!showSplash" class="guardian-workbench-entry" to="/teacher-login?redirect=/admin">
-      <span>教师支持工作台</span>
-      <small>申请个案权限并启动 Agent 工单</small>
-    </RouterLink>
+    <!-- 顶部状态条：只保留今日上下文，不再堆叠独立卡片。 -->
+    <header v-if="!showSplash" class="room-status-bar">
+      <div class="room-status-greeting">
+        <time>{{ currentTime }}</time>
+        <strong>{{ greeting }}，{{ displayNickname }}</strong>
+      </div>
+      <button type="button" class="room-status-checkin" :aria-pressed="selectedRoomFeatureId === 'daily'" @click.stop="selectRoomFeature('daily', $event)">
+        <span aria-hidden="true">{{ dailyReturnTask.emoji }}</span>
+        <span>
+          <small>今日状态</small>
+          <strong>{{ dailyStatusLabel }}</strong>
+        </span>
+      </button>
+      <button type="button" class="room-status-utility" :aria-label="`刷新天气，当前${temperature}度`" @click.stop="refreshWeather">
+        <span aria-hidden="true">{{ weatherEmoji }}</span>
+        <span>{{ temperature }}°</span>
+      </button>
+      <button type="button" class="room-status-utility" :aria-label="musicOn ? '关闭背景音乐' : '开启背景音乐'" @click.stop="toggleMusic">
+        <span aria-hidden="true">{{ musicOn ? 'Ⅱ' : '▷' }}</span>
+        <span>声音</span>
+      </button>
+    </header>
     <StudentAgentRail
       v-if="!showSplash"
       :open="showAgentRail"
       :state="studentAgentState"
       :steps="studentAgentSteps"
-      @toggle="showAgentRail = !showAgentRail"
+      @toggle="toggleAgentRail"
       @close="showAgentRail = false"
     />
-    <!-- 复访引导：每日仪式 + 首次教学 -->
-    <div class="engagement-stack" v-if="!showSplash">
-      <section class="first-run-guide" v-if="showFirstRunGuide">
-        <template v-if="guideStage !== 'mood-card'">
-          <div class="guide-title">先完成一次小倾诉，马上会用咕哝</div>
-          <p class="guide-copy">跟着提示点两下，马上会用咕哝。跟着三步走：先点电脑，再发出一句话，最后去树洞看看今日心情卡。</p>
-          <div class="guide-progress-row">
-            <span :class="['guide-progress-dot', { active: guideStage === 'computer', done: guideStage !== 'computer' }]">1</span>
-            <span class="guide-progress-line"></span>
-            <span :class="['guide-progress-dot', { active: guideStage === 'confession', done: guideStage === 'mood-card' }]">2</span>
-            <span class="guide-progress-line"></span>
-            <span :class="['guide-progress-dot', { active: guideStage === 'mood-card' }]">3</span>
-          </div>
-          <div class="guide-target-hint" v-if="guideStage === 'computer'">
-            <span class="guide-target-kicker">现在请点击</span>
-            <strong>请点击房间里的电脑</strong>
-            <em>电脑位置会发光，点它就能打开倾诉窗口。</em>
-          </div>
-          <div class="guide-target-hint" v-else>
-            <span class="guide-target-kicker">下一步</span>
-            <strong>在倾诉窗口发出一句话</strong>
-            <em>把今天最想说的一句话丢给我，收到回复后会生成今日心情卡。</em>
-          </div>
-          <button class="guide-option is-primary" @click="focusGuideTarget">
-            <span class="guide-option-icon">👆</span>
-            <span>
-              <strong>{{ guideStage === 'computer' ? '带我去点电脑' : '带我去输入一句话' }}</strong>
-              <em>{{ guideStage === 'computer' ? '看房间里的电脑高亮' : '倾诉输入框已经准备好' }}</em>
-            </span>
-          </button>
-          <button class="guide-secondary" @click="skipFirstRunGuide">跳过教学</button>
-        </template>
-        <template v-else>
-          <div class="guide-mood-card">
-            <div class="guide-mood-meta">
-              <span>{{ firstRunMoodCard.emoji }}</span>
-              <small>今日心情卡</small>
-              <strong>{{ firstRunMoodCard.emotion || '被认真听见' }}</strong>
-            </div>
-            <p class="guide-copy">{{ firstRunMoodCard.summary }}</p>
-            <p class="guide-mood-suggestion">{{ firstRunMoodCard.suggestion }}</p>
-            <button class="guide-option is-primary" @click="openTreeHoleFromMoodCard">
-              <span class="guide-option-icon">🌳</span>
-              <span>
-                <strong>去树洞看看</strong>
-                <em>请点击底部导航的树洞，看看有没有人也在经历类似的心情。</em>
-              </span>
-            </button>
-          </div>
-        </template>
-      </section>
-
-      <section class="daily-return-card" v-else>
-        <div class="ritual-glow"></div>
-        <div class="ritual-meta-row">
-          <div class="ritual-orb">{{ dailyReturnTask.emoji }}</div>
-          <div>
-            <div class="ritual-kicker">今日咕哝</div>
-            <div class="ritual-date">第 {{ companionshipStreak }} 天回来看看自己</div>
-          </div>
-        </div>
-        <div class="ritual-title">今天也给自己留一分钟</div>
-        <p class="ritual-copy">你已经陪自己 {{ companionshipStreak }} 天了</p>
-        <p class="ritual-copy">{{ dailyReturnTask.copy }}</p>
-        <div class="daily-check-row" aria-label="今日心情快速签到">
-          <button
-            v-for="option in dailyCheckInOptions"
-            :key="option"
-            type="button"
-            :class="['daily-check-pill', { active: dailyReturnState.mood === option }]"
-            @click="selectDailyMood(option)"
-          >
-            {{ option }}
-          </button>
-        </div>
-        <button class="ritual-action" @click="completeDailyTask">
-          {{ dailyReturnState.completedTask ? '今天已完成，继续照顾自己' : dailyReturnTask.actionText }}
-        </button>
-      </section>
-
-      <section class="pet-companion-card">
-        <div class="pet-orb" :class="`is-${petMoodStatus}`">
-          <img class="pet-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
-        </div>
-        <div class="pet-body">
-          <div class="pet-kicker">咕哝小伙伴</div>
-          <h3>{{ petAffinityLabel }}</h3>
-          <p>{{ petCompanionMessage }}</p>
-          <div class="pet-meta-row">
-            <span>亲密度 {{ petCompanionState.affinity }}</span>
-            <span>陪伴 {{ companionshipStreak }} 天</span>
-          </div>
-          <div class="pet-actions">
-            <button type="button" class="pet-open-btn" @click.stop="openPetPlayground">进入宠物互动</button>
-          </div>
-        </div>
-      </section>
-    </div>
+    <aside v-if="!showSplash && showFirstRunGuide" class="room-onboarding-cue" aria-live="polite">
+      <span class="room-onboarding-step">{{ guideStage === 'mood-card' ? '完成' : guideStage === 'confession' ? '2/2' : '1/2' }}</span>
+      <div>
+        <strong>{{ guideStage === 'mood-card' ? '第一次倾诉已经被接住' : guideStage === 'confession' ? '把最想说的一句话告诉咕哝' : '先从房间里的电脑开始' }}</strong>
+        <small>{{ guideStage === 'mood-card' ? firstRunMoodCard.summary : guideStage === 'confession' ? '倾诉窗口已经准备好。' : '电脑会打开一个安静的倾诉空间。' }}</small>
+      </div>
+      <button type="button" @click="guideStage === 'mood-card' ? openTreeHoleFromMoodCard() : focusGuideTarget()">
+        {{ guideStage === 'mood-card' ? '去树洞看看' : '带我开始' }}
+      </button>
+      <button v-if="guideStage !== 'mood-card'" type="button" class="room-onboarding-skip" aria-label="跳过首次引导" @click="skipFirstRunGuide">×</button>
+    </aside>
     <button
       v-if="!showSplash"
       type="button"
       :class="['room-roaming-pet', { moving: petIsMoving }]"
       :style="{ left: `${roomPetPosition.x}px`, top: `${roomPetPosition.y}px` }"
-      @click.stop="openPetPlayground"
+      :aria-pressed="selectedRoomFeatureId === 'pet'"
+      @click.stop="selectRoomFeature('pet', $event)"
     >
       <img :src="selectedPetFrame" :alt="selectedPetVisual.name" />
-      <span>{{ petRoamingBubble }}</span>
+      <span>{{ petIsMoving ? petRoamingBubble : petCompanionMessage }}</span>
     </button>
-    <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="showPetCompanionPanel = false">
-      <section class="pet-panel-card pet-playground-card">
-        <button type="button" class="pet-panel-close" @click="showPetCompanionPanel = false">×</button>
+    <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="closeWorkspacePanel('pet')">
+      <section class="pet-panel-card pet-playground-card" data-workspace="pet" @keydown.esc="closeWorkspacePanel('pet')">
+        <button type="button" class="pet-panel-close" aria-label="关闭宠物互动" @click="closeWorkspacePanel('pet')">×</button>
         <div class="pet-panel-head">
           <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
             <img class="pet-panel-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
@@ -159,7 +85,7 @@
         </div>
         <div class="pet-panel-meta">
           <span>亲密度 {{ petCompanionState.affinity }}</span>
-          <span>陪伴 {{ companionshipStreak }} 天</span>
+          <span>随时回来都可以</span>
         </div>
         <div class="pet-playground-stage">
           <div class="pet-stage-hint">点击房间任意位置，它会跑过去陪你</div>
@@ -170,7 +96,7 @@
           <button type="button" @click.stop="petPetting">摸摸它</button>
           <button type="button" @click.stop="feedPetSnack">喂点心</button>
           <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
-          <button type="button" @click.stop="showPetCompanionPanel = false">回到房间</button>
+          <button type="button" @click.stop="closeWorkspacePanel('pet')">回到房间</button>
         </div>
         <div class="pet-visual-picker">
           <div class="pet-section-title">
@@ -231,40 +157,25 @@
         </div>
       </section>
     </div>
-    <!-- 全局音乐开关 -->
-    <button class="global-music-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
-      <span v-if="musicOn">🔊</span>
-      <span v-else>🔇</span>
+    <!-- 交互热区 — 电脑（倾诉） -->
+    <button type="button" :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && guideStage === 'computer', 'is-selected': selectedRoomFeatureId === 'chat' }]" :aria-pressed="selectedRoomFeatureId === 'chat'" aria-label="电脑：打开倾诉空间" @click.stop="selectRoomFeature('chat', $event)">
+      <span class="hover-tip">电脑 · 倾诉</span>
+      <div v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</div>
     </button>
 
-    <!-- 窗外天气浮层 -->
-    <div class="weather-float" @click="refreshWeather">
-      <span>{{ weatherEmoji }}</span>
-      <span>{{ temperature }}°C</span>
-    </div>
-
-    <!-- 音乐推荐按钮 -->
-    <!-- 已改为热区形式，见下方 zone-speaker -->
-
-    <!-- 音乐切换按钮（隐藏，功能移至面板内） -->
-    <!-- 交互热区 — 电脑（倾诉） -->
-    <div :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && guideStage === 'computer' }]" @click="handleGuideChatTarget">
-      <div class="hover-tip">💬 倾诉</div>
-      <div v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</div>
-    </div>
-
     <!-- 交互热区 — 床（情绪回顾） -->
-    <div class="hot-zone zone-bed" @click="goToTrend">
-      <div class="bed-label">回顾近期的情绪</div>
-    </div>
+    <button type="button" :class="['hot-zone zone-bed', { 'is-selected': selectedRoomFeatureId === 'trend' }]" :aria-pressed="selectedRoomFeatureId === 'trend'" aria-label="床头：回顾近期情绪" @click.stop="selectRoomFeature('trend', $event)">
+      <span class="bed-label">床头 · 情绪回顾</span>
+    </button>
 
     <!-- 交互热区 — 窗户（悬浮提示） -->
-    <div class="hot-zone zone-window" @click="showTransportPanel = true">
-      <div class="window-label">看看窗外</div>
-    </div>
+    <button type="button" :class="['hot-zone zone-window', { 'is-selected': selectedRoomFeatureId === 'window' }]" :aria-pressed="selectedRoomFeatureId === 'window'" aria-label="窗户：看看窗外" @click.stop="selectRoomFeature('window', $event)">
+      <span class="window-label">窗边 · 看看窗外</span>
+    </button>
 
     <!-- 交互热区 — 音响1（音乐推荐） -->
-    <div class="hot-zone zone-speaker zone-speaker-left" @click="openMusicPanel">
+    <button type="button" :class="['hot-zone zone-speaker zone-speaker-left', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
+      <span class="hover-tip">音响 · 音乐</span>
       <div class="speaker-notes">
         <span class="note n1">🎵</span>
         <span class="note n2">🎶</span>
@@ -272,10 +183,11 @@
         <span class="note n4">🎵</span>
         <span class="note n5">♫</span>
       </div>
-    </div>
+    </button>
 
     <!-- 交互热区 — 音响2（音乐推荐） -->
-    <div class="hot-zone zone-speaker zone-speaker-right" @click="openMusicPanel">
+    <button type="button" :class="['hot-zone zone-speaker zone-speaker-right', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
+      <span class="hover-tip">音响 · 音乐</span>
       <div class="speaker-notes">
         <span class="note n1">🎶</span>
         <span class="note n2">♫</span>
@@ -283,7 +195,16 @@
         <span class="note n4">♪</span>
         <span class="note n5">🎶</span>
       </div>
-    </div>
+    </button>
+
+    <RoomActionBar
+      :feature="selectedRoomFeature"
+      :moods="dailyCheckInOptions"
+      :selected-mood="dailyReturnState.mood"
+      @primary="runSelectedRoomFeature"
+      @select-mood="selectDailyMood"
+      @close="clearRoomFeature"
+    />
 
 
     <nav class="bottom-nav">
@@ -295,7 +216,7 @@
         </div>
         <span class="bnav-label">倾诉</span>
       </button>
-      <button class="bnav-item" @click="showHealingPanel = true">
+      <button class="bnav-item" @click="openWorkspacePanel('healing')">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
@@ -315,7 +236,7 @@
         </div>
         <span class="bnav-label">树洞</span>
       </button>
-      <button class="bnav-item" @click="showReportPanel = true">
+      <button class="bnav-item" @click="openWorkspacePanel('report')">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -529,11 +450,11 @@
 
     <!-- ══ 出去看看 — 交通工具选择 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showTransportPanel" class="profile-overlay" @click="showTransportPanel = false">
-        <div class="profile-panel transport-panel" @click.stop>
-          <div class="panel-close" @click="showTransportPanel = false">
+      <div v-if="showTransportPanel" class="profile-overlay" @click.self="closeWorkspacePanel('transport')">
+        <div class="profile-panel transport-panel" data-workspace="transport" @click.stop @keydown.esc="closeWorkspacePanel('transport')">
+          <button type="button" class="panel-close" aria-label="关闭出发方式" @click="closeWorkspacePanel('transport')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
+          </button>
           <div class="trend-header">
             <h2>🚪 选择出发方式</h2>
             <p>请选择你的交通工具</p>
@@ -946,11 +867,11 @@
 
     <!-- ══ 音乐推荐面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showMusicPanel" class="profile-overlay" @click="showMusicPanel = false">
-        <div class="profile-panel music-panel" @click.stop>
-          <div class="panel-close" @click="showMusicPanel = false">
+      <div v-if="showMusicPanel" class="profile-overlay" @click.self="closeWorkspacePanel('music')">
+        <div class="profile-panel music-panel" data-workspace="music" @click.stop @keydown.esc="closeWorkspacePanel('music')">
+          <button type="button" class="panel-close" aria-label="关闭音乐推荐" @click="closeWorkspacePanel('music')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
+          </button>
 
           <!-- 标题 -->
           <div class="trend-header">
@@ -1111,14 +1032,14 @@
 
     <!-- ══ 情绪回顾面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showTrendPanel" class="profile-overlay" @click="showTrendPanel = false">
-        <div class="profile-panel trend-panel" @click.stop>
+      <div v-if="showTrendPanel" class="profile-overlay" @click.self="closeWorkspacePanel('trend')">
+        <div class="profile-panel trend-panel" data-workspace="trend" @click.stop @keydown.esc="closeWorkspacePanel('trend')">
           <!-- 关闭按钮 -->
-          <div class="panel-close" @click="showTrendPanel = false">
+          <button type="button" class="panel-close" aria-label="关闭情绪回顾" @click="closeWorkspacePanel('trend')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 18L18 6M6 6l12 12"/>
             </svg>
-          </div>
+          </button>
 
           <!-- 标题 -->
           <div class="trend-header">
@@ -1144,18 +1065,9 @@
           <!-- 统计卡片 -->
           <div class="stats-row" v-else>
             <div class="stat-card main-stat">
-              <div class="score-wrap">
-                <svg class="score-ring" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>
-                  <circle cx="40" cy="40" r="34" fill="none" :stroke="trendScoreColor" stroke-width="6"
-                    stroke-linecap="round" stroke-dasharray="213.6"
-                    :stroke-dashoffset="213.6 - 213.6 * ((trendStats.avg_score || 0) / 10)"
-                    transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s ease"/>
-                </svg>
-                <div class="main-score" :style="{color: trendScoreColor}">{{ trendStats.avg_score || '--' }}</div>
-              </div>
-              <div class="main-label">平均情绪分</div>
-              <div class="main-hint" :style="{color: trendScoreColor}">{{ trendScoreHint }}</div>
+              <div class="main-score">{{ trendStats.count || 0 }}</div>
+              <div class="main-label">自愿记录</div>
+              <div class="main-hint">描述性整理，不是心理测评</div>
             </div>
             <div class="side-stats">
               <div class="stat-card side-card">
@@ -1171,7 +1083,7 @@
 
           <!-- 折线图 -->
           <div class="card chart-card" v-if="trendStats.trend?.length">
-            <div class="card-title">📈 情绪走势</div>
+            <div class="card-title">记录标签变化</div>
             <div class="line-chart-wrap">
               <svg class="line-chart" viewBox="0 0 300 100" preserveAspectRatio="none">
                 <line v-for="y in [20,50,80]" :key="y" x1="0" :y1="y" x2="300" :y2="y" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
@@ -1193,7 +1105,7 @@
 
           <!-- 情绪分布 -->
           <div class="card" v-if="trendStats.distribution && Object.keys(trendStats.distribution).length">
-            <div class="card-title">🎯 情绪分布</div>
+            <div class="card-title">记录标签分布</div>
             <div class="dist-list">
               <div v-for="(count, label) in sortedDist" :key="label" class="dist-row">
                 <span class="dist-emoji">{{ getMoodEmoji(label) }}</span>
@@ -1224,7 +1136,7 @@
 
           <!-- AI 洞察 -->
           <div class="card insight-card" v-if="trendStats.trend?.length">
-            <div class="card-title">🤖 AI情绪洞察</div>
+            <div class="card-title">Agent 记录整理</div>
             <div class="insight-content">
               <div v-if="trendInsightLoading" class="insight-loading">
                 <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -1233,7 +1145,7 @@
             </div>
             <button class="refresh-btn" @click="loadTrendInsight" :disabled="trendInsightLoading">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right:4px"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-              重新分析
+              重新整理
             </button>
           </div>
         </div>
@@ -1242,10 +1154,10 @@
 
     <!-- ══ 聊天面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showChatPanel" class="profile-overlay" @click="showChatPanel = false">
-        <div class="profile-panel chat-panel" @click.stop>
+      <div v-if="showChatPanel" class="profile-overlay" @click.self="closeWorkspacePanel('chat')">
+        <div class="profile-panel chat-panel" data-workspace="chat" @click.stop @keydown.esc="closeWorkspacePanel('chat')">
           <!-- 关闭按钮 -->
-          <button class="panel-close" type="button" aria-label="关闭倾诉面板" @click="showChatPanel = false">
+          <button class="panel-close" type="button" aria-label="关闭倾诉面板" @click="closeWorkspacePanel('chat')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 18L18 6M6 6l12 12"/>
             </svg>
@@ -1622,6 +1534,7 @@ import {
 import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
+import RoomActionBar from '../components/RoomActionBar.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1643,15 +1556,19 @@ const summaryStatus = ref('idle')
 const summaryUnread = ref(false)
 const conversationSummary = ref(null)
 const showAgentRail = ref(false)
+const selectedRoomFeatureId = ref('')
+let roomFeatureTrigger = null
+let workspaceTrigger = null
+let activeWorkspaceKey = ''
 const studentAgentState = reactive({
   status: 'standby',
   phase: 'waiting',
-  riskLevel: 'routine',
+  riskLevel: 'unassessed',
   signal: 'continue',
   emotion: '',
   verifiedSteps: [],
   messageCount: 0,
-  lastEvent: '等待你开始表达，聊天期间不会打断你',
+  lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
 })
 const studentAgentSteps = computed(() => {
   const phase = studentAgentState.phase
@@ -1669,6 +1586,14 @@ const studentAgentSteps = computed(() => {
   ]
   return steps
 })
+function toggleAgentRail() {
+  const next = !showAgentRail.value
+  if (next) {
+    closeRoomWorkspaces('agent')
+    clearRoomFeature()
+  }
+  showAgentRail.value = next
+}
 const summaryOrbLabel = computed(() => {
   if (summaryStatus.value === 'processing') return '正在整理本次倾诉'
   if (summaryStatus.value === 'error') return '倾诉小结整理失败，打开后可以重试'
@@ -1701,6 +1626,51 @@ const showHealingPanel = ref(false)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
+
+function closeRoomWorkspaces(except = '') {
+  const panels = roomWorkspacePanels()
+  Object.entries(panels).forEach(([key, panel]) => {
+    if (key !== except) panel.value = false
+  })
+  if (except !== 'agent') showAgentRail.value = false
+}
+
+function roomWorkspacePanels() {
+  return {
+    profile: showProfilePanel,
+    chat: showChatPanel,
+    support: showSupportDrawer,
+    healing: showHealingPanel,
+    treehole: showTreeHolePanel,
+    report: showReportPanel,
+    pet: showPetCompanionPanel,
+    transport: showTransportPanel,
+    music: showMusicPanel,
+    trend: showTrendPanel,
+  }
+}
+
+function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement) {
+  closeRoomWorkspaces(key)
+  selectedRoomFeatureId.value = ''
+  const panel = roomWorkspacePanels()[key]
+  if (!panel) return
+  workspaceTrigger = trigger?.focus ? trigger : workspaceTrigger
+  activeWorkspaceKey = key
+  panel.value = true
+  nextTick(() => {
+    const focusTarget = document.querySelector(`[data-workspace="${key}"] .panel-close, [data-workspace="${key}"] .pet-panel-close`)
+    focusWithoutScroll(focusTarget)
+  })
+}
+
+function closeWorkspacePanel(key) {
+  const panel = roomWorkspacePanels()[key]
+  if (panel) panel.value = false
+  if (activeWorkspaceKey !== key) return
+  activeWorkspaceKey = ''
+  nextTick(() => focusWithoutScroll(workspaceTrigger))
+}
 
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
 const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
@@ -1774,26 +1744,34 @@ function loadRoomPetPosition() {
   try {
     const saved = JSON.parse(localStorage.getItem(ROOM_PET_POSITION_KEY) || 'null')
     if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
-      return { x: Number(saved.x), y: Number(saved.y) }
+      return safeRoomPetPosition(Number(saved.x), Number(saved.y))
     }
   } catch {}
-  return { x: Math.max(120, window.innerWidth - 180), y: Math.max(220, window.innerHeight - 180) }
+  return safeRoomPetPosition(window.innerWidth * .72, window.innerHeight * .76)
+}
+function safeRoomPetPosition(x, y) {
+  const minX = Math.max(92, window.innerWidth * .38)
+  const maxX = Math.max(minX, window.innerWidth - 58)
+  const minY = Math.max(220, window.innerHeight * .58)
+  const maxY = Math.max(minY, window.innerHeight - 96)
+  return {
+    x: Math.min(Math.max(x, minX), maxX),
+    y: Math.min(Math.max(y, minY), maxY),
+  }
 }
 function saveRoomPetPosition() {
   localStorage.setItem(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
 }
 function openPetPlayground() {
-  showPetCompanionPanel.value = true
+  openWorkspacePanel('pet')
 }
 function handleRoomPetMove(event) {
   if (showSplash.value || showPetCompanionPanel.value) return
   const target = event.target
-  if (target?.closest?.('button, a, input, textarea, select, .hot-zone, .bottom-nav, .engagement-stack, .global-music-btn, .weather-float, .transport-panel, .profile-panel, .chat-panel, .report-panel, .healing-panel, .treehole-panel')) return
-  const padding = 52
-  const nextX = Math.min(Math.max(event.clientX, padding), window.innerWidth - padding)
-  const nextY = Math.min(Math.max(event.clientY, 120), window.innerHeight - 96)
-  roomPetPosition.x = nextX
-  roomPetPosition.y = nextY
+  if (target?.closest?.('button, a, input, textarea, select, .hot-zone, .bottom-nav, .room-status-bar, .room-onboarding-cue, .room-action-bar, .transport-panel, .profile-panel, .chat-panel, .report-panel, .healing-panel, .treehole-panel')) return
+  const next = safeRoomPetPosition(event.clientX, event.clientY)
+  roomPetPosition.x = next.x
+  roomPetPosition.y = next.y
   saveRoomPetPosition()
   petIsMoving.value = true
   if (petMoveTimer) clearTimeout(petMoveTimer)
@@ -1960,11 +1938,11 @@ function loadPetCompanionState() {
         taskDate: saved.taskDate || '',
         mood: saved.mood || '',
         status: saved.status || 'okay',
-        message: saved.message || '我在这里，等你回来。',
+        message: saved.message || '我在这里，想靠近时就来坐坐。',
       }
     }
   } catch {}
-  return { affinity: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '我在这里，等你回来。' }
+  return { affinity: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '我在这里，想靠近时就来坐坐。' }
 }
 function savePetCompanionState() {
   localStorage.setItem(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState }))
@@ -1974,11 +1952,96 @@ const petMoodStatus = computed(() => {
   return petCompanionState.status || 'okay'
 })
 const petAffinityLabel = computed(() => {
-  if (petCompanionState.affinity >= 8) return '它已经习惯等你回来'
-  if (petCompanionState.affinity >= 4) return '它开始记得你常来的时间'
+  if (petCompanionState.affinity >= 8) return '你们已经很熟悉了'
+  if (petCompanionState.affinity >= 4) return '你们正在慢慢熟悉'
   return '它还在慢慢认识你'
 })
 const petCompanionMessage = computed(() => petCompanionState.message || pickPetMessage(petMoodStatus.value))
+const dailyStatusLabel = computed(() => {
+  if (dailyReturnState.date === todayKey && dailyReturnState.mood) return dailyReturnState.mood
+  return '留下一句话'
+})
+const roomFeatures = computed(() => ({
+  chat: {
+    id: 'chat',
+    symbol: '▣',
+    location: '电脑',
+    title: '说说现在的感受',
+    description: '正常聊天不会被分析面板打断，结束后由你决定是否生成小结。',
+    actionLabel: '开始倾诉',
+  },
+  trend: {
+    id: 'trend',
+    symbol: '⌁',
+    location: '床头',
+    title: '回顾近期的情绪',
+    description: '查看近期记录和变化，只呈现已有数据与明确边界。',
+    actionLabel: '打开回顾',
+  },
+  window: {
+    id: 'window',
+    symbol: '◇',
+    location: '窗边',
+    title: '换个地方透透气',
+    description: '离开房间片刻，看看城市和远方的风景。',
+    actionLabel: '看看窗外',
+  },
+  music: {
+    id: 'music',
+    symbol: '♫',
+    location: '音响',
+    title: '听一点适合此刻的声音',
+    description: '根据当前时间与已记录状态整理音乐建议。',
+    actionLabel: '打开音乐',
+  },
+  pet: {
+    id: 'pet',
+    symbol: '·',
+    location: selectedPetVisual.value.name,
+    title: petAffinityLabel.value,
+    description: petCompanionMessage.value,
+    actionLabel: '和它待一会',
+  },
+  daily: {
+    id: 'daily',
+    symbol: '✦',
+    location: '今日状态',
+    title: '今天也给自己留一分钟',
+    description: dailyReturnTask.value.copy,
+    actionLabel: dailyReturnState.mood ? dailyReturnTask.value.actionText : '先选择上方状态',
+    actionDisabled: !dailyReturnState.mood,
+  },
+}))
+const selectedRoomFeature = computed(() => roomFeatures.value[selectedRoomFeatureId.value] || null)
+
+function selectRoomFeature(id, event) {
+  if (!roomFeatures.value[id]) return
+  closeRoomWorkspaces()
+  roomFeatureTrigger = event?.currentTarget || roomFeatureTrigger
+  selectedRoomFeatureId.value = id
+}
+
+function clearRoomFeature(restoreFocus = true) {
+  selectedRoomFeatureId.value = ''
+  if (restoreFocus) nextTick(() => focusWithoutScroll(roomFeatureTrigger))
+}
+
+function runSelectedRoomFeature() {
+  const id = selectedRoomFeatureId.value
+  if (id === 'daily') {
+    if (!dailyReturnState.mood) return
+    clearRoomFeature(false)
+    completeDailyTask()
+    return
+  }
+  clearRoomFeature(false)
+  if (id === 'chat') { handleGuideChatTarget(); return }
+  if (id === 'trend') { goToTrend(); return }
+  if (id === 'window') { openWorkspacePanel('transport'); return }
+  if (id === 'music') { openMusicPanel(); return }
+  if (id === 'pet') openPetPlayground()
+}
+
 function pickPetMessage(status) {
   const list = petMoodMessages[status] || petMoodMessages.okay
   const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.affinity
@@ -2043,14 +2106,14 @@ function completeDailyTask() {
   dailyReturnState.date = todayKey
   saveDailyReturnState()
   bumpPetAffinityOnce('taskDate')
-  setPetStatus('happy', '你完成了今天的小照顾，它也替你松了一口气。')
+  setPetStatus('happy', '谢谢你留下这一刻。我会安静陪着你，不需要每天打卡。')
   companionshipStreak.value = updateCompanionshipStreak()
   if (dailyReturnTask.value.action === 'treehole') {
-    showTreeHolePanel.value = true
+    openWorkspacePanel('treehole')
     return
   }
   if (dailyReturnTask.value.action === 'healing') {
-    showHealingPanel.value = true
+    openWorkspacePanel('healing')
     return
   }
   goToChat()
@@ -2089,6 +2152,7 @@ function focusGuideTarget() {
   const target = document.querySelector(selector)
   target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
   if (guideStage.value === 'confession') focusWithoutScroll(inputEl.value)
+  else selectRoomFeature('chat')
 }
 function handleGuideChatTarget() {
   goToChat()
@@ -2099,10 +2163,10 @@ function handleGuideChatTarget() {
 }
 function openTreeHoleFromMoodCard() {
   showFirstRunGuide.value = false
-  showTreeHolePanel.value = true
+  openWorkspacePanel('treehole')
 }
 function handleGuideTreeholeTarget() {
-  showTreeHolePanel.value = true
+  openWorkspacePanel('treehole')
   if (showFirstRunGuide.value && guideStage.value === 'mood-card') {
     showFirstRunGuide.value = false
   }
@@ -2149,28 +2213,18 @@ async function generateReport() {
     // 使用已有的情绪数据生成报告
     const res = await getMoodStats({ period: 30 })
     const distribution = res.distribution || {}
-    const avgScore = res.avg_score || 0
     const count = res.count || 0
 
     const topMood = Object.entries(distribution).sort((a, b) => b[1] - a[1])[0]
-    const topMoodLabel = topMood ? topMood[0] : '平静'
-    const topMoodPct = topMood ? Math.round(topMood[1] / count * 100) : 0
+    const topMoodLabel = topMood ? topMood[0] : '暂无'
+    const topMoodCount = topMood ? topMood[1] : 0
 
-    const suggestions = []
-    if (avgScore < 4) {
-      suggestions.push('建议多进行户外活动，适当运动有助于改善情绪')
-      suggestions.push('可以尝试与亲近的人聊聊最近的感受')
-    } else if (avgScore < 7) {
-      suggestions.push('保持当前的生活节奏，注意劳逸结合')
-      suggestions.push('每天给自己留一点独处放松的时间')
-    } else {
-      suggestions.push('你目前的状态很不错，继续保持积极的心态')
-    }
+    const suggestions = ['从最近一条记录开始，补充当时发生了什么和你希望获得的支持']
     if (topMoodLabel === '焦虑' || topMoodLabel === '紧张') {
-      suggestions.push('试试治愈空间的呼吸练习，对缓解焦虑很有效')
+      suggestions.push('如果你愿意，可以试试治愈空间的短时呼吸练习，留意它是否适合此刻的你')
     }
     if (topMoodLabel === '悲伤' || topMoodLabel === '低落') {
-      suggestions.push('可以去树洞倾诉，有人会与你共鸣')
+      suggestions.push('可以继续倾诉，或告诉一位你信任的人现在更希望被怎样陪伴')
     }
 
     const affirmations = [
@@ -2182,7 +2236,9 @@ async function generateReport() {
     ]
 
     reportData.value = {
-      summary: `近30天共记录 ${count} 次情绪，平均情绪分 ${avgScore.toFixed(1)}。主要情绪为「${topMoodLabel}」占比 ${topMoodPct}%。${avgScore >= 7 ? '整体状态良好，继续保持！' : avgScore >= 4 ? '情绪起伏属于正常范围，关注自我关怀。' : '近期情绪偏低落，建议多关照自己。'}`,
+      summary: count
+        ? `近30天保存了 ${count} 次学生主动记录，出现较多的自报或系统归纳标签是「${topMoodLabel}」（${topMoodCount} 次）。这只是对已有记录的描述性整理，不是心理测评，也不能代表整体心理状态。`
+        : '近30天暂时没有可整理的主动记录。这不代表任何心理状态，也不是心理测评结果。',
       suggestions,
       positive_affirmation: affirmations[Math.floor(Math.random() * affirmations.length)]
     }
@@ -2751,7 +2807,7 @@ function toggleSongPlay(song) {
 }
 
 function openMusicPanel() {
-  showMusicPanel.value = true
+  openWorkspacePanel('music')
   expandedCard.value = -1
   activeSongId.value = null
   if (musicAudioEl.value) {
@@ -3034,28 +3090,14 @@ const trendStats = ref({})
 const trendInsight = ref('正在分析你的情绪数据...')
 const trendInsightLoading = ref(false)
 
-const trendScoreColor = computed(() => {
-  const s = trendStats.value.avg_score || 5
-  if (s >= 7) return '#6DB58B'
-  if (s >= 5) return '#7FB3A6'
-  if (s >= 3) return '#E8C468'
-  return '#D4776A'
-})
-const trendScoreHint = computed(() => {
-  const s = trendStats.value.avg_score || 0
-  if (s >= 8) return '状态很好 ☺'
-  if (s >= 6) return '整体不错'
-  if (s >= 4) return '需要关注'
-  if (s > 0) return '建议多倾诉'
-  return '--'
-})
+const trendScoreColor = computed(() => '#9fc9b6')
 const topMood = computed(() => {
   const dist = trendStats.value.distribution || {}
   if (!Object.keys(dist).length) return '--'
   return Object.entries(dist).sort((a, b) => b[1] - a[1])[0][0]
 })
 const topMoodEmoji = computed(() => {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡' }
+  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
   return map[topMood.value] || '--'
 })
 const sortedDist = computed(() => {
@@ -3086,7 +3128,7 @@ const xLabels = computed(() => {
 })
 
 function getMoodEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡' }
+  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
   return map[label] || '🙂'
 }
 function getMoodColor(label) {
@@ -3113,7 +3155,7 @@ async function loadTrendInsight() {
   trendInsightLoading.value = false
 }
 function openTrendPanel() {
-  showTrendPanel.value = true
+  openWorkspacePanel('trend')
   loadTrendData(); loadTrendInsight()
 }
 watch(trendActiveTab, loadTrendData)
@@ -3166,7 +3208,7 @@ function buildStatusCalendar() {
 }
 
 function getEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡' }
+  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
   return map[label] || '🙂'
 }
 
@@ -3212,7 +3254,7 @@ async function handleLogout() {
 }
 
 function openProfile() {
-  showProfilePanel.value = true
+  openWorkspacePanel('profile')
   nickname.value = userStore.nickname || ''
   loadStats()
 }
@@ -3436,7 +3478,7 @@ function onQuickMouseUp() {
 }
 
 function getEmotionEmoji(emotion) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡', '疲惫': '😴' }
+  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴' }
   return map[emotion] || '🙂'
 }
 
@@ -3581,7 +3623,8 @@ async function completeConversation() {
 
 async function openSummaryDrawer() {
   if (summaryStatus.value === 'processing') return
-  showAgentRail.value = false
+  closeRoomWorkspaces('support')
+  clearRoomFeature()
   showSupportDrawer.value = true
   supportDrawerMode.value = 'plan'
   summaryUnread.value = false
@@ -3639,8 +3682,8 @@ async function startNewConversation() {
 
 function resetStudentAgentState() {
   Object.assign(studentAgentState, {
-    status: 'standby', phase: 'waiting', riskLevel: 'routine', signal: 'continue', emotion: '',
-    messageCount: 0, lastEvent: '等待你开始表达，聊天期间不会打断你',
+    status: 'standby', phase: 'waiting', riskLevel: 'unassessed', signal: 'continue', emotion: '',
+    messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
   })
 }
@@ -3791,7 +3834,7 @@ function playTTS(text) {
 }
 
 async function openChatPanel() {
-  showChatPanel.value = true
+  openWorkspacePanel('chat')
   chatInput.value = ''
   try {
     const session = await startChatSession(false)
@@ -6724,5 +6767,190 @@ onUnmounted(() => {
   .room-roaming-pet,
   .room-roaming-pet img,
   .splash-fade-leave-active { transition: none; animation: none; }
+}
+
+/* v5.1.0-alpha.2：主界面减法系统。场景承担导航，控制层只保留一个状态条和按需操作条。 */
+.room-status-bar {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  right: 132px;
+  z-index: 224;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100vw - 160px);
+  min-height: 46px;
+  padding: 5px;
+  border-radius: 14px;
+  color: #f7f4ed;
+  background: rgba(16, 22, 28, .84);
+  box-shadow: 0 5px 8px rgba(5, 8, 12, .25);
+  backdrop-filter: blur(18px) saturate(1.14);
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+}
+.room-status-greeting {
+  display: grid;
+  min-width: 174px;
+  padding: 3px 12px;
+}
+.room-status-greeting time { color: rgba(247, 244, 237, .68); font-size: 10px; }
+.room-status-greeting strong { margin-top: 1px; font-size: 13px; line-height: 1.35; }
+.room-status-checkin,
+.room-status-utility {
+  min-height: 36px;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(247, 244, 237, .9);
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+.room-status-checkin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  border-inline: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 0;
+}
+.room-status-checkin > span:first-child { font-size: 17px; }
+.room-status-checkin > span:last-child { display: grid; text-align: left; }
+.room-status-checkin small { color: rgba(247, 244, 237, .62); font-size: 9px; }
+.room-status-checkin strong { margin-top: 1px; font-size: 11px; }
+.room-status-utility { display: flex; align-items: center; gap: 4px; padding: 0 9px; font-size: 11px; }
+.room-status-checkin:hover,
+.room-status-utility:hover { background: rgba(255, 255, 255, .1); }
+.room-status-checkin:focus-visible,
+.room-status-utility:focus-visible,
+.hot-zone:focus-visible,
+.room-onboarding-cue button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
+
+.room-onboarding-cue {
+  position: fixed;
+  top: 76px;
+  left: 14px;
+  z-index: 223;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: min(470px, calc(100vw - 28px));
+  padding: 9px 10px;
+  border-radius: 12px;
+  color: #f7f4ed;
+  background: rgba(16, 22, 28, .9);
+  box-shadow: 0 5px 8px rgba(5, 8, 12, .28);
+  backdrop-filter: blur(18px) saturate(1.12);
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+}
+.room-onboarding-step {
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  height: 32px;
+  padding-inline: 7px;
+  border-radius: 8px;
+  color: #1d2a25;
+  background: #b8d7c7;
+  font-size: 10px;
+  font-weight: 800;
+}
+.room-onboarding-cue > div { min-width: 0; }
+.room-onboarding-cue strong,
+.room-onboarding-cue small { display: block; }
+.room-onboarding-cue strong { font-size: 12px; }
+.room-onboarding-cue small { margin-top: 2px; overflow: hidden; color: rgba(247, 244, 237, .7); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.room-onboarding-cue button {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  color: #1d261f;
+  background: #e8d49b;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.room-onboarding-cue .room-onboarding-skip { width: 36px; padding: 0; color: #f7f4ed; background: rgba(255, 255, 255, .08); font-size: 18px; }
+
+.hot-zone {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+.hot-zone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  pointer-events: none;
+  transition: border-color .18s ease, background-color .18s ease;
+}
+.hot-zone:hover::after,
+.hot-zone:focus-visible::after,
+.hot-zone.is-selected::after { border-color: rgba(240, 213, 142, .82); background: rgba(240, 213, 142, .08); }
+.hot-zone:focus-visible .hover-tip,
+.hot-zone:focus-visible .bed-label,
+.hot-zone:focus-visible .window-label { opacity: 1; }
+.hot-zone .hover-tip,
+.hot-zone .bed-label,
+.hot-zone .window-label {
+  padding: 6px 9px;
+  border-radius: 8px;
+  color: #f7f4ed;
+  background: rgba(16, 22, 28, .88);
+  font-size: 10px;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.zone-bed .bed-label,
+.zone-window .window-label { pointer-events: none; }
+.room-roaming-pet span { max-width: 164px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beian-footer {
+  right: 14px;
+  bottom: 14px;
+  left: auto;
+  padding: 7px 10px;
+  transform: none;
+}
+.beian-footer a { font-size: 11px; }
+
+@media (max-width: 760px) {
+  .room-status-bar {
+    top: 10px;
+    left: 10px;
+    right: 112px;
+    max-width: calc(100vw - 124px);
+    min-height: 42px;
+  }
+  .room-status-greeting { min-width: 0; padding-inline: 8px; }
+  .room-status-greeting time { display: none; }
+  .room-status-greeting strong { max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-status-checkin { border-inline-end: 0; }
+  .room-status-checkin > span:first-child,
+  .room-status-checkin small { display: none; }
+  .room-status-checkin strong { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-status-utility { display: none; }
+  .zone-speaker-left { top: 46%; left: 26%; width: 12%; height: 12%; }
+  .zone-speaker-right { display: none; }
+  .room-onboarding-cue { top: 64px; left: 10px; width: calc(100vw - 20px); }
+  .room-onboarding-cue small { display: none; }
+  .beian-footer {
+    right: 8px;
+    bottom: calc(98px + env(safe-area-inset-bottom));
+    left: auto;
+    max-width: calc(100vw - 16px);
+    transform: scale(.78);
+    transform-origin: right bottom;
+  }
+}
+
+@media (max-width: 440px) {
+  .room-onboarding-cue { grid-template-columns: auto minmax(0, 1fr) auto; }
 }
 </style>

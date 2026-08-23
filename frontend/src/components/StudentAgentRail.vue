@@ -10,11 +10,10 @@
       @click="$emit('toggle')"
     >
       <span class="agent-toggle-mark" :class="`is-${state.status}`" aria-hidden="true"></span>
-      <span>
-        <strong>咕哝 Agent</strong>
+      <span class="agent-toggle-copy">
+        <strong>Agent</strong>
         <small>{{ compactStatus }}</small>
       </span>
-      <span class="agent-toggle-chevron" aria-hidden="true">{{ open ? '›' : '‹' }}</span>
     </button>
 
     <Transition name="agent-rail">
@@ -91,12 +90,13 @@ const compactStatus = computed(() => {
 
 const riskLabel = computed(() => {
   const labels = {
+    unassessed: '尚未分流',
     routine: '日常支持',
     watch: '建议持续留意',
     professional: '建议专业支持',
     urgent: '立即安全协助',
   }
-  return labels[props.state.riskLevel] || labels.routine
+  return labels[props.state.riskLevel] || labels.unassessed
 })
 
 function statusIcon(status) {
@@ -120,8 +120,8 @@ watch(() => props.open, async (value, previous) => {
   --agent-muted: rgba(247, 244, 237, .72);
   --agent-accent: #b9d9c9;
   position: fixed;
-  top: 98px;
-  right: 20px;
+  top: 16px;
+  right: 16px;
   z-index: 230;
   display: flex;
   align-items: flex-start;
@@ -136,9 +136,9 @@ watch(() => props.open, async (value, previous) => {
   display: flex;
   align-items: center;
   gap: 9px;
-  width: 142px;
-  min-height: 48px;
-  padding: 8px 9px;
+  width: 104px;
+  min-height: 46px;
+  padding: 7px 10px;
   border: 0;
   border-radius: 12px;
   color: var(--agent-ink);
@@ -162,7 +162,7 @@ watch(() => props.open, async (value, previous) => {
 .student-agent-toggle small { display: block; }
 .student-agent-toggle strong { font-size: 12px; line-height: 1.25; }
 .student-agent-toggle small { margin-top: 2px; color: var(--agent-muted); font-size: 10px; }
-.agent-toggle-chevron { margin-left: auto; color: var(--agent-muted); font-size: 20px; line-height: 1; }
+.agent-toggle-copy { min-width: 0; }
 .student-agent-rail {
   width: min(330px, calc(100vw - 40px));
   max-height: calc(100vh - 190px);
@@ -244,22 +244,22 @@ watch(() => props.open, async (value, previous) => {
 @keyframes agent-pulse { 50% { opacity: .58; } }
 
 @media (min-width: 900px) {
-  .student-agent-shell.is-open .student-agent-toggle { width: 48px; justify-content: center; }
-  .student-agent-shell.is-open .student-agent-toggle > span:not(.agent-toggle-mark) { display: none; }
+  .student-agent-shell.is-open .student-agent-toggle { width: 46px; justify-content: center; }
+  .student-agent-shell.is-open .agent-toggle-copy { display: none; }
 }
 
 @media (max-width: 899px) {
   .student-agent-shell {
-    top: auto;
+    top: 12px;
     right: 12px;
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    bottom: auto;
     align-items: flex-end;
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
-  .student-agent-toggle { width: 132px; min-height: 44px; }
+  .student-agent-toggle { width: 92px; min-height: 44px; }
   .student-agent-rail {
     width: min(360px, calc(100vw - 24px));
-    max-height: min(62vh, 560px);
+    max-height: min(66vh, 560px);
   }
   .agent-rail-enter-from,
   .agent-rail-leave-to { opacity: 0; transform: translateY(12px); }
