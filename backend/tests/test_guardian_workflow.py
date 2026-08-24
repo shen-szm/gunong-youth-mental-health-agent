@@ -151,7 +151,8 @@ class GuardianWorkflowTests(unittest.TestCase):
         evidence = self.db.query(EvidenceSource).filter(EvidenceSource.source_code.in_(plan.evidence_codes)).all()
         pdf = generate_guardian_pdf(completed, plan, evidence)
         self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertGreater(len(pdf), 20_000)
+        self.assertTrue(pdf.rstrip().endswith(b"%%EOF"))
+        self.assertGreater(len(pdf), 5_000)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ def main() -> None:
         Path(__file__).resolve().parents[2]
         / "output"
         / "pdf"
-        / "咕哝-守护者支持方案-5.1.0-alpha.4.pdf"
+        / "咕哝-守护者支持方案-5.1.0-alpha.5.pdf"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

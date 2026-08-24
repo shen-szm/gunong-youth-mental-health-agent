@@ -1,6 +1,6 @@
 {
   "name": "gunong-youth-mental-health-agent",
-  "version": "5.1.0-alpha.4",
+  "version": "5.1.0-alpha.5",
   "private": true,
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
