@@ -1,0 +1,14 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.36
+pymysql>=1.1.1
+cryptography>=44.0.0
+python-dotenv>=1.0.1
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+websockets>=14.0
+requests>=2.32.3
+passlib>=1.7.4
+bcrypt>=4.2.0
+httpx>=0.28.0
+reportlab>=4.2.5

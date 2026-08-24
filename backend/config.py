@@ -1,0 +1,60 @@
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    APP_ENV: Literal["development", "test", "production"] = "development"
+    RELEASE_VERSION: str = "5.1.0-alpha.4"
+    DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
+    DEMO_MODE: bool = True
+    SESSION_COOKIE_NAME: str = "shengyu_session"
+    SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
+    COOKIE_SECURE: bool = False
+    AGENT_STEP_DELAY_MS: int = 180
+    # 默认禁止把聊天、语音或情绪记录发送给第三方模型。
+    ALLOW_EXTERNAL_AI: bool = False
+    # 学生自由倾诉包含高度敏感信息；除总开关外，必须单独启用并取得逐会话明确同意。
+    ALLOW_STUDENT_EXTERNAL_AI: bool = False
+    # 守护者表单只允许去标识化观察；外部生成需单独开启，失败时显式降级。
+    ALLOW_GUARDIAN_EXTERNAL_AI: bool = False
+
+    # 讯飞语音识别(ASR)和语音合成(TTS)配置
+    XUNFEI_APP_ID: str = ""
+    XUNFEI_API_KEY: str = ""
+    XUNFEI_API_SECRET: str = ""
+
+    # 星火大模型配置（HTTP API方式）
+    SPARK_MODEL: str = "pro"  # pro / pro-128k / lite / max / max-32k / ultra
+    SPARK_API_PASSWORD: str = ""  # 讯飞开放平台控制台获取的APIPassword
+
+    # MySQL配置
+    MYSQL_HOST: str = "localhost"
+    MYSQL_PORT: int = 3306
+    MYSQL_USER: str = "root"
+    MYSQL_PASSWORD: str = ""
+    MYSQL_DATABASE: str = "shengyu_db"
+
+    BACKEND_PORT: int = 9000
+
+    # 只有显式提供强密码时才初始化本地教师账号。
+    ADMIN_USERNAME: str = ""
+    ADMIN_PASSWORD: str = ""
+
+    # CORS配置 - 前端开发服务器地址
+    CORS_ORIGINS: list = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @model_validator(mode="after")
+    def enforce_production_session_security(self):
+        if self.APP_ENV == "production" and (self.DEMO_MODE or not self.COOKIE_SECURE):
+            raise ValueError("production requires DEMO_MODE=false and COOKIE_SECURE=true")
+        return self
+
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings()
