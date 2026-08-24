@@ -6,6 +6,7 @@ __pycache__/
 *.db
 .codex-guardian-*.log
 .codex-alpha*.log
+.codex-*-alpha*.log
 .codex-alpha*.png
 .vite/
 .DS_Store

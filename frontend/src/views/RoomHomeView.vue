@@ -41,7 +41,7 @@
       </button>
     </header>
     <StudentAgentRail
-      v-if="!showSplash"
+      v-if="!showSplash && !showLeisurePanel"
       :open="showAgentRail"
       :state="studentAgentState"
       :steps="studentAgentSteps"
@@ -216,13 +216,14 @@
         </div>
         <span class="bnav-label">倾诉</span>
       </button>
-      <button class="bnav-item" @click="openWorkspacePanel('healing')">
+      <button class="bnav-item" @click="openWorkspacePanel('leisure')">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+            <path d="M4 20V10l8-6 8 6v10"/>
+            <path d="M8 20v-6h8v6M7 9h10"/>
           </svg>
         </div>
-        <span class="bnav-label">治愈</span>
+        <span class="bnav-label">休闲</span>
       </button>
       <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && guideStage === 'mood-card' }]" @click="handleGuideTreeholeTarget">
         <div v-if="showFirstRunGuide && guideStage === 'mood-card'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
@@ -1392,6 +1393,18 @@
       </div>
     </Transition>
 
+    <!-- ══ 休闲角：游戏与 Agent 进度共用一个工作区 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showLeisurePanel" class="profile-overlay leisure-overlay" @click.self="closeWorkspacePanel('leisure')">
+        <StudentLeisureHub
+          data-workspace="leisure"
+          :storage-scope="userStore.userId || 'student'"
+          @close="closeWorkspacePanel('leisure')"
+          @open-healing="openWorkspacePanel('healing')"
+        />
+      </div>
+    </Transition>
+
     <!-- ══ 树洞面板 ══ -->
     <Transition name="panel-slide">
       <div v-if="showTreeHolePanel" class="profile-overlay" @click="showTreeHolePanel = false">
@@ -1535,6 +1548,7 @@ import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
+import StudentLeisureHub from '../components/StudentLeisureHub.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1623,6 +1637,7 @@ watch(supportDrawerMode, async () => {
   focusWithoutScroll(supportModeHeading.value)
 })
 const showHealingPanel = ref(false)
+const showLeisurePanel = ref(false)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
@@ -1641,6 +1656,7 @@ function roomWorkspacePanels() {
     chat: showChatPanel,
     support: showSupportDrawer,
     healing: showHealingPanel,
+    leisure: showLeisurePanel,
     treehole: showTreeHolePanel,
     report: showReportPanel,
     pet: showPetCompanionPanel,
