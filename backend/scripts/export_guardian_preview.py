@@ -10,6 +10,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from database import SessionLocal
+from config import settings
 from guardian_pdf import generate_guardian_pdf
 from guardian_schemas import SupportPlanOutput
 from models import EvidenceSource, GuardianCase, SupportPlan
@@ -24,7 +25,7 @@ def main() -> None:
         Path(__file__).resolve().parents[2]
         / "output"
         / "pdf"
-        / "咕哝-守护者支持方案-5.1.0-alpha.4.pdf"
+        / f"咕哝-守护者支持方案-{settings.RELEASE_VERSION}.pdf"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

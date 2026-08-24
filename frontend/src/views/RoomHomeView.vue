@@ -173,6 +173,18 @@
       <span class="window-label">窗边 · 看看窗外</span>
     </button>
 
+    <!-- 心岛入口：延续房间像素场景，真正的游戏引擎仅在进入后加载。 -->
+    <button
+      v-if="!showSplash"
+      type="button"
+      class="heart-island-door"
+      aria-label="进入心岛探索"
+      @click.stop="openWorkspacePanel('leisure', $event.currentTarget)"
+    >
+      <span class="heart-island-door-glow" aria-hidden="true"></span>
+      <span class="heart-island-door-copy"><strong>心岛</strong><small>走进去探索</small></span>
+    </button>
+
     <!-- 交互热区 — 音响1（音乐推荐） -->
     <button type="button" :class="['hot-zone zone-speaker zone-speaker-left', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
       <span class="hover-tip">音响 · 音乐</span>
@@ -216,40 +228,25 @@
         </div>
         <span class="bnav-label">倾诉</span>
       </button>
-      <button class="bnav-item" @click="openWorkspacePanel('leisure')">
+      <button class="bnav-item" @click="openWorkspacePanel('pet', $event.currentTarget)">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 20V10l8-6 8 6v10"/>
-            <path d="M8 20v-6h8v6M7 9h10"/>
+            <path d="M8 11c-2.5-2.5-5-1.2-5 1.3 0 2.7 3.1 5.2 9 8.2 5.9-3 9-5.5 9-8.2 0-2.5-2.5-3.8-5-1.3"/>
+            <path d="M8.5 7.5 7 4M15.5 7.5 17 4M9 13h.01M15 13h.01"/>
           </svg>
         </div>
-        <span class="bnav-label">休闲</span>
+        <span class="bnav-label">咕团</span>
       </button>
-      <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && guideStage === 'mood-card' }]" @click="handleGuideTreeholeTarget">
-        <div v-if="showFirstRunGuide && guideStage === 'mood-card'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
+      <button ref="islandNavButton" class="bnav-item" @click="openWorkspacePanel('leisure', $event.currentTarget)">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-            <line x1="9" y1="9" x2="9.01" y2="9"/>
-            <line x1="15" y1="9" x2="15.01" y2="9"/>
+            <path d="M12 3 5 7v10l7 4 7-4V7z"/>
+            <path d="m5 7 7 4 7-4M12 11v10"/>
           </svg>
         </div>
-        <span class="bnav-label">树洞</span>
+        <span class="bnav-label">探索</span>
       </button>
-      <button class="bnav-item" @click="openWorkspacePanel('report')">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-        </div>
-        <span class="bnav-label">报告</span>
-      </button>
-      <button class="bnav-item" @click="goProfile">
+      <button ref="profileNavButton" class="bnav-item" @click="goProfile">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
@@ -262,14 +259,14 @@
 
     <!-- ══ 个人中心面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showProfilePanel" class="profile-overlay" @click="showProfilePanel = false">
-        <div class="profile-panel" @click.stop>
+      <div v-if="showProfilePanel" class="profile-overlay" @click.self="closeWorkspacePanel('profile')">
+        <div class="profile-panel" data-workspace="profile" role="dialog" aria-modal="true" aria-label="个人空间" @click.stop @keydown.esc="closeWorkspacePanel('profile')">
           <!-- 关闭按钮 -->
-          <div class="panel-close" @click="showProfilePanel = false">
+          <button type="button" class="panel-close" aria-label="关闭个人空间" @click="closeWorkspacePanel('profile')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 18L18 6M6 6l12 12"/>
             </svg>
-          </div>
+          </button>
 
           <!-- 头像区 -->
           <div class="panel-hero">
@@ -357,6 +354,15 @@
                 <div class="pbadge-desc">{{ b.desc }}</div>
                 <div v-if="b.unlocked" class="pbadge-check">✓</div>
               </div>
+            </div>
+          </div>
+
+          <!-- 设置 -->
+          <div class="panel-section">
+            <div class="panel-sec-title">更多空间</div>
+            <div class="profile-space-grid">
+              <button type="button" @click="handleGuideTreeholeTarget">树洞回声<small>看看相似的心情</small></button>
+              <button type="button" @click="openWorkspacePanel('report', $event.currentTarget)">情绪报告<small>回顾自己的记录</small></button>
             </div>
           </div>
 
@@ -1276,7 +1282,7 @@
     <!-- 倾诉结束后才出现：像素房间中的液态玻璃小结入口 -->
     <Transition name="summary-orb">
       <button
-        v-if="summaryStatus !== 'idle'"
+        v-if="summaryStatus !== 'idle' && !showLeisurePanel"
         ref="summaryOrbButton"
         class="student-summary-orb"
         :class="[`is-${summaryStatus}`, { 'has-unread': summaryUnread }]"
@@ -1396,9 +1402,16 @@
     <!-- ══ 休闲角：游戏与 Agent 进度共用一个工作区 ══ -->
     <Transition name="panel-slide">
       <div v-if="showLeisurePanel" class="profile-overlay leisure-overlay" @click.self="closeWorkspacePanel('leisure')">
+        <StudentIslandWorkspace
+          v-if="useIslandWorkspace"
+          :storage-scope="userStore.userId || ''"
+          @close="closeWorkspacePanel('leisure')"
+          @fallback="handleIslandFallback"
+        />
         <StudentLeisureHub
+          v-else
           data-workspace="leisure"
-          :storage-scope="userStore.userId || 'student'"
+          :storage-scope="userStore.userId || ''"
           @close="closeWorkspacePanel('leisure')"
           @open-healing="openWorkspacePanel('healing')"
         />
@@ -1407,26 +1420,26 @@
 
     <!-- ══ 树洞面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showTreeHolePanel" class="profile-overlay" @click="showTreeHolePanel = false">
-        <div class="profile-panel treehole-panel" @click.stop>
-          <div class="panel-close" @click="showTreeHolePanel = false">
+      <div v-if="showTreeHolePanel" class="profile-overlay" @click.self="closeWorkspacePanel('treehole')">
+        <div class="profile-panel treehole-panel" data-workspace="treehole" role="dialog" aria-modal="true" aria-label="树洞回声" @click.stop @keydown.esc="closeWorkspacePanel('treehole')">
+          <button type="button" class="panel-close" aria-label="关闭树洞" @click="closeWorkspacePanel('treehole')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
-          <TreeHoleView :inline="true" @close="showTreeHolePanel = false" />
+          </button>
+          <TreeHoleView :inline="true" @close="closeWorkspacePanel('treehole')" />
         </div>
       </div>
     </Transition>
 
     <!-- ══ 报告面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showReportPanel" class="profile-overlay" @click="showReportPanel = false">
-        <div class="profile-panel report-panel" @click.stop>
-          <div class="panel-close" @click="showReportPanel = false">
+      <div v-if="showReportPanel" class="profile-overlay" @click.self="closeWorkspacePanel('report')">
+        <div class="profile-panel report-panel" data-workspace="report" role="dialog" aria-modal="true" aria-label="情绪记录回顾" @click.stop @keydown.esc="closeWorkspacePanel('report')">
+          <button type="button" class="panel-close" aria-label="关闭情绪记录回顾" @click="closeWorkspacePanel('report')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
+          </button>
           <div class="trend-header">
             <h2>📊 情绪报告</h2>
-            <p>了解你的心理健康状态</p>
+            <p>回顾近期记录与变化，不替代专业评估</p>
           </div>
 
           <!-- 生成报告入口 -->
@@ -1500,7 +1513,7 @@
               每一次倾诉都是一颗种子，<br>
               等它们慢慢发芽，就会开出属于你的心情花园。
             </div>
-            <button class="report-empty-btn" @click="showReportPanel = false; goToChat()">
+            <button class="report-empty-btn" @click="closeWorkspacePanel('report'); goToChat()">
               去种下第一颗心情种子 →
             </button>
           </div>
@@ -1549,6 +1562,7 @@ import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
 import StudentLeisureHub from '../components/StudentLeisureHub.vue'
+import StudentIslandWorkspace from '../components/island/StudentIslandWorkspace.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1562,6 +1576,8 @@ const showSupportDrawer = ref(false)
 const supportCloseButton = ref(null)
 const supportModeHeading = ref(null)
 const chatNavButton = ref(null)
+const islandNavButton = ref(null)
+const profileNavButton = ref(null)
 const summaryOrbButton = ref(null)
 const chatSessionId = ref('')
 const summarySessionId = ref('')
@@ -1638,6 +1654,9 @@ watch(supportDrawerMode, async () => {
 })
 const showHealingPanel = ref(false)
 const showLeisurePanel = ref(false)
+const islandFallbackRequested = ref(false)
+const studentIslandEnabled = import.meta.env.VITE_STUDENT_ISLAND_ALPHA5 !== '0'
+const useIslandWorkspace = computed(() => studentIslandEnabled && !islandFallbackRequested.value)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
@@ -1667,6 +1686,7 @@ function roomWorkspacePanels() {
 }
 
 function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement) {
+  if (key === 'leisure') islandFallbackRequested.value = false
   closeRoomWorkspaces(key)
   selectedRoomFeatureId.value = ''
   const panel = roomWorkspacePanels()[key]
@@ -1680,12 +1700,21 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
   })
 }
 
+async function handleIslandFallback() {
+  islandFallbackRequested.value = true
+  await nextTick()
+  focusWithoutScroll(document.querySelector('.leisure-hub .leisure-close'))
+}
+
 function closeWorkspacePanel(key) {
   const panel = roomWorkspacePanels()[key]
   if (panel) panel.value = false
   if (activeWorkspaceKey !== key) return
   activeWorkspaceKey = ''
-  nextTick(() => focusWithoutScroll(workspaceTrigger))
+  nextTick(() => {
+    const fallback = key === 'leisure' ? islandNavButton.value : ['profile', 'treehole', 'report'].includes(key) ? profileNavButton.value : chatNavButton.value
+    focusWithoutScroll(workspaceTrigger?.isConnected ? workspaceTrigger : fallback)
+  })
 }
 
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
@@ -4855,6 +4884,7 @@ onUnmounted(() => {
   backdrop-filter: blur(6px);
   display: flex; align-items: flex-end; justify-content: center;
 }
+.leisure-overlay { z-index: 400; }
 /* 面板主体 */
 .profile-panel {
   width: 100%; max-height: 85vh; position: relative;
@@ -6727,12 +6757,49 @@ onUnmounted(() => {
 .pet-actions .pet-open-btn { min-width: 0; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; box-shadow: none; }
 .bottom-nav { bottom: calc(18px + env(safe-area-inset-bottom)); }
 .bottom-nav::before {
+  width: 304px;
   border: 0;
   border-radius: 15px;
   background: rgba(16, 22, 28, .78) !important;
   box-shadow: 0 6px 8px rgba(5, 8, 12, .25) !important;
   backdrop-filter: blur(20px) saturate(1.15) !important;
 }
+.heart-island-door {
+  position: fixed;
+  right: clamp(92px, 12vw, 184px);
+  top: 38%;
+  z-index: 32;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  width: 86px;
+  min-height: 112px;
+  padding: 8px;
+  border: 0;
+  color: #fff9e8;
+  background: transparent;
+  cursor: pointer;
+  text-shadow: 0 2px 5px rgba(8, 11, 21, .72);
+}
+.heart-island-door-glow {
+  width: 54px;
+  height: 68px;
+  border: 5px solid rgba(38, 31, 64, .86);
+  border-bottom-width: 7px;
+  border-radius: 28px 28px 8px 8px;
+  background: linear-gradient(180deg, rgba(189, 174, 238, .94), rgba(115, 195, 174, .88));
+  box-shadow: 0 0 0 3px rgba(235, 210, 141, .7), 0 0 24px rgba(167, 216, 196, .64), inset 0 0 20px rgba(255,255,255,.38);
+  image-rendering: pixelated;
+}
+.heart-island-door-copy { display: grid; gap: 1px; padding: 5px 8px; border-radius: 8px; background: rgba(15, 20, 29, .76); backdrop-filter: blur(10px); }
+.heart-island-door-copy strong { font-size: 12px; }
+.heart-island-door-copy small { color: rgba(255, 249, 232, .74); font-size: 9px; }
+.heart-island-door:hover .heart-island-door-glow { filter: brightness(1.12); transform: translateY(-2px); }
+.heart-island-door:focus-visible { outline: 3px solid #f1d48c; outline-offset: 4px; border-radius: 12px; }
+.profile-space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.profile-space-grid button { min-height: 62px; padding: 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; color: #fff; background: rgba(255,255,255,.06); cursor: pointer; text-align: left; font-weight: 700; }
+.profile-space-grid button small { display: block; margin-top: 4px; color: rgba(247,244,237,.65); font-size: 10px; font-weight: 500; }
+.profile-space-grid button:focus-visible { outline: 3px solid #f1d48c; outline-offset: 3px; }
 .nav-label { font-size: 10px; }
 .student-summary-orb { right: 20px; }
 .student-support-drawer {
@@ -6762,6 +6829,12 @@ onUnmounted(() => {
   .pet-companion-card { display: none; }
   .student-summary-orb { right: 154px; bottom: calc(84px + env(safe-area-inset-bottom)); }
   .student-support-drawer { border-radius: 16px; }
+  .heart-island-door { right: 14px; top: 44%; transform: scale(.86); transform-origin: right center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heart-island-door-glow { transition: none; }
+  .heart-island-door:hover .heart-island-door-glow { transform: none; }
 }
 
 @media (max-width: 520px) {

@@ -4,22 +4,27 @@ import test from 'node:test'
 
 const roomUrl = new URL('../src/views/RoomHomeView.vue', import.meta.url)
 const hubUrl = new URL('../src/components/StudentLeisureHub.vue', import.meta.url)
+const islandUrl = new URL('../src/components/island/StudentIslandWorkspace.vue', import.meta.url)
 
 test('student room exposes one leisure workspace without restoring the old iframe mini app', async () => {
-  const [room, hub] = await Promise.all([
+  const [room, hub, island] = await Promise.all([
     readFile(roomUrl, 'utf8'),
     readFile(hubUrl, 'utf8'),
+    readFile(islandUrl, 'utf8'),
   ])
 
   assert.match(room, /<StudentLeisureHub/)
-  assert.match(room, /openWorkspacePanel\('leisure'\)/)
+  assert.match(room, /openWorkspacePanel\('leisure'(?:,|\))/)
   assert.match(room, /leisure: showLeisurePanel/)
   assert.match(room, /v-if="!showSplash && !showLeisurePanel"/)
-  assert.match(room, /<span class="bnav-label">休闲<\/span>/)
+  assert.match(room, /<StudentIslandWorkspace/)
+  assert.match(room, /<span class="bnav-label">探索<\/span>/)
+  assert.match(room, /VITE_STUDENT_ISLAND_ALPHA5/)
   assert.doesNotMatch(room, /mini-app-iframe|openMiniApp/)
   assert.match(hub, /小田园/)
   assert.match(hub, /慢钓台/)
   assert.match(hub, /\$emit\('open-healing'\)/)
+  assert.match(island, /打开经典休闲角/)
 })
 
 test('leisure games use deterministic local state and explicit student feedback', async () => {
