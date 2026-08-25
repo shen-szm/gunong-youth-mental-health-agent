@@ -113,11 +113,11 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(blocked["status"], "urgent")
         self.assertIsNone(blocked["summary"])
 
-        normal_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
-        self.client_one.post("/api/chat/send", json={
-            "user_id": user_id, "session_id": normal_id, "message": "今天作业很多，我有点焦虑"
+        normal_id = self.client_two.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        self.client_two.post("/api/chat/send", json={
+            "user_id": self.user_two_id, "session_id": normal_id, "message": "今天作业很多，我有点焦虑"
         })
-        self.client_one.post(f"/api/chat/sessions/{normal_id}/complete")
+        self.client_two.post(f"/api/chat/sessions/{normal_id}/complete")
         db = self.Session()
         try:
             row = db.query(StudentConversationSummary).one()
@@ -125,7 +125,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             db.commit()
         finally:
             db.close()
-        self.assertEqual(self.client_one.get("/api/chat/sessions/latest-summary").json()["status"], "empty")
+        self.assertEqual(self.client_two.get("/api/chat/sessions/latest-summary").json()["status"], "empty")
 
     def test_end_candidate_requires_unambiguous_own_expression(self):
         self.assertTrue(_detect_end_candidate("谢谢你"))
@@ -186,43 +186,64 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertTrue(secure.COOKIE_SECURE)
 
     def test_indirect_split_crisis_and_professional_actions_are_safety_overrides(self):
-        user_id = self.user_one_id
         indirect_samples = [
             "我最近总想消失", "我不想醒过来了", "我在用刀划自己", "我有时候会自残", "我已经站在楼顶了",
             "我刚刚吃了一整瓶安眠药", "我吞了很多药", "我刚割腕了", "我手里有刀，不知道怎么办", "我买好了炭",
         ]
         for sample in indirect_samples:
-            session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
-            response = self.client_one.post("/api/chat/send", json={
-                "user_id": user_id, "session_id": session_id, "message": sample
-            }).json()
-            self.assertEqual(response["conversation_signal"], "urgent", sample)
+            with self.subTest(sample=sample):
+                client = TestClient(self.app)
+                try:
+                    user_id = client.post("/api/user/demo-session").json()["user_id"]
+                    session_id = client.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+                    response = client.post("/api/chat/send", json={
+                        "user_id": user_id, "session_id": session_id, "message": sample
+                    }).json()
+                    self.assertEqual(response["conversation_signal"], "urgent", sample)
+                finally:
+                    client.close()
 
         for sample in ["我没有吞很多药", "电影里有人手里有刀", "我没买炭"]:
-            session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
-            response = self.client_one.post("/api/chat/send", json={
-                "user_id": user_id, "session_id": session_id, "message": sample
+            with self.subTest(sample=sample):
+                client = TestClient(self.app)
+                try:
+                    user_id = client.post("/api/user/demo-session").json()["user_id"]
+                    session_id = client.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+                    response = client.post("/api/chat/send", json={
+                        "user_id": user_id, "session_id": session_id, "message": sample
+                    }).json()
+                    self.assertEqual(response["conversation_signal"], "continue", sample)
+                finally:
+                    client.close()
+
+        split_client = TestClient(self.app)
+        try:
+            split_user = split_client.post("/api/user/demo-session").json()["user_id"]
+            split_id = split_client.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+            first = split_client.post("/api/chat/send", json={
+                "user_id": split_user, "session_id": split_id, "message": "我不想"
             }).json()
-            self.assertEqual(response["conversation_signal"], "continue", sample)
+            second = split_client.post("/api/chat/send", json={
+                "user_id": split_user, "session_id": split_id, "message": "活了"
+            }).json()
+            self.assertEqual(first["conversation_signal"], "continue")
+            self.assertEqual(second["conversation_signal"], "urgent")
+        finally:
+            split_client.close()
 
-        split_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
-        first = self.client_one.post("/api/chat/send", json={
-            "user_id": user_id, "session_id": split_id, "message": "我不想"
-        }).json()
-        second = self.client_one.post("/api/chat/send", json={
-            "user_id": user_id, "session_id": split_id, "message": "活了"
-        }).json()
-        self.assertEqual(first["conversation_signal"], "continue")
-        self.assertEqual(second["conversation_signal"], "urgent")
-
-        professional_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
-        self.client_one.post("/api/chat/send", json={
-            "user_id": user_id, "session_id": professional_id,
-            "message": "我连续失眠，已经无法上学"
-        })
-        summary = self.client_one.post(f"/api/chat/sessions/{professional_id}/complete").json()["summary"]
-        self.assertEqual(summary["risk_level"], "professional")
-        self.assertIn("可信成年人", summary["next_steps"][0])
+        professional_client = TestClient(self.app)
+        try:
+            professional_user = professional_client.post("/api/user/demo-session").json()["user_id"]
+            professional_id = professional_client.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+            professional_client.post("/api/chat/send", json={
+                "user_id": professional_user, "session_id": professional_id,
+                "message": "我连续失眠，已经无法上学"
+            })
+            summary = professional_client.post(f"/api/chat/sessions/{professional_id}/complete").json()["summary"]
+            self.assertEqual(summary["risk_level"], "professional")
+            self.assertIn("可信成年人", summary["next_steps"][0])
+        finally:
+            professional_client.close()
         self.assertTrue(any("12356" in step or "心理老师" in step for step in summary["next_steps"]))
 
     def test_continuation_links_context(self):

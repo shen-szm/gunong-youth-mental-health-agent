@@ -92,7 +92,14 @@
           <button @click="companionActive = false">← 返回树洞</button>
           <span>{{ companionName }}</span>
         </div>
-        <div class="cc-messages" ref="chatMessages">
+        <p class="cc-boundary">这是 AI 支持工具，不是真人，也不能替代可信成年人或专业人员。</p>
+        <section v-if="companionUrgent" ref="companionUrgentPanel" class="cc-urgent" role="alert" tabindex="-1">
+          <strong>普通陪伴已停止，请先连接真人支持</strong>
+          <p>{{ companionUrgentMessage }}</p>
+          <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+          <button type="button" @click="returnToSafetyChat">打开安全倾诉入口</button>
+        </section>
+        <div class="cc-messages" ref="chatMessages" role="log" aria-live="polite" :aria-busy="companionTyping">
           <div v-for="(msg, i) in companionMsgs" :key="i" class="cc-msg" :class="msg.role">
             <div class="ccm-bubble">{{ msg.content }}</div>
           </div>
@@ -100,8 +107,8 @@
             <div class="ccm-bubble typing">正在输入...</div>
           </div>
         </div>
-        <div class="cc-input">
-          <input v-model="companionInput" placeholder="说点什么..." @keyup.enter="sendCompanionMsg" />
+        <div v-if="!companionUrgent" class="cc-input">
+          <input v-model="companionInput" aria-label="输入陪伴对话内容" placeholder="说点什么..." @keyup.enter="sendCompanionMsg" />
           <button @click="sendCompanionMsg" :disabled="!companionInput.trim() || companionTyping">发送</button>
         </div>
       </div>
@@ -149,6 +156,8 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { treeholeApi } from '../api/treehole'
+import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
+import { isOfflineCompanionUrgent } from '../utils/companionSafety'
 import axios from 'axios'
 
 const API = import.meta.env.VITE_API_BASE || ''
@@ -156,7 +165,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const props = defineProps({ inline: { type: Boolean, default: false } })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'open-chat'])
 
 const posts = ref([])
 const newContent = ref('')
@@ -194,6 +203,10 @@ const companionId = ref('')
 const companionMsgs = ref([])
 const companionInput = ref('')
 const companionTyping = ref(false)
+const companionUrgent = ref(false)
+const companionUrgentMessage = ref('')
+const companionUrgentPanel = ref(null)
+const companionSafetyFragments = ref([])
 const chatMessages = ref(null)
 
 const moodOptions = [
@@ -547,60 +560,44 @@ const POSITIVE_BOTTLES = [
   { mood: '被治愈了', content: '在图书馆坐了一整天，虽然累但很充实。回家的路上买了最爱的奶茶，奖励自己。' },
 ]
 
-const DEFAULT_COMPANIONS = Object.values(COMPANION_PROFILES).map(p => ({
+const DEFAULT_COMPANIONS = [COMPANION_PROFILES.gunong].map(p => ({
   id: p.id, avatar: p.avatar, name: p.name, desc: p.desc
 }))
 
-async function loadCompanions() {
-  try {
-    const res = await axios.get(`${API}/api/companion/list`)
-    companions.value = res.data?.companions || []
-  } catch (e) {
-    companions.value = DEFAULT_COMPANIONS
-  }
+function loadCompanions() {
+  companions.value = DEFAULT_COMPANIONS
 }
 
 async function startCompanion(c) {
   showCompanions.value = false
   companionId.value = c.id
   companionName.value = c.name
-  companionMsgs.value = []
+  if (!companionUrgent.value) companionMsgs.value = []
   companionActive.value = true
+
+  try {
+    const status = await getCompanionSafetyStatus()
+    if (status.data?.urgent) {
+      companionUrgent.value = true
+      companionUrgentMessage.value = status.data.message
+      companionMsgs.value = [{ role: 'assistant', content: status.data.message }]
+      await nextTick()
+      companionUrgentPanel.value?.focus()
+      return
+    }
+  } catch {}
 
   const profile = COMPANION_PROFILES[c.id]
   const greeting = profile?.greeting || `你好呀！我是${c.name}，有什么想和我聊的吗？`
 
-  try {
-    const res = await axios.post(`${API}/api/companion/start`, null, {
-      params: { user_id: Number(userStore.userId), character_id: c.id }
-    })
-    if (res.data?.greeting) {
-      companionMsgs.value.push({ role: 'assistant', content: res.data.greeting })
-    } else {
-      companionMsgs.value.push({ role: 'assistant', content: greeting })
-    }
-  } catch (e) {
-    companionMsgs.value.push({ role: 'assistant', content: greeting })
-  }
+  if (!companionUrgent.value) companionMsgs.value.push({ role: 'assistant', content: greeting })
 }
 
-// 本地智能回复引擎：根据角色性格和用户输入匹配回复
-function generateLocalReply(characterId, userContent) {
-  const profile = COMPANION_PROFILES[characterId]
-  if (!profile) return '我在听，请继续说...'
-
-  const text = userContent.toLowerCase()
-  let category = 'default'
-
-  if (/你好|嗨|hi|hello|在吗|在嘛/.test(text)) category = 'hello'
-  else if (/开心|高兴|快乐|兴奋|棒|好耶|太好了|不错|厉害/.test(text)) category = 'happy'
-  else if (/难过|伤心|哭|痛苦|emo|悲伤|失落|抑郁|绝望|想死/.test(text)) category = 'sad'
-  else if (/焦虑|紧张|害怕|担心|压力|慌|恐惧|不安/.test(text)) category = 'anxious'
-  else if (/累|疲惫|困|睡不着|失眠|疲倦|没劲/.test(text)) category = 'tired'
-  else if (/喜欢|爱|暗恋|感情|恋爱|心动|表白|对象|分手/.test(text)) category = 'love'
-
-  const pool = profile.replies[category] || profile.replies.default
-  return pool[Math.floor(Math.random() * pool.length)]
+function safeCompanionFailureReply(isUrgent) {
+  if (isUrgent) {
+    return '这些话可能表示你现在无法保证安全。请先不要独处，马上联系可信成年人并拨打12356；如果已采取行动或危险迫近，请立即拨打110或120。'
+  }
+  return '安全检查暂时没有完成，所以这里不会继续分析这句话。你可以稍后重试，或回到房间使用正式倾诉入口。'
 }
 
 async function sendCompanionMsg() {
@@ -608,6 +605,7 @@ async function sendCompanionMsg() {
 
   const content = companionInput.value
   companionMsgs.value.push({ role: 'user', content })
+  companionSafetyFragments.value = [...companionSafetyFragments.value, content].slice(-3)
   companionInput.value = ''
   companionTyping.value = true
 
@@ -616,30 +614,46 @@ async function sendCompanionMsg() {
     chatMessages.value.scrollTop = chatMessages.value.scrollHeight
   }
 
-  // 延迟回复，模拟真实打字感
-  const typingDelay = 600 + Math.random() * 800
-  await new Promise(r => setTimeout(r, typingDelay))
-
   try {
-    const res = await axios.post(`${API}/api/companion/chat`, {
-      user_id: Number(userStore.userId),
-      character_id: companionId.value,
-      content: content,
-    })
-    if (res.data?.reply) {
-      companionMsgs.value.push({ role: 'assistant', content: res.data.reply })
-    } else {
-      companionMsgs.value.push({ role: 'assistant', content: generateLocalReply(companionId.value, content) })
+    const res = await sendCompanionMessage(content)
+    if (!res.data?.reply) throw new Error('invalid companion response')
+    companionMsgs.value.push({ role: 'assistant', content: res.data.reply })
+    if (res.data.risk_level === 'urgent') {
+      companionUrgent.value = true
+      companionUrgentMessage.value = res.data.reply
+      await nextTick()
+      companionUrgentPanel.value?.focus()
     }
   } catch (e) {
-    // API 失败 → 使用角色性格的本地智能回复
-    companionMsgs.value.push({ role: 'assistant', content: generateLocalReply(companionId.value, content) })
+    const offlineUrgent = companionSafetyFragments.value.some(isOfflineCompanionUrgent)
+      || isOfflineCompanionUrgent(companionSafetyFragments.value.slice(-2).join(''))
+      || isOfflineCompanionUrgent(companionSafetyFragments.value.join(''))
+    const fallback = safeCompanionFailureReply(offlineUrgent)
+    companionMsgs.value.push({ role: 'assistant', content: fallback })
+    if (offlineUrgent) {
+      companionUrgent.value = true
+      companionUrgentMessage.value = fallback
+      await nextTick()
+      companionUrgentPanel.value?.focus()
+    }
   }
 
   companionTyping.value = false
   await nextTick()
   if (chatMessages.value) {
     chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+  }
+}
+
+async function returnToSafetyChat() {
+  try {
+    await handoffCompanionToChat()
+    companionActive.value = false
+    emit('open-chat')
+  } catch {
+    companionUrgentMessage.value = `${companionUrgentMessage.value} 安全倾诉入口暂时未连接，请先拨打12356；危险迫近时拨打110或120。`.trim()
+    await nextTick()
+    companionUrgentPanel.value?.focus()
   }
 }
 
@@ -761,6 +775,12 @@ function openDriftBottle() {
 }
 .cc-header button { background: none; border: none; font-size: 14px; color: #5B8C7E; cursor: pointer; }
 .cc-header span { font-size: 16px; font-weight: 600; color: #3D6B5E; }
+.cc-boundary { margin: 0; padding: 10px 16px; background: #eef7f3; color: #36594f; font-size: 13px; line-height: 1.5; }
+.cc-urgent { margin: 12px 16px 0; padding: 14px; border: 2px solid #9f493f; border-radius: 12px; background: #fff2ef; color: #652b25; }
+.cc-urgent:focus { outline: 3px solid #f4c66a; outline-offset: 2px; }
+.cc-urgent p { margin: 8px 0; line-height: 1.6; }
+.cc-urgent div { display: flex; flex-wrap: wrap; gap: 8px; }
+.cc-urgent a, .cc-urgent button { min-height: 44px; padding: 10px 14px; border: 1px solid #8b3b34; border-radius: 9px; background: #fff; color: #6a2923; font-weight: 700; text-decoration: none; }
 
 .cc-messages { flex: 1; overflow-y: auto; padding: 16px; }
 .cc-msg { margin-bottom: 12px; display: flex; }
@@ -896,6 +916,8 @@ function openDriftBottle() {
 .treehole-page.inline-mode .cc-header { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .cc-header button { color: #7FB3A6; }
 .treehole-page.inline-mode .cc-header span { color: #E8E2D8; }
+.treehole-page.inline-mode .cc-boundary { background: rgba(91,140,126,0.18); color: #d9eee7; }
+.treehole-page.inline-mode .cc-urgent { background: rgba(120,45,40,0.3); border-color: #e4a099; color: #ffe5df; }
 .treehole-page.inline-mode .ccm-bubble { background: rgba(255,255,255,0.08); color: #E8E2D8; }
 .treehole-page.inline-mode .cc-msg.user .ccm-bubble { background: #5B8C7E; }
 .treehole-page.inline-mode .cc-input { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }

@@ -10,7 +10,7 @@ import models  # 确保模型被加载
 from validation import sanitized_validation_exception_handler
 
 # 导入路由
-from api import chat, user, mood, admin, music, guardian, teacher
+from api import chat, companion, user, mood, admin, music, guardian, teacher
 
 app = FastAPI(title="咕哝 API", description="AI心理健康教育与守护者支持工具", version=settings.RELEASE_VERSION)
 app.add_exception_handler(RequestValidationError, sanitized_validation_exception_handler)
@@ -26,6 +26,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(chat.router)
+app.include_router(companion.router)
 app.include_router(user.router)
 app.include_router(mood.router)
 app.include_router(admin.router)

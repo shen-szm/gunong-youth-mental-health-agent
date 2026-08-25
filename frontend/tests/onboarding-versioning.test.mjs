@@ -18,7 +18,7 @@ test('first-run guide requires a chat confession before completion', async () =>
   assert.match(room, /guideStage\.value = 'confession'/)
   assert.match(room, /completeFirstRunAfterChat/)
   assert.match(room, /guideStage\.value = 'mood-card'/)
-  assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
+  assert.match(room, /safeStudentStorageSet\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
 })
 
 test('daily return is available through the unified status and action system', async () => {
@@ -51,9 +51,9 @@ test('patch release continues from latest baseline and records changelog', async
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '5.1.0-alpha.5')
-  assert.equal(lock.version, '5.1.0-alpha.5')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.5')
+  assert.equal(pkg.version, '5.1.0-alpha.6')
+  assert.equal(lock.version, '5.1.0-alpha.6')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.6')
   assert.match(changelog, /## \[5\.1\.0-alpha\.5\] - 2026-08-25/)
   assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
   assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)

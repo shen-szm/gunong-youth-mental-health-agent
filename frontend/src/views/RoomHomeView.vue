@@ -67,93 +67,100 @@
       :aria-pressed="selectedRoomFeatureId === 'pet'"
       @click.stop="selectRoomFeature('pet', $event)"
     >
-      <img :src="selectedPetFrame" :alt="selectedPetVisual.name" />
+      <img :src="selectedPetFrame" alt="原创陪伴宠物咕团" />
       <span>{{ petIsMoving ? petRoamingBubble : petCompanionMessage }}</span>
     </button>
     <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="closeWorkspacePanel('pet')">
-      <section class="pet-panel-card pet-playground-card" data-workspace="pet" @keydown.esc="closeWorkspacePanel('pet')">
+      <section ref="petPanelRoot" class="pet-panel-card pet-playground-card" data-workspace="pet" role="dialog" aria-modal="true" aria-labelledby="guguan-panel-title" @keydown="handlePetPanelKeydown">
         <button type="button" class="pet-panel-close" aria-label="关闭宠物互动" @click="closeWorkspacePanel('pet')">×</button>
         <div class="pet-panel-head">
-          <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
-            <img class="pet-panel-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
+          <div class="pet-panel-avatar" :class="[`is-${petMoodStatus}`, `is-${petVisualState}`]">
+            <img class="pet-panel-frame" :src="selectedPetFrame" alt="咕团当前状态" />
           </div>
           <div>
-            <span class="pet-panel-kicker">宠物互动</span>
-            <h3>{{ petAffinityLabel }}</h3>
+            <span class="pet-panel-kicker">原创陪伴 IP · 咕团</span>
+            <h2 id="guguan-panel-title" tabindex="-1">{{ petGrowthStage.name }}</h2>
             <p>{{ petCompanionMessage }}</p>
           </div>
         </div>
-        <div class="pet-panel-meta">
-          <span>亲密度 {{ petCompanionState.affinity }}</span>
-          <span>随时回来都可以</span>
-        </div>
-        <div class="pet-playground-stage">
-          <div class="pet-stage-hint">点击房间任意位置，它会跑过去陪你</div>
-          <img class="pet-stage-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
-          <div class="pet-stage-bubble">{{ petCompanionMessage }}</div>
-        </div>
-        <div class="pet-panel-actions">
-          <button type="button" @click.stop="petPetting">摸摸它</button>
-          <button type="button" @click.stop="feedPetSnack">喂点心</button>
-          <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
-          <button type="button" @click.stop="closeWorkspacePanel('pet')">回到房间</button>
-        </div>
-        <div class="pet-visual-picker">
-          <div class="pet-section-title">
-            <span>宠物形象</span>
-            <small>选择陪你待机的小伙伴</small>
+        <div class="pet-growth-summary" aria-label="咕团成长状态">
+          <div>
+            <span>默契成长</span>
+            <strong>{{ petCompanionState.bond }} / {{ petGrowthStage.nextAt }}</strong>
           </div>
-          <div class="pet-visual-list">
-            <button
-              v-for="visual in PET_VISUALS"
-              :key="visual.key"
-              type="button"
-              :class="['pet-visual-option', { active: selectedPetVisualKey === visual.key }]"
-              @click.stop="selectPetVisual(visual.key)"
-            >
-              <img :src="visual.frames[0]" :alt="visual.name" />
-              <strong>{{ visual.name }}</strong>
-            </button>
+          <div class="pet-growth-track" role="progressbar" aria-label="默契成长" :aria-valuenow="petGrowthProgress" aria-valuemin="0" aria-valuemax="100">
+            <span :style="{ width: `${petGrowthProgress}%` }"></span>
           </div>
+          <small>{{ petGrowthStage.copy }} 不连续登录也不会倒退。</small>
         </div>
-        <div class="pet-companion-restored">
-          <div class="pet-section-title">
-            <span>原陪伴角色</span>
-            <small>选择一个小伙伴开始聊天</small>
+        <div class="pet-care-layout">
+          <div class="pet-playground-stage" aria-live="polite">
+            <div class="pet-stage-hint">{{ petCurrentNeed }}</div>
+            <img class="pet-stage-frame" :class="`is-${petVisualState}`" :src="selectedPetFrame" alt="咕团" />
+            <div class="pet-stage-bubble">{{ petCompanionMessage }}</div>
           </div>
-          <div class="pet-companion-list">
-            <button
-              v-for="companion in petCompanions"
-              :key="companion.id"
-              type="button"
-              :class="['pet-companion-option', { active: activePetCompanionId === companion.id }]"
-              @click.stop="startPetCompanion(companion)"
-            >
-              <img :src="companion.image || selectedPetFrame" :alt="companion.name" />
-              <span class="pet-companion-emoji">{{ companion.avatar }}</span>
-              <strong>{{ companion.name }}</strong>
-              <em>{{ companion.desc }}</em>
-            </button>
-          </div>
-          <div class="pet-companion-chat" v-if="petCompanionActive">
-            <div class="pet-chat-head">
-              <img :src="activePetImage" :alt="activePetCompanion.name" />
-              <div>
-                <strong>{{ activePetCompanion.name }}</strong>
-                <span>正在陪你聊天</span>
+          <div class="pet-care-console">
+            <div class="pet-care-meters">
+              <div v-for="meter in petCareMeters" :key="meter.key" class="pet-care-meter">
+                <span>{{ meter.label }}</span>
+                <div role="progressbar" :aria-label="meter.label" :aria-valuenow="meter.value" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${meter.value}%` }"></i></div>
+                <strong>{{ meter.state }}</strong>
               </div>
             </div>
-            <div ref="petChatMessages" class="pet-chat-messages">
+            <div class="pet-panel-actions" aria-label="照顾咕团">
+              <button type="button" @click.stop="petPetting"><span aria-hidden="true">◇</span> 摸摸它</button>
+              <button type="button" @click.stop="feedPetSnack"><span aria-hidden="true">◆</span> 喂种子饼</button>
+              <button type="button" @click.stop="restWithPet"><span aria-hidden="true">☾</span> 一起休息</button>
+              <button v-if="petCompanionMode === 'urgent'" type="button" class="is-primary" @click.stop="focusPetUrgentSupport"><span aria-hidden="true">!</span> 查看安全支持</button>
+              <button v-else type="button" class="is-primary" @click.stop="talkWithPet"><span aria-hidden="true">▣</span> 和它说话</button>
+            </div>
+            <p class="pet-care-boundary">照护值只反馈当下互动，不设断签惩罚，也不用于判断你的情绪。</p>
+          </div>
+        </div>
+        <div class="pet-memory-strip">
+          <div class="pet-section-title">
+            <span>相处小记</span>
+            <small>只记录照护动作，不保存聊天原文</small>
+          </div>
+          <ul><li v-for="memory in petRecentMemories" :key="memory.id"><time>{{ memory.time }}</time><span>{{ memory.copy }}</span></li></ul>
+        </div>
+        <div class="pet-companion-restored">
+          <div class="pet-companion-chat" v-if="petCompanionActive">
+            <div class="pet-chat-head">
+              <img :src="selectedPetFrame" alt="咕团" />
+              <div>
+                <strong>咕团在听</strong>
+                <span>{{ petCompanionModeLabel }}</span>
+              </div>
+            </div>
+            <div class="pet-chat-safety-state" :class="`is-${petCompanionMode}`" role="status" aria-live="polite">
+              <span aria-hidden="true"></span>{{ petCompanionModeLabel }}
+            </div>
+            <p class="pet-chat-identity">咕团是 AI 支持角色，没有真实感受，也不能替代可信成年人或专业人员。</p>
+            <ol v-if="petCompanionWorkflow.length" class="pet-chat-workflow" aria-label="咕团 Agent 已核验步骤">
+              <li v-for="step in petCompanionWorkflow" :key="step.id" :class="`is-${step.status}`"><span>{{ step.id === 'safety' ? '安全' : step.id === 'context' ? '理解' : '回应' }}</span>{{ step.summary }}</li>
+            </ol>
+            <section v-if="petCompanionMode === 'urgent'" ref="petUrgentHandoff" class="pet-urgent-handoff" role="alert" aria-label="立即安全支持" tabindex="-1">
+              <strong>先连接真人支持</strong>
+              <p>{{ petCompanionError }}</p>
+              <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+              <button type="button" @click="goToChatFromPet">打开安全倾诉入口</button>
+            </section>
+            <div v-if="petCompanionMode !== 'urgent'" class="pet-chat-prompts" aria-label="快速开场">
+              <button v-for="prompt in petCompanionQuickPrompts" :key="prompt" type="button" @click="usePetQuickPrompt(prompt)">{{ prompt }}</button>
+            </div>
+            <div ref="petChatMessages" class="pet-chat-messages" role="log" aria-live="polite" aria-relevant="additions text" :aria-busy="petCompanionTyping">
               <div v-for="(msg, index) in petCompanionMsgs" :key="index" :class="['pet-chat-msg', msg.role]">
                 {{ msg.content }}
               </div>
               <div v-if="petCompanionTyping" class="pet-chat-msg assistant">正在想怎么回应你...</div>
             </div>
-            <div class="pet-chat-input-row">
-              <input v-model="petCompanionInput" placeholder="和它说点什么..." @keyup.enter="sendPetCompanionMsg" />
+            <div v-if="petCompanionMode !== 'urgent'" class="pet-chat-input-row">
+              <input v-model="petCompanionInput" aria-label="告诉咕团现在想说的话" placeholder="和它说点什么..." @keyup.enter="sendPetCompanionMsg" />
               <button type="button" @click.stop="sendPetCompanionMsg" :disabled="!petCompanionInput.trim() || petCompanionTyping">发送</button>
             </div>
           </div>
+          <button v-else type="button" class="pet-chat-entry" @click.stop="talkWithPet">坐到咕团旁边，说一句现在的感受</button>
         </div>
       </section>
     </div>
@@ -1162,7 +1169,16 @@
     <!-- ══ 聊天面板 ══ -->
     <Transition name="panel-slide">
       <div v-if="showChatPanel" class="profile-overlay" @click.self="closeWorkspacePanel('chat')">
-        <div class="profile-panel chat-panel" data-workspace="chat" @click.stop @keydown.esc="closeWorkspacePanel('chat')">
+        <div
+          ref="chatPanelRoot"
+          class="profile-panel chat-panel"
+          data-workspace="chat"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="student-chat-title"
+          @click.stop
+          @keydown="handleChatPanelKeydown"
+        >
           <!-- 关闭按钮 -->
           <button class="panel-close" type="button" aria-label="关闭倾诉面板" @click="closeWorkspacePanel('chat')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -1175,7 +1191,7 @@
             <div class="header-center">
               <img src="/images/logo.jpg" class="ai-avatar ai-logo" alt="咕哝" />
               <div>
-                <div class="ai-name">咕哝</div>
+                <div id="student-chat-title" class="ai-name">咕哝倾诉空间</div>
                 <div class="ai-status">
                   <span class="status-dot" :class="{thinking: chatLoading}"></span>
                   {{ chatLoading ? '正在思考...' : '在线，随时倾听' }}
@@ -1183,6 +1199,7 @@
               </div>
             </div>
             <button
+              v-if="!chatUrgentLocked"
               class="chat-end-button"
               type="button"
               :disabled="chatLoading || !chatMessages.some(item => item.role === 'user')"
@@ -1227,7 +1244,34 @@
             </div>
           </div>
 
-          <section v-if="showEndConfirmation" class="chat-end-confirm" role="status" aria-live="polite">
+          <section
+            v-if="chatUrgentLocked"
+            ref="chatUrgentSupport"
+            class="chat-urgent-support"
+            role="alert"
+            aria-live="assertive"
+            aria-labelledby="chat-urgent-title"
+            tabindex="-1"
+          >
+            <strong id="chat-urgent-title">先保持真人支持，不要独处</strong>
+            <p>请先去到可信成年人身边并远离危险物。若已采取行动或正处在迫切危险中，立即拨打 110 或 120；也可拨打 12356。咕哝是 AI 支持工具，不能替代真人危机干预。</p>
+            <div class="chat-urgent-calls" aria-label="紧急求助电话">
+              <a href="tel:12356">拨打 12356</a>
+              <a href="tel:110">拨打 110</a>
+              <a href="tel:120">拨打 120</a>
+            </div>
+            <label><input v-model="safetyCurrentSafe" type="checkbox"> 我现在在安全地点，身边没有危险物</label>
+            <label><input v-model="safetyContactedAdult" type="checkbox"> 我已经联系并和一位可信成年人待在一起</label>
+            <button
+              class="chat-safety-resolve"
+              type="button"
+              :disabled="!safetyCurrentSafe || !safetyContactedAdult || safetyResolving"
+              @click="resolveUrgentChat"
+            >{{ safetyResolving ? '正在确认…' : '确认已完成安全交接，开始新话题' }}</button>
+            <p v-if="safetyResolveError" class="chat-safety-error" role="status">{{ safetyResolveError }}</p>
+          </section>
+
+          <section v-if="showEndConfirmation && !chatUrgentLocked" class="chat-end-confirm" role="status" aria-live="polite">
             <div>
               <strong>要结束本次倾诉并生成小结吗？</strong>
               <span>会整理整段对话；这不是诊断或量表结果。</span>
@@ -1239,7 +1283,7 @@
           </section>
 
           <!-- 快捷按钮 -->
-          <div class="quick-wrap">
+          <div v-if="!chatUrgentLocked" class="quick-wrap">
             <div
               class="quick-scroll"
               ref="quickScroll"
@@ -1256,7 +1300,7 @@
           </div>
 
           <!-- 输入栏 -->
-          <div class="input-bar">
+          <div v-if="!chatUrgentLocked" class="input-bar">
             <button class="voice-btn" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading" :title="recording ? '停止录音' : '语音输入'">
               <svg v-if="!recording" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 14c1.7 0 3-1.3 3-3V5c0-1.7-1.3-3-3-3S9 3.3 9 5v6c0 1.7 1.3 3 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7h-1.7z"/></svg>
               <span v-else class="rec-wave"></span>
@@ -1425,7 +1469,7 @@
           <button type="button" class="panel-close" aria-label="关闭树洞" @click="closeWorkspacePanel('treehole')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
-          <TreeHoleView :inline="true" @close="closeWorkspacePanel('treehole')" />
+          <TreeHoleView :inline="true" @close="closeWorkspacePanel('treehole')" @open-chat="closeWorkspacePanel('treehole'); goToChat()" />
         </div>
       </div>
     </Transition>
@@ -1549,11 +1593,14 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
 import { getMoodStats, getMoodInsight } from '../api/mood'
+import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
+import { isOfflineCompanionUrgent } from '../utils/companionSafety'
 import {
   completeChatSession,
   deleteChatSummary,
   getChatHistory,
   getLatestChatSummary,
+  resolveChatSafety,
   sendMessage,
   startChatSession,
 } from '../api/chat'
@@ -1580,6 +1627,13 @@ const islandNavButton = ref(null)
 const profileNavButton = ref(null)
 const summaryOrbButton = ref(null)
 const chatSessionId = ref('')
+const chatPanelRoot = ref(null)
+const chatUrgentSupport = ref(null)
+const chatUrgentLocked = ref(false)
+const safetyCurrentSafe = ref(false)
+const safetyContactedAdult = ref(false)
+const safetyResolving = ref(false)
+const safetyResolveError = ref('')
 const summarySessionId = ref('')
 const showEndConfirmation = ref(false)
 const summaryStatus = ref('idle')
@@ -1717,18 +1771,71 @@ function closeWorkspacePanel(key) {
   })
 }
 
+function handlePetPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeWorkspacePanel('pet')
+    return
+  }
+  if (event.key !== 'Tab' || !petPanelRoot.value) return
+  const focusable = [...petPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function handleChatPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeWorkspacePanel('chat')
+    return
+  }
+  if (event.key !== 'Tab' || !chatPanelRoot.value) return
+  const focusable = [...chatPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
 const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
 const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
-const PET_COMPANION_STATE_KEY = 'shengyu_pet_companion_v4_5_0'
-const PET_VISUAL_KEY = 'shengyu_pet_visual_v4_5_4'
+const PET_COMPANION_STATE_KEY = 'shengyu_guguan_v5_1_0_alpha_6'
 const ROOM_PET_POSITION_KEY = 'shengyu_room_pet_position_v4_5_5'
-const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
-const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
 const todayKey = new Date().toISOString().slice(0, 10)
-const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
+function studentStorageKey(base) {
+  return `${base}:${userStore.userId || 'guest'}`
+}
+function safeStudentStorageGet(base) {
+  try { return localStorage.getItem(studentStorageKey(base)) } catch { return null }
+}
+function safeStudentStorageSet(base, value) {
+  try { localStorage.setItem(studentStorageKey(base), value); return true } catch { return false }
+}
+function safeStudentStorageRemove(base) {
+  try { localStorage.removeItem(studentStorageKey(base)); return true } catch { return false }
+}
+const showFirstRunGuide = ref(safeStudentStorageGet(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
 const guideStage = ref('computer')
 const firstRunMoodCard = ref(loadFirstRunMoodCard())
 const isFirstRunChatPending = computed(() => showFirstRunGuide.value && guideStage.value === 'confession')
@@ -1758,7 +1865,6 @@ const dailyReturnTask = computed(() => {
   return dailyReturnTasks[sum % dailyReturnTasks.length]
 })
 const dailyReturnState = reactive(loadDailyReturnState())
-const companionshipStreak = ref(loadCompanionshipStreak())
 const petMoodMessages = {
   tired: ['今天有点累的话，先靠着我坐一会儿。', '不用马上恢复精神，我会慢慢陪你。'],
   annoyed: ['烦的时候不用讲清楚全部，先说一句也可以。', '我在这里，先把最吵的那件事放下来。'],
@@ -1768,16 +1874,16 @@ const petMoodMessages = {
 }
 const petCompanionState = reactive(loadPetCompanionState())
 const showPetCompanionPanel = ref(false)
-const PET_VISUALS = [
-  { key: 'snorlax', name: '卡比兽', frames: Array.from({ length: 8 }, (_, index) => `/pets/snorlax/frame-${String(index + 1).padStart(2, '0')}.png`) },
-  { key: 'bubu', name: '布布', frames: Array.from({ length: 8 }, (_, index) => `/pets/bubu/frame-${String(index + 1).padStart(2, '0')}.png`) },
-  { key: 'kabi', name: '卡比', frames: Array.from({ length: 8 }, (_, index) => `/pets/kabi/frame-${String(index + 1).padStart(2, '0')}.png`) },
-]
-const selectedPetVisualKey = ref(loadPetVisualKey())
-const petAnimationFrame = ref(0)
-let petAnimationTimer = null
-const selectedPetVisual = computed(() => PET_VISUALS.find(visual => visual.key === selectedPetVisualKey.value) || PET_VISUALS[0])
-const selectedPetFrame = computed(() => selectedPetVisual.value.frames[petAnimationFrame.value % selectedPetVisual.value.frames.length])
+const petPanelRoot = ref(null)
+const GUGUAN_ASSETS = Object.freeze({
+  idle: '/images/guguan/guguan-idle.png',
+  happy: '/images/guguan/guguan-happy.png',
+  eating: '/images/guguan/guguan-eating.png',
+  sleeping: '/images/guguan/guguan-sleeping.png',
+})
+const petVisualState = ref('idle')
+let petVisualTimer = null
+const selectedPetFrame = computed(() => GUGUAN_ASSETS[petVisualState.value] || GUGUAN_ASSETS.idle)
 
 const roomRoot = ref(null)
 const roomPetPosition = reactive(loadRoomPetPosition())
@@ -1787,7 +1893,7 @@ const petRoamingBubble = computed(() => petIsMoving.value ? '我来了' : '点�
 
 function loadRoomPetPosition() {
   try {
-    const saved = JSON.parse(localStorage.getItem(ROOM_PET_POSITION_KEY) || 'null')
+    const saved = JSON.parse(safeStudentStorageGet(ROOM_PET_POSITION_KEY) || 'null')
     if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
       return safeRoomPetPosition(Number(saved.x), Number(saved.y))
     }
@@ -1805,7 +1911,7 @@ function safeRoomPetPosition(x, y) {
   }
 }
 function saveRoomPetPosition() {
-  localStorage.setItem(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
+  safeStudentStorageSet(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
 }
 function openPetPlayground() {
   openWorkspacePanel('pet')
@@ -1822,136 +1928,142 @@ function handleRoomPetMove(event) {
   if (petMoveTimer) clearTimeout(petMoveTimer)
   petMoveTimer = setTimeout(() => { petIsMoving.value = false }, 720)
 }
-function loadPetVisualKey() {
-  const saved = localStorage.getItem(PET_VISUAL_KEY)
-  return PET_VISUALS.some(visual => visual.key === saved) ? saved : 'snorlax'
-}
-function selectPetVisual(key) {
-  if (!PET_VISUALS.some(visual => visual.key === key)) return
-  selectedPetVisualKey.value = key
-  petAnimationFrame.value = 0
-  localStorage.setItem(PET_VISUAL_KEY, key)
-  setPetStatus('happy', `${selectedPetVisual.value.name}靠近了一点，准备继续陪你。`)
-}
-function startPetAnimation() {
-  if (petAnimationTimer) clearInterval(petAnimationTimer)
-  petAnimationTimer = setInterval(() => {
-    petAnimationFrame.value = (petAnimationFrame.value + 1) % selectedPetVisual.value.frames.length
-  }, 180)
+function showPetVisual(state, duration = 1800) {
+  petVisualState.value = GUGUAN_ASSETS[state] ? state : 'idle'
+  if (petVisualTimer) clearTimeout(petVisualTimer)
+  if (state === 'idle') return
+  petVisualTimer = setTimeout(() => { petVisualState.value = 'idle' }, duration)
 }
 
 const PET_COMPANION_PROFILES = {
-  xiaoqing: {
-    id: 'xiaoqing', avatar: '🌸', image: '/pets/snorlax/frame-01.png', name: '温柔学姐「小晴」', shortName: '小晴', desc: '轻柔、耐心，适合想被认真接住的时候。',
-    greeting: '我在这里。你可以慢慢说，今天最让你卡住的那件事是什么？',
-    replies: {
-      default: ['慢慢说，我会认真听完。', '你现在的感受是真实的，也值得被好好对待。', '不用急着变好，先把心里的声音放下来。'],
-      sad: ['听起来你真的撑了很久。先深呼吸一下，我们一点点把它说清楚。', '难过不是软弱，它是在提醒你有些需求需要被看见。'],
-      anxious: ['焦虑来的时候，先把它拆成一件具体的小事。现在最担心的是什么？', '我们先回到当下：喝口水、放慢呼吸，然后只处理眼前一步。'],
-      tired: ['累了就先靠一会儿，不需要马上证明自己。', '你的身体在提醒你要休息，这不是退步。'],
-      happy: ['真好，这份开心值得被记住。能告诉我它从哪里来的吗？'],
-      hello: ['你好呀，我在。今天想从哪一句开始说？'],
-    },
-  },
-  aze: {
-    id: 'aze', avatar: '☀️', image: '/pets/snorlax/frame-01.png', name: '邻家哥哥「阿泽」', shortName: '阿泽', desc: '直接、行动感强，适合需要一点推动和陪跑的时候。',
-    greeting: '来了？坐。先别一个人扛，说说现在最难处理的是哪一块。',
-    replies: {
-      default: ['我听着，先把情况讲清楚。', '稳住，我们先找一个能做的小动作。', '别急着全解决，先解决最靠近你的那一步。'],
-      sad: ['难受就先说出来，别憋着。说完我们再想办法。', '低谷不是终点，只是现在这段路比较暗。'],
-      anxious: ['担心可以理解。我们把最坏情况、发生概率、你能做什么列出来。', '压力大时先别硬扛，先做一件能立刻完成的小事。'],
-      tired: ['累就先停。能量不够的时候，休息本身就是任务。'],
-      happy: ['可以啊，这状态就对了。把这个小胜利记下来。'],
-      hello: ['在。今天遇到什么事了？'],
-    },
-  },
   gunong: {
-    id: 'gunong', avatar: '🌿', image: '/pets/snorlax/frame-01.png', name: '咕哝', shortName: '咕哝', desc: '更像你的专属情绪小伙伴，陪你倾诉、复盘、恢复一点力量。',
-    greeting: '我一直在这里。你不用组织得很完整，先说一句现在最真实的感受就可以。',
-    replies: {
-      default: ['我听见了。能再多说一点吗？', '这件事对你来说应该不轻松，我们先把它放在桌面上看一看。', '我会陪你说完，不急着给答案。'],
-      sad: ['现在不需要马上好起来。先允许自己难过一会儿。', '如果这份难过有名字，它更像委屈、失落，还是无助？'],
-      anxious: ['先把注意力拉回现在：你能看到的三样东西是什么？', '焦虑常常把未来放大。我们先确认眼前真正需要处理的一步。'],
-      tired: ['今天先降低要求。能好好休息，也是照顾自己的一部分。'],
-      happy: ['这份轻松很珍贵。要不要把它记录成今天的一个小亮点？'],
-      hello: ['你好，我在。今天想聊聊什么？'],
-    },
+    id: 'gunong', image: GUGUAN_ASSETS.idle, name: '咕团', shortName: '咕团', desc: '原创的房间陪伴宠物，只根据你明确说出的内容回应。',
+    greeting: '咕。你不用组织得很完整，先说一句现在最想让我听见的话就可以。',
   },
 }
-const petCompanions = ref(Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc })))
-const activePetCompanionId = ref('gunong')
 const petCompanionActive = ref(false)
 const petCompanionMsgs = ref([])
 const petCompanionInput = ref('')
 const petCompanionTyping = ref(false)
+const petCompanionMode = ref('idle')
+const petCompanionRisk = ref('routine')
+const petCompanionError = ref('')
+const petCompanionWorkflow = ref([])
 const petChatMessages = ref(null)
-const activePetCompanion = computed(() => PET_COMPANION_PROFILES[activePetCompanionId.value] || PET_COMPANION_PROFILES.gunong)
-const activePetImage = computed(() => selectedPetFrame.value)
+const petUrgentHandoff = ref(null)
+const petSafetyFragments = ref([])
+const petCompanionQuickPrompts = ['今天有点累', '想安静待一会', '有件开心的小事']
+const petCompanionModeLabel = computed(() => ({
+  idle: '安全检查会先于陪伴回应',
+  checking: '正在完成安全检查',
+  ready: petCompanionRisk.value === 'professional' ? '建议同时连接可信成年人' : '安全检查已完成',
+  urgent: '普通陪伴已停止，正在显示安全支持',
+  unavailable: '安全服务暂不可用，未继续分析',
+}[petCompanionMode.value] || '安全检查会先于陪伴回应'))
 
-function pickPetReply(characterId, userContent) {
-  const profile = PET_COMPANION_PROFILES[characterId] || PET_COMPANION_PROFILES.gunong
-  const text = String(userContent || '').toLowerCase()
-  let category = 'default'
-  if (/你好|hi|hello|在吗|在嘛/.test(text)) category = 'hello'
-  else if (/开心|高兴|快乐|兴奋|不错|太好了|舒服/.test(text)) category = 'happy'
-  else if (/难过|伤心|哭|痛苦|emo|悲伤|失落|抑郁|绝望/.test(text)) category = 'sad'
-  else if (/焦虑|紧张|害怕|担心|压力|慌|恐惧|不安/.test(text)) category = 'anxious'
-  else if (/累|疲惫|困|睡不着|失眠|没劲/.test(text)) category = 'tired'
-  const pool = profile.replies[category] || profile.replies.default
-  return pool[Math.floor(Math.random() * pool.length)]
-}
-
-async function loadPetCompanions() {
-  try {
-    const res = await axios.get(`${API}/api/companion/list`)
-    if (Array.isArray(res.data?.companions) && res.data.companions.length) {
-      petCompanions.value = res.data.companions.map(c => ({ ...c, image: PET_COMPANION_PROFILES[c.id]?.image || selectedPetFrame.value }))
-    }
-  } catch (e) {
-    petCompanions.value = Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc }))
-  }
-}
-
-async function startPetCompanion(companion = activePetCompanion.value) {
-  const id = companion.id || 'gunong'
-  activePetCompanionId.value = id
+async function startPetCompanion() {
   petCompanionActive.value = true
+  if (petCompanionMode.value === 'urgent') {
+    await nextTick()
+    petUrgentHandoff.value?.focus()
+    return
+  }
+  try {
+    const status = await getCompanionSafetyStatus()
+    if (status.data?.urgent) {
+      petCompanionMode.value = 'urgent'
+      petCompanionRisk.value = 'urgent'
+      petCompanionError.value = status.data.message
+      petCompanionWorkflow.value = [
+        { id: 'safety', status: 'attention', summary: '已恢复本次紧急安全状态' },
+        { id: 'context', status: 'blocked', summary: '普通陪伴保持停止' },
+        { id: 'response', status: 'blocked', summary: '请先连接真人安全支持' },
+      ]
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+      return
+    }
+  } catch {}
   petCompanionMsgs.value = []
+  petCompanionMode.value = 'idle'
+  petCompanionRisk.value = 'routine'
+  petCompanionError.value = ''
+  petCompanionWorkflow.value = []
   bumpPetAffinityOnce('talkDate')
   setPetStatus(petMoodStatus.value, '它坐近了一点，准备认真听你说。')
-  const fallbackGreeting = PET_COMPANION_PROFILES[id]?.greeting || '我在这里，想说什么都可以。'
-  try {
-    const res = await axios.post(`${API}/api/companion/start`, null, { params: { user_id: Number(userStore.userId) || 1, character_id: id } })
-    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.greeting || fallbackGreeting })
-  } catch (e) {
-    petCompanionMsgs.value.push({ role: 'assistant', content: fallbackGreeting })
-  }
+  petCompanionMsgs.value.push({ role: 'assistant', content: PET_COMPANION_PROFILES.gunong.greeting })
   await nextTick()
   if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
+}
+
+function usePetQuickPrompt(prompt) {
+  petCompanionInput.value = prompt
+  sendPetCompanionMsg()
 }
 
 async function sendPetCompanionMsg() {
   const content = petCompanionInput.value.trim()
   if (!content || petCompanionTyping.value) return
   petCompanionMsgs.value.push({ role: 'user', content })
+  petSafetyFragments.value = [...petSafetyFragments.value, content].slice(-3)
   petCompanionInput.value = ''
   petCompanionTyping.value = true
+  petCompanionMode.value = 'checking'
+  petCompanionError.value = ''
   await nextTick()
   if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
-  await new Promise(resolve => setTimeout(resolve, 420))
   try {
-    const res = await axios.post(`${API}/api/companion/chat`, { user_id: Number(userStore.userId) || 1, character_id: activePetCompanionId.value, content })
-    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.reply || pickPetReply(activePetCompanionId.value, content) })
+    const res = await sendCompanionMessage(content)
+    const payload = res.data || {}
+    if (!payload.reply || !['routine', 'watch', 'professional', 'urgent'].includes(payload.risk_level)) throw new Error('invalid companion response')
+    petCompanionRisk.value = payload.risk_level
+    petCompanionWorkflow.value = Array.isArray(payload.workflow) ? payload.workflow : []
+    petCompanionMode.value = payload.risk_level === 'urgent' ? 'urgent' : 'ready'
+    petCompanionError.value = payload.risk_level === 'urgent' ? payload.reply : ''
+    petCompanionMsgs.value.push({ role: 'assistant', content: payload.reply })
+    if (payload.risk_level === 'urgent') {
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+    }
   } catch (e) {
-    petCompanionMsgs.value.push({ role: 'assistant', content: pickPetReply(activePetCompanionId.value, content) })
+    const offlineUrgent = petSafetyFragments.value.some(isOfflineCompanionUrgent)
+      || isOfflineCompanionUrgent(petSafetyFragments.value.slice(-2).join(''))
+      || isOfflineCompanionUrgent(petSafetyFragments.value.join(''))
+    if (offlineUrgent) {
+      const urgent = '这些话可能表示你现在无法保证安全。请先不要独处，马上去到一位可信成年人身边并拨打12356；如果已经采取行动或危险迫近，请立即拨打110或120。'
+      petCompanionRisk.value = 'urgent'
+      petCompanionMode.value = 'urgent'
+      petCompanionError.value = urgent
+      petCompanionMsgs.value.push({ role: 'assistant', content: urgent })
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+    } else {
+      petCompanionMode.value = 'unavailable'
+      petCompanionMsgs.value.push({ role: 'assistant', content: '安全检查暂时没有完成，所以咕团不会继续猜测或分析这句话。你可以稍后重试，或打开倾诉入口继续说。' })
+    }
   } finally {
     petCompanionTyping.value = false
     await nextTick()
     if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
   }
-}function loadDailyReturnState() {
+}
+async function goToChatFromPet() {
   try {
-    const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
+    const handoff = await handoffCompanionToChat()
+    chatSessionId.value = handoff.data.session_id
+    closeWorkspacePanel('pet')
+    goToChat()
+  } catch {
+    petCompanionError.value = `${petCompanionError.value} 安全倾诉入口暂时未连接，请先拨打12356；危险迫近时拨打110或120。`.trim()
+    focusPetUrgentSupport()
+  }
+}
+function focusPetUrgentSupport() {
+  nextTick(() => petUrgentHandoff.value?.focus())
+}
+function loadDailyReturnState() {
+  try {
+    const saved = JSON.parse(safeStudentStorageGet(DAILY_RETURN_STATE_KEY) || 'null')
     if (saved?.date === todayKey) {
       return {
         date: todayKey,
@@ -1963,7 +2075,7 @@ async function sendPetCompanionMsg() {
   return { date: todayKey, mood: '', completedTask: false }
 }
 function saveDailyReturnState() {
-  localStorage.setItem(DAILY_RETURN_STATE_KEY, JSON.stringify({
+  safeStudentStorageSet(DAILY_RETURN_STATE_KEY, JSON.stringify({
     date: dailyReturnState.date,
     mood: dailyReturnState.mood,
     completedTask: dailyReturnState.completedTask,
@@ -1972,36 +2084,64 @@ function saveDailyReturnState() {
 
 function loadPetCompanionState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PET_COMPANION_STATE_KEY) || 'null')
+    const saved = JSON.parse(safeStudentStorageGet(PET_COMPANION_STATE_KEY) || 'null')
     if (saved && typeof saved === 'object') {
       return {
-        affinity: Number.isFinite(Number(saved.affinity)) ? Number(saved.affinity) : 1,
+        schemaVersion: 1,
+        bond: clampPetValue(saved.bond ?? (Number(saved.affinity || 1) * 2), 1, 40),
+        comfort: clampPetValue(saved.comfort, 0, 100, 72),
+        fullness: clampPetValue(saved.fullness, 0, 100, 68),
+        energy: clampPetValue(saved.energy, 0, 100, 76),
+        totalCare: clampPetValue(saved.totalCare ?? saved.affinity, 0, 999, 1),
         lastInteractionDate: saved.lastInteractionDate || '',
         pettedDate: saved.pettedDate || '',
         fedDate: saved.fedDate || '',
+        restedDate: saved.restedDate || '',
         talkDate: saved.talkDate || '',
         taskDate: saved.taskDate || '',
         mood: saved.mood || '',
         status: saved.status || 'okay',
-        message: saved.message || '我在这里，想靠近时就来坐坐。',
+        message: saved.message || '咕。想靠近时就来坐坐，我不会催你。',
+        memories: Array.isArray(saved.memories) ? saved.memories.slice(0, 6) : [],
       }
     }
   } catch {}
-  return { affinity: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '我在这里，想靠近时就来坐坐。' }
+  return { schemaVersion: 1, bond: 2, comfort: 72, fullness: 68, energy: 76, totalCare: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', restedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '咕。想靠近时就来坐坐，我不会催你。', memories: [] }
+}
+function clampPetValue(value, min, max, fallback = min) {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback
 }
 function savePetCompanionState() {
-  localStorage.setItem(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState }))
+  safeStudentStorageSet(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState, memories: petCompanionState.memories.slice(0, 6) }))
 }
 const petMoodStatus = computed(() => {
   if (timeOfDay.value === 'night' && !['很累', '有点烦'].includes(petCompanionState.mood)) return 'sleepy'
   return petCompanionState.status || 'okay'
 })
 const petAffinityLabel = computed(() => {
-  if (petCompanionState.affinity >= 8) return '你们已经很熟悉了'
-  if (petCompanionState.affinity >= 4) return '你们正在慢慢熟悉'
-  return '它还在慢慢认识你'
+  return `咕团 · ${petGrowthStage.value.name}`
 })
 const petCompanionMessage = computed(() => petCompanionState.message || pickPetMessage(petMoodStatus.value))
+const petGrowthStage = computed(() => {
+  if (petCompanionState.bond >= 18) return { name: '默契期', nextAt: 40, startAt: 18, copy: '它开始熟悉你照顾彼此的节奏。' }
+  if (petCompanionState.bond >= 6) return { name: '熟悉期', nextAt: 18, startAt: 6, copy: '一次次轻松互动，会慢慢积累默契。' }
+  return { name: '初遇期', nextAt: 6, startAt: 0, copy: '先认识彼此，不需要完成打卡任务。' }
+})
+const petGrowthProgress = computed(() => {
+  const stage = petGrowthStage.value
+  return clampPetValue(((petCompanionState.bond - stage.startAt) / Math.max(1, stage.nextAt - stage.startAt)) * 100, 0, 100)
+})
+const petCareMeters = computed(() => [
+  { key: 'comfort', label: '安心', value: petCompanionState.comfort, state: petCompanionState.comfort >= 80 ? '很放松' : petCompanionState.comfort >= 55 ? '安稳' : '想靠近' },
+  { key: 'fullness', label: '饱足', value: petCompanionState.fullness, state: petCompanionState.fullness >= 80 ? '吃饱了' : petCompanionState.fullness >= 55 ? '刚刚好' : '想吃点心' },
+  { key: 'energy', label: '精神', value: petCompanionState.energy, state: petCompanionState.energy >= 80 ? '有活力' : petCompanionState.energy >= 55 ? '从容' : '想休息' },
+])
+const petCurrentNeed = computed(() => {
+  const lowest = petCareMeters.value.reduce((current, meter) => meter.value < current.value ? meter : current)
+  return lowest.key === 'comfort' ? '此刻想被摸摸' : lowest.key === 'fullness' ? '此刻想吃一块种子饼' : '此刻想和你安静休息'
+})
+const petRecentMemories = computed(() => petCompanionState.memories.length ? petCompanionState.memories.slice(0, 3) : [{ id: 'first-meet', time: '今天', copy: '咕团搬进了你的房间，正在慢慢认识你。' }])
 const dailyStatusLabel = computed(() => {
   if (dailyReturnState.date === todayKey && dailyReturnState.mood) return dailyReturnState.mood
   return '留下一句话'
@@ -2042,7 +2182,7 @@ const roomFeatures = computed(() => ({
   pet: {
     id: 'pet',
     symbol: '·',
-    location: selectedPetVisual.value.name,
+    location: '咕团',
     title: petAffinityLabel.value,
     description: petCompanionMessage.value,
     actionLabel: '和它待一会',
@@ -2089,15 +2229,25 @@ function runSelectedRoomFeature() {
 
 function pickPetMessage(status) {
   const list = petMoodMessages[status] || petMoodMessages.okay
-  const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.affinity
+  const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.bond
   return list[seed % list.length]
 }
 function bumpPetAffinityOnce(field, amount = 1) {
   if (petCompanionState[field] !== todayKey) {
-    petCompanionState.affinity += amount
+    petCompanionState.bond = clampPetValue(petCompanionState.bond + amount, 1, 40)
+    petCompanionState.totalCare = clampPetValue(petCompanionState.totalCare + 1, 0, 999)
     petCompanionState[field] = todayKey
   }
   petCompanionState.lastInteractionDate = todayKey
+}
+function rememberPetCare(copy) {
+  const now = new Date()
+  petCompanionState.memories.unshift({
+    id: `${now.getTime()}-${petCompanionState.totalCare}`,
+    time: `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+    copy,
+  })
+  petCompanionState.memories = petCompanionState.memories.slice(0, 6)
 }
 function setPetStatus(status, message) {
   petCompanionState.status = status
@@ -2107,15 +2257,33 @@ function setPetStatus(status, message) {
 }
 function petPetting() {
   bumpPetAffinityOnce('pettedDate')
-  setPetStatus('happy', '它蹭了蹭你，好像认真收到了这份靠近。')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 12, 0, 100)
+  rememberPetCare('你摸了摸咕团，它把这份靠近记在了星尾巴里。')
+  showPetVisual('happy')
+  setPetStatus('happy', '咕！它蹭了蹭你，星尾巴亮了一下。')
 }
 function feedPetSnack() {
   bumpPetAffinityOnce('fedDate')
-  setPetStatus('happy', '小点心已经收下了，它看起来安心了一点。')
+  petCompanionState.fullness = clampPetValue(petCompanionState.fullness + 15, 0, 100)
+  rememberPetCare('咕团认真吃完了一块种子饼。')
+  showPetVisual('eating')
+  setPetStatus('happy', '种子饼收下了。咕团的脸颊鼓鼓的。')
+}
+function restWithPet() {
+  bumpPetAffinityOnce('restedDate')
+  petCompanionState.energy = clampPetValue(petCompanionState.energy + 14, 0, 100)
+  rememberPetCare('你和咕团安静休息了一会儿。')
+  showPetVisual('sleeping', 2600)
+  setPetStatus('sleepy', '不用做什么，和咕团一起把呼吸放慢一点。')
 }
 async function talkWithPet() {
   showPetCompanionPanel.value = true
-  await startPetCompanion(activePetCompanion.value)
+  if (petCompanionMode.value === 'urgent') {
+    focusPetUrgentSupport()
+    return
+  }
+  showPetVisual('happy')
+  await startPetCompanion()
 }
 function updatePetFromMood(option) {
   petCompanionState.mood = option
@@ -2125,26 +2293,11 @@ function updatePetFromMood(option) {
   else setPetStatus('okay')
 }
 
-function loadCompanionshipStreak() {
-  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
-  return Number.isFinite(saved) && saved > 0 ? saved : 1
-}
-function updateCompanionshipStreak() {
-  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
-  const lastActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY)
-  if (lastActiveDate === todayKey) return Number.isFinite(saved) && saved > 0 ? saved : 1
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const nextStreak = lastActiveDate === yesterday && Number.isFinite(saved) && saved > 0 ? saved + 1 : 1
-  localStorage.setItem(COMPANIONSHIP_STREAK_KEY, String(nextStreak))
-  localStorage.setItem(LAST_ACTIVE_DATE_KEY, todayKey)
-  return nextStreak
-}
 function selectDailyMood(option) {
   dailyReturnState.mood = option
   dailyReturnState.date = todayKey
   saveDailyReturnState()
   updatePetFromMood(option)
-  companionshipStreak.value = updateCompanionshipStreak()
 }
 function completeDailyTask() {
   dailyReturnState.completedTask = true
@@ -2152,7 +2305,6 @@ function completeDailyTask() {
   saveDailyReturnState()
   bumpPetAffinityOnce('taskDate')
   setPetStatus('happy', '谢谢你留下这一刻。我会安静陪着你，不需要每天打卡。')
-  companionshipStreak.value = updateCompanionshipStreak()
   if (dailyReturnTask.value.action === 'treehole') {
     openWorkspacePanel('treehole')
     return
@@ -2165,7 +2317,7 @@ function completeDailyTask() {
 }
 function loadFirstRunMoodCard() {
   try {
-    const saved = JSON.parse(localStorage.getItem(FIRST_RUN_MOOD_CARD_KEY) || 'null')
+    const saved = JSON.parse(safeStudentStorageGet(FIRST_RUN_MOOD_CARD_KEY) || 'null')
     if (saved?.summary && saved?.suggestion) return saved
     if (saved?.title || saved?.copy) {
       return buildFirstRunMoodCard(saved.copy || saved.title || '', saved)
@@ -2188,8 +2340,8 @@ function buildFirstRunMoodCard(message = '', reply = {}) {
 function completeFirstRunAfterChat(message, reply) {
   if (!showFirstRunGuide.value || guideStage.value !== 'confession' || !reply?.reply) return
   firstRunMoodCard.value = buildFirstRunMoodCard(message, reply)
-  localStorage.setItem(FIRST_RUN_MOOD_CARD_KEY, JSON.stringify(firstRunMoodCard.value))
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+  safeStudentStorageSet(FIRST_RUN_MOOD_CARD_KEY, JSON.stringify(firstRunMoodCard.value))
+  safeStudentStorageSet(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
   guideStage.value = 'mood-card'
 }
 function focusGuideTarget() {
@@ -2218,7 +2370,7 @@ function handleGuideTreeholeTarget() {
 }
 function skipFirstRunGuide() {
   showFirstRunGuide.value = false
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+  safeStudentStorageSet(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
 }
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
@@ -2712,7 +2864,32 @@ function nextStep() {
 }
 
 // ═══ 微信状态 ═══
-const userStatus = ref(JSON.parse(localStorage.getItem('shengyu_user_status') || 'null'))
+const USER_STATUS_KEY = 'shengyu_user_status'
+const STATUS_HISTORY_KEY = 'shengyu_status_history'
+function clearUnscopedStudentStatus() {
+  try {
+    localStorage.removeItem(USER_STATUS_KEY)
+    localStorage.removeItem(STATUS_HISTORY_KEY)
+  } catch {}
+}
+function loadUserStatus() {
+  try {
+    const value = JSON.parse(safeStudentStorageGet(USER_STATUS_KEY) || 'null')
+    if (!value || typeof value.emoji !== 'string' || typeof value.text !== 'string') return null
+    return { emoji: value.emoji.slice(0, 8), text: value.text.slice(0, 40) }
+  } catch { return null }
+}
+function loadStatusHistory() {
+  try {
+    const value = JSON.parse(safeStudentStorageGet(STATUS_HISTORY_KEY) || '[]')
+    if (!Array.isArray(value)) return []
+    return value.filter(item => item && /^\d{4}-\d{2}-\d{2}$/.test(item.date) && typeof item.emoji === 'string' && typeof item.text === 'string')
+      .slice(-366)
+      .map(item => ({ date: item.date, emoji: item.emoji.slice(0, 8), text: item.text.slice(0, 40) }))
+  } catch { return [] }
+}
+clearUnscopedStudentStatus()
+const userStatus = ref(loadUserStatus())
 const statusInput = ref('')
 
 const presetStatuses = [
@@ -2748,18 +2925,18 @@ const presetStatuses = [
 function addStatusHistory(emoji, text) {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
-  const history = JSON.parse(localStorage.getItem('shengyu_status_history') || '[]')
+  const history = loadStatusHistory()
   // 同一天覆盖，新增日期追加
   const idx = history.findIndex(h => h.date === dateStr)
   if (idx >= 0) { history[idx] = { date: dateStr, emoji, text } }
   else { history.push({ date: dateStr, emoji, text }) }
-  localStorage.setItem('shengyu_status_history', JSON.stringify(history))
+  safeStudentStorageSet(STATUS_HISTORY_KEY, JSON.stringify(history.slice(-366)))
   buildStatusCalendar()
 }
 
 function setStatus(item) {
   userStatus.value = { emoji: item.emoji, text: item.text }
-  localStorage.setItem('shengyu_user_status', JSON.stringify(userStatus.value))
+  safeStudentStorageSet(USER_STATUS_KEY, JSON.stringify(userStatus.value))
   addStatusHistory(item.emoji, item.text)
   showStatusPicker.value = false
 }
@@ -2767,14 +2944,14 @@ function setCustomStatus() {
   const text = statusInput.value.trim()
   if (!text) return
   userStatus.value = { emoji: '💬', text }
-  localStorage.setItem('shengyu_user_status', JSON.stringify(userStatus.value))
+  safeStudentStorageSet(USER_STATUS_KEY, JSON.stringify(userStatus.value))
   addStatusHistory('💬', text)
   statusInput.value = ''
   showStatusPicker.value = false
 }
 function clearStatus() {
   userStatus.value = null
-  localStorage.removeItem('shengyu_user_status')
+  safeStudentStorageRemove(USER_STATUS_KEY)
   showStatusPicker.value = false
 }
 const distribution = ref({})
@@ -3219,7 +3396,7 @@ const badges = computed(() => [
 const moodCalendar = ref([])
 
 function buildStatusCalendar() {
-  const history = JSON.parse(localStorage.getItem('shengyu_status_history') || '[]')
+  const history = loadStatusHistory()
   // 把当前状态也加入今天（如果历史里没有今天的话）
   const today = new Date().toISOString().slice(0, 10)
   if (userStatus.value && !history.find(h => h.date === today)) {
@@ -3529,7 +3706,7 @@ function getEmotionEmoji(emotion) {
 
 async function sendChatMsg(text) {
   const msg = text || chatInput.value.trim()
-  if (!msg || chatLoading.value) return
+  if (!msg || chatLoading.value || chatUrgentLocked.value) return
   chatInput.value = ''
   showEndConfirmation.value = false
   chatMessages.value.push({ role: 'user', content: msg })
@@ -3558,11 +3735,15 @@ async function sendChatMsg(text) {
       studentAgentState.riskLevel = res.data.risk_level || 'routine'
       studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
       if (studentAgentState.signal === 'urgent') {
+        chatUrgentLocked.value = true
+        safetyCurrentSafe.value = false
+        safetyContactedAdult.value = false
         studentAgentState.status = 'urgent'
         studentAgentState.phase = 'urgent'
         studentAgentState.riskLevel = 'urgent'
         studentAgentState.lastEvent = '普通分析已停止，当前优先显示安全协助路径'
         showAgentRail.value = false
+        nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
       } else {
         studentAgentState.status = 'ready'
         studentAgentState.phase = showEndConfirmation.value ? 'end_candidate' : 'responded'
@@ -3590,7 +3771,7 @@ async function sendChatMsg(text) {
 }
 
 function requestConversationEnd() {
-  if (!chatMessages.value.some(item => item.role === 'user') || chatLoading.value) return
+  if (chatUrgentLocked.value || !chatMessages.value.some(item => item.role === 'user') || chatLoading.value) return
   showEndConfirmation.value = true
   studentAgentState.phase = 'end_candidate'
   studentAgentState.lastEvent = '等待你确认是否结束；未确认前不会生成分析小结'
@@ -3691,6 +3872,12 @@ function closeSupportDrawer() {
 async function beginFreshConversation() {
   const res = await startChatSession(true)
   chatSessionId.value = res.data.session_id
+  applyChatSessionStatus(res.data?.status)
+  if (chatUrgentLocked.value) {
+    showSupportDrawer.value = false
+    showChatPanel.value = true
+    return
+  }
   chatMessages.value = []
   chatInput.value = ''
   showEndConfirmation.value = false
@@ -3709,6 +3896,12 @@ async function continueAfterSummary() {
     }
     const res = await startChatSession(true, summarySessionId.value || null)
     chatSessionId.value = res.data.session_id
+    applyChatSessionStatus(res.data?.status)
+    if (chatUrgentLocked.value) {
+      showSupportDrawer.value = false
+      showChatPanel.value = true
+      return
+    }
     chatInput.value = ''
     showEndConfirmation.value = false
     showSupportDrawer.value = false
@@ -3731,6 +3924,43 @@ function resetStudentAgentState() {
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
   })
+}
+
+function applyChatSessionStatus(status) {
+  chatUrgentLocked.value = status === 'urgent'
+  safetyCurrentSafe.value = false
+  safetyContactedAdult.value = false
+  safetyResolveError.value = ''
+  if (!chatUrgentLocked.value) return
+  showEndConfirmation.value = false
+  studentAgentState.status = 'urgent'
+  studentAgentState.phase = 'urgent'
+  studentAgentState.riskLevel = 'urgent'
+  studentAgentState.signal = 'urgent'
+  studentAgentState.lastEvent = '普通分析已停止，当前优先保持真人安全支持'
+  showAgentRail.value = false
+  nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
+}
+
+async function resolveUrgentChat() {
+  if (!chatSessionId.value || !safetyCurrentSafe.value || !safetyContactedAdult.value || safetyResolving.value) return
+  safetyResolving.value = true
+  safetyResolveError.value = ''
+  try {
+    await resolveChatSafety(chatSessionId.value, true, true)
+    const session = await startChatSession(true)
+    chatSessionId.value = session.data.session_id
+    chatMessages.value = []
+    chatInput.value = ''
+    applyChatSessionStatus(session.data?.status)
+    resetStudentAgentState()
+    await nextTick()
+    focusWithoutScroll(inputEl.value)
+  } catch (err) {
+    safetyResolveError.value = err?.response?.data?.detail || '暂时无法开始新话题，请继续和可信成年人待在一起。'
+  } finally {
+    safetyResolving.value = false
+  }
 }
 
 async function removeConversationSummary() {
@@ -3884,6 +4114,7 @@ async function openChatPanel() {
   try {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
+    applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     if (res.data?.length) chatMessages.value = res.data
     else chatMessages.value = []
@@ -3911,10 +4142,10 @@ async function loadLatestConversationSummary() {
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions(); startPetAnimation(); loadLatestConversationSummary() })
+onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadLatestConversationSummary() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
-  if (petAnimationTimer) clearInterval(petAnimationTimer)
+  if (petVisualTimer) clearTimeout(petVisualTimer)
   if (petMoveTimer) clearTimeout(petMoveTimer)
   if (audioEl.value) audioEl.value.pause()
   window.removeEventListener('resize', onResize)
@@ -4190,12 +4421,6 @@ onUnmounted(() => {
 .pet-panel-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .pet-panel-actions button { min-height: 44px; border: none; border-radius: 15px; background: rgba(255,255,255,0.16); color: #fff8e8; font-size: 14px; font-weight: 900; font-family: inherit; cursor: pointer; }
 .pet-panel-actions button.is-primary { background: #ffd67e; color: #33220f; }
-.pet-visual-picker { margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.12); }
-.pet-visual-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.pet-visual-option { min-height: 98px; padding: 9px; border-radius: 17px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.1); color: #fff8e8; font-family: inherit; cursor: pointer; }
-.pet-visual-option.active { border-color: rgba(255,214,126,0.9); background: rgba(255,214,126,0.18); box-shadow: 0 12px 30px rgba(255,214,126,0.14); }
-.pet-visual-option img { width: 58px; height: 58px; object-fit: contain; display: block; margin: 0 auto 6px; filter: drop-shadow(0 8px 14px rgba(0,0,0,0.22)); }
-.pet-visual-option strong { display: block; text-align: center; font-size: 13px; }
 
 .first-run-guide {
   padding: 15px;
@@ -4367,7 +4592,6 @@ onUnmounted(() => {
   .pet-playground-stage { min-height: 220px; }
   .room-roaming-pet { width: 72px; min-height: 76px; }
   .room-roaming-pet img { width: 70px; height: 70px; }
-  .pet-visual-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {
   .engagement-stack {
@@ -5833,6 +6057,33 @@ onUnmounted(() => {
 }
 .chat-panel .tts-btn:hover, .chat-panel .tts-btn.playing { background: rgba(255,255,255,0.14); color: #C8C0B6; }
 
+.chat-panel .chat-urgent-support {
+  flex-shrink: 0;
+  margin: 12px 16px max(14px, env(safe-area-inset-bottom));
+  padding: 16px;
+  border: 2px solid rgba(255, 196, 132, .72);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(75, 45, 39, .96), rgba(38, 34, 42, .96));
+  color: #fff6e8;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .3);
+}
+.chat-panel .chat-urgent-support strong { display: block; font-size: 16px; margin-bottom: 7px; }
+.chat-panel .chat-urgent-support p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; }
+.chat-panel .chat-urgent-support label { display: flex; gap: 9px; align-items: flex-start; margin: 9px 0; font-size: 13px; line-height: 1.5; }
+.chat-panel .chat-urgent-support input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: #a7d8bc; }
+.chat-panel .chat-urgent-calls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chat-panel .chat-urgent-calls a,
+.chat-panel .chat-safety-resolve {
+  min-height: 40px; padding: 9px 13px; border-radius: 12px; border: 1px solid rgba(255,255,255,.3);
+  background: rgba(255,255,255,.13); color: #fff; font-weight: 700; text-decoration: none;
+}
+.chat-panel .chat-safety-resolve { width: 100%; margin-top: 4px; cursor: pointer; }
+.chat-panel .chat-safety-resolve:disabled { opacity: .45; cursor: not-allowed; }
+.chat-panel .chat-urgent-calls a:focus-visible,
+.chat-panel .chat-safety-resolve:focus-visible,
+.chat-panel .chat-urgent-support input:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
+.chat-panel .chat-safety-error { color: #ffd2c8; margin-top: 8px !important; }
+
 /* 加载气泡 */
 .chat-panel .typing-bubble { display: flex; gap: 5px; padding: 14px 18px; }
 .chat-panel .typing-bubble .dot {
@@ -7041,5 +7292,170 @@ onUnmounted(() => {
 
 @media (max-width: 440px) {
   .room-onboarding-cue { grid-template-columns: auto minmax(0, 1fr) auto; }
+}
+
+/* v5.1.0-alpha.6：原创宠物「咕团」的单一养成工作区。 */
+.room-roaming-pet img,
+.pet-panel-frame,
+.pet-stage-frame,
+.pet-chat-head img {
+  image-rendering: pixelated;
+}
+.room-roaming-pet img { object-position: center bottom; }
+.pet-panel-overlay {
+  background: rgba(7, 12, 18, .58);
+  backdrop-filter: blur(12px) saturate(.88);
+}
+.pet-panel-card.pet-playground-card {
+  width: min(820px, calc(100vw - 32px));
+  max-height: min(90vh, 820px);
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 18px;
+  color: #f8f6ef;
+  background: linear-gradient(145deg, rgba(24, 31, 38, .97), rgba(42, 39, 53, .96));
+  box-shadow: 0 24px 70px rgba(3, 7, 12, .5), inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(24px) saturate(1.08);
+  scrollbar-gutter: stable;
+}
+.pet-panel-head { grid-template-columns: 92px minmax(0, 1fr); gap: 18px; padding-right: 42px; }
+.pet-panel-head h2 { margin: 0 0 6px; font-size: 21px; line-height: 1.25; }
+.pet-panel-head p { margin: 0; max-width: 58ch; color: rgba(248,246,239,.72); font-size: 13px; line-height: 1.6; }
+.pet-panel-avatar {
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border: 1px solid rgba(221, 211, 255, .18);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 65%, rgba(236, 211, 135, .2), rgba(171, 214, 192, .09));
+}
+.pet-panel-frame { width: 96px; height: 96px; }
+.pet-panel-kicker { color: #bcdcc9; font-size: 11px; letter-spacing: .03em; }
+.pet-panel-close { border-radius: 10px; }
+.pet-panel-close:hover { background: rgba(255,255,255,.2); }
+.pet-panel-close:focus-visible,
+.pet-panel-actions button:focus-visible,
+.pet-chat-prompts button:focus-visible,
+.pet-chat-entry:focus-visible,
+.pet-chat-input-row input:focus-visible,
+.pet-chat-input-row button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
+
+.pet-growth-summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; margin: 18px 0 14px; }
+.pet-growth-summary > div:first-child { display: flex; align-items: baseline; gap: 8px; }
+.pet-growth-summary span { color: rgba(248,246,239,.68); font-size: 11px; }
+.pet-growth-summary strong { color: #f0d58e; font-size: 12px; }
+.pet-growth-track { height: 7px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.1); }
+.pet-growth-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #91cbb3, #ecd182); transition: width .22s ease; }
+.pet-growth-summary small { grid-column: 1 / -1; color: rgba(248,246,239,.58); font-size: 11px; }
+
+.pet-care-layout { display: grid; grid-template-columns: minmax(280px, 1.05fr) minmax(260px, .95fr); gap: 16px; }
+.pet-playground-stage {
+  min-height: 300px;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 50%, rgba(181, 218, 199, .16), transparent 54%), linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+}
+.pet-stage-frame { width: min(245px, 62vw); height: min(245px, 62vw); animation: guguan-breathe 2.4s steps(2, end) infinite; }
+.pet-stage-frame.is-happy { animation: guguan-hop .46s steps(3, end) 3; }
+.pet-stage-frame.is-eating { animation: guguan-nibble .32s steps(2, end) 5; }
+.pet-stage-frame.is-sleeping { transform: rotate(-4deg) translateY(8px); filter: saturate(.82) brightness(.9) drop-shadow(0 18px 24px rgba(0,0,0,.2)); animation: guguan-sleep 2.5s steps(2, end) infinite; }
+@keyframes guguan-breathe { 50% { transform: translateY(-5px); } }
+@keyframes guguan-hop { 50% { transform: translateY(-12px) scale(1.02); } }
+@keyframes guguan-nibble { 50% { transform: translateY(2px) scale(.985); } }
+@keyframes guguan-sleep { 50% { transform: rotate(-4deg) translateY(10px) scale(.985); } }
+.pet-stage-hint { top: 12px; left: 12px; border-radius: 8px; background: rgba(12,18,24,.68); color: rgba(248,246,239,.76); }
+.pet-stage-bubble { right: 12px; bottom: 12px; max-width: 78%; border-radius: 10px 10px 3px 10px; background: rgba(239,214,148,.94); }
+.pet-care-console { display: grid; align-content: start; gap: 16px; padding: 2px 0; }
+.pet-care-meters { display: grid; gap: 13px; }
+.pet-care-meter { display: grid; grid-template-columns: 38px minmax(80px, 1fr) 54px; gap: 9px; align-items: center; }
+.pet-care-meter > span { color: rgba(248,246,239,.76); font-size: 12px; font-weight: 700; }
+.pet-care-meter > div { height: 8px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.1); }
+.pet-care-meter i { display: block; height: 100%; border-radius: inherit; background: #a8d4c1; }
+.pet-care-meter strong { color: rgba(248,246,239,.62); font-size: 10px; text-align: right; }
+.pet-panel-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.pet-panel-actions button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.075);
+  font-size: 12px;
+  transition: background .18s ease, transform .18s ease;
+}
+.pet-panel-actions button:hover { background: rgba(255,255,255,.14); transform: translateY(-1px); }
+.pet-panel-actions button.is-primary { border-color: transparent; background: #bcdcc9; color: #14241e; }
+.pet-care-boundary { margin: 0; color: rgba(248,246,239,.54); font-size: 10px; line-height: 1.55; }
+
+.pet-memory-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.09); }
+.pet-section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pet-section-title span { font-size: 12px; font-weight: 800; }
+.pet-section-title small { color: rgba(248,246,239,.52); font-size: 10px; }
+.pet-memory-strip ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.pet-memory-strip li { min-height: 56px; padding: 9px 10px; border-left: 2px solid rgba(188,220,201,.7); background: rgba(255,255,255,.045); }
+.pet-memory-strip time { display: block; margin-bottom: 4px; color: #bcdcc9; font-size: 9px; }
+.pet-memory-strip li span { color: rgba(248,246,239,.7); font-size: 10px; line-height: 1.45; }
+
+.pet-companion-restored { margin-top: 12px; }
+.pet-chat-entry { width: 100%; min-height: 42px; border: 1px solid rgba(188,220,201,.25); border-radius: 10px; color: #dceee5; background: rgba(188,220,201,.08); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pet-companion-chat { display: grid; gap: 10px; padding-top: 4px; }
+.pet-chat-head { display: flex; align-items: center; gap: 10px; }
+.pet-chat-head img { width: 42px; height: 42px; object-fit: contain; }
+.pet-chat-head div { display: grid; }
+.pet-chat-head strong { font-size: 12px; }
+.pet-chat-head span { color: rgba(248,246,239,.55); font-size: 10px; }
+.pet-chat-safety-state { display: flex; align-items: center; gap: 7px; min-height: 28px; color: rgba(248,246,239,.7); font-size: 10px; }
+.pet-chat-safety-state > span { width: 7px; height: 7px; border-radius: 2px; background: #a8d4c1; }
+.pet-chat-safety-state.is-checking > span { background: #f0d58e; }
+.pet-chat-safety-state.is-urgent > span,
+.pet-chat-safety-state.is-unavailable > span { background: #f08b7f; }
+.pet-chat-identity { margin: -4px 0 0; color: rgba(248,246,239,.52); font-size: 10px; line-height: 1.5; }
+.pet-chat-workflow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pet-chat-workflow li { min-height: 42px; padding: 7px 8px; border-radius: 8px; color: rgba(248,246,239,.64); background: rgba(255,255,255,.045); font-size: 9px; line-height: 1.35; }
+.pet-chat-workflow li span { display: block; margin-bottom: 3px; color: #bcdcc9; font-weight: 800; }
+.pet-chat-workflow li.is-attention span,
+.pet-chat-workflow li.is-blocked span { color: #f2a59b; }
+.pet-chat-prompts { display: flex; flex-wrap: wrap; gap: 7px; }
+.pet-chat-prompts button { min-height: 32px; padding: 6px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; color: rgba(248,246,239,.76); background: rgba(255,255,255,.055); font: inherit; font-size: 10px; cursor: pointer; }
+.pet-chat-messages { display: grid; gap: 7px; max-height: 170px; overflow-y: auto; padding: 10px; border-radius: 10px; background: rgba(5,10,15,.22); }
+.pet-chat-msg { width: fit-content; max-width: 82%; padding: 8px 10px; border-radius: 9px 9px 9px 3px; color: rgba(248,246,239,.82); background: rgba(255,255,255,.08); font-size: 11px; line-height: 1.5; }
+.pet-chat-msg.user { justify-self: end; border-radius: 9px 9px 3px 9px; background: rgba(188,220,201,.16); }
+.pet-chat-input-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.pet-chat-input-row input { min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; color: #f8f6ef; background: rgba(255,255,255,.06); font: inherit; font-size: 11px; }
+.pet-chat-input-row button { min-width: 64px; border: 0; border-radius: 9px; color: #16251f; background: #bcdcc9; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.pet-chat-input-row button:disabled { opacity: .48; cursor: not-allowed; }
+.pet-urgent-handoff { display: grid; gap: 9px; padding: 12px; border: 1px solid rgba(240,139,127,.34); border-radius: 10px; background: rgba(115,34,34,.22); }
+.pet-urgent-handoff strong { color: #ffd7d1; font-size: 13px; }
+.pet-urgent-handoff p { margin: 0; color: rgba(255,241,237,.82); font-size: 11px; line-height: 1.55; }
+.pet-urgent-handoff div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.pet-urgent-handoff a,
+.pet-urgent-handoff button { display: grid; min-height: 44px; place-items: center; border: 0; border-radius: 9px; color: #291511; background: #ffd0c9; font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.pet-urgent-handoff button { width: 100%; background: rgba(255,255,255,.12); color: #fff4f1; }
+
+@media (max-width: 680px) {
+  .pet-panel-overlay { align-items: flex-end; padding: 0; }
+  .pet-panel-card.pet-playground-card { width: 100%; max-height: min(91dvh, 860px); padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 16px 16px 0 0; }
+  .pet-panel-head { grid-template-columns: 66px minmax(0, 1fr); gap: 12px; }
+  .pet-panel-avatar { width: 66px; height: 66px; }
+  .pet-panel-frame { width: 70px; height: 70px; }
+  .pet-growth-summary { grid-template-columns: 1fr; }
+  .pet-growth-summary > div:first-child { justify-content: space-between; }
+  .pet-growth-track { grid-row: 2; }
+  .pet-care-layout { grid-template-columns: 1fr; }
+  .pet-playground-stage { min-height: 230px; }
+  .pet-memory-strip ul { grid-template-columns: 1fr; }
+  .pet-memory-strip li:nth-child(n + 3) { display: none; }
+  .pet-panel-close { width: 44px; height: 44px; top: 10px; right: 10px; }
+  .pet-chat-prompts button { min-height: 44px; }
+  .pet-chat-workflow { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-stage-frame,
+  .pet-stage-frame.is-happy,
+  .pet-stage-frame.is-eating,
+  .pet-stage-frame.is-sleeping { animation: none; }
+  .pet-growth-track span,
+  .pet-panel-actions button { transition: none; }
 }
 </style>

@@ -81,6 +81,17 @@ class SessionResponse(BaseModel):
     started_at: datetime
 
 
+class SafetyResolutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_safe: bool
+    contacted_trusted_adult: bool
+
+
+class SafetyResolutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["resolved"]
+
+
 class SummarySignal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message_id: int
@@ -159,7 +170,7 @@ def _active_or_new_session(db: Session, user_id: int, session_code: str | None =
             raise HTTPException(status_code=409, detail="本次倾诉已经结束，请开始新话题")
         return row
     row = db.query(StudentChatSession).filter(
-        StudentChatSession.user_id == user_id, StudentChatSession.status == "active"
+        StudentChatSession.user_id == user_id, StudentChatSession.status.in_(["active", "urgent"])
     ).order_by(StudentChatSession.started_at.desc()).first()
     return row or _new_session(db, user_id)
 
@@ -169,10 +180,12 @@ def start_session(payload: SessionStartRequest, db: Session = Depends(get_db),
                   current_user: User = Depends(get_current_user)):
     _cleanup_expired_summaries(db, current_user.id)
     active = db.query(StudentChatSession).filter(
-        StudentChatSession.user_id == current_user.id, StudentChatSession.status == "active"
+        StudentChatSession.user_id == current_user.id, StudentChatSession.status.in_(["active", "urgent"])
     ).order_by(StudentChatSession.started_at.desc()).first()
+    if active and active.status == "urgent":
+        return SessionResponse(session_id=active.session_code, status="urgent", started_at=active.started_at)
     if active and not payload.force_new:
-        return SessionResponse(session_id=active.session_code, status="active", started_at=active.started_at)
+        return SessionResponse(session_id=active.session_code, status=active.status, started_at=active.started_at)
     if active:
         active.status = "abandoned"
         active.ended_at = datetime.utcnow()
@@ -186,6 +199,36 @@ def start_session(payload: SessionStartRequest, db: Session = Depends(get_db),
         continued_from_id=continued_from.id if continued_from else None,
         consent_version=payload.external_ai_consent_version)
     return SessionResponse(session_id=row.session_code, status="active", started_at=row.started_at)
+
+
+@router.post("/sessions/{session_code}/resolve-safety", response_model=SafetyResolutionResponse)
+def resolve_safety_session(session_code: str, payload: SafetyResolutionRequest, request: Request,
+                           db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_user)):
+    """学生完成真人安全交接后，受控结束危机会话；不改写原风险记录。"""
+    session = _owned_session(db, session_code, current_user.id)
+    if session.status != "urgent":
+        raise HTTPException(status_code=409, detail="当前倾诉不处于安全协助状态")
+    if not payload.current_safe or not payload.contacted_trusted_adult:
+        raise HTTPException(status_code=400, detail="请先确认已到达安全地点，并已联系可信成年人")
+
+    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    if token:
+        # 延迟导入以避免 companion -> chat 的模块循环。
+        from api.companion import clear_companion_context_for_token
+        clear_companion_context_for_token(token, db)
+
+    session.status = "abandoned"
+    session.ended_at = datetime.utcnow()
+    db.add(SensitiveAccessLog(
+        actor_user_id=current_user.id,
+        action="resolve_student_urgent_session",
+        resource_type="student_chat_session",
+        resource_id=session.session_code,
+        result="student_confirmed_safe_and_contacted_adult",
+    ))
+    db.commit()
+    return SafetyResolutionResponse(status="resolved")
 
 
 @router.post("/send", response_model=ChatResponse)
@@ -630,8 +673,8 @@ def _detect_crisis(text: str) -> bool:
         r"(?:手里|身边|旁边).{0,5}(?:有|拿着|放着).{0,4}(?:刀|刀片|大量药|一瓶药|绳)",
         r"(?:买|准备|备|藏)(?:好|好了).{0,5}(?:炭|木炭|安眠药|刀片|绳)",
     )
-    quote_prefix = re.compile(r"(?:新闻|电影|书里|课文|别人|同学|朋友|他说|她说).{0,8}$")
-    negation_prefix = re.compile(r"(?:没|没有|从没|从未|并没有|不会|不再|不想).{0,4}$")
+    quote_prefix = re.compile(r"(?:(?:别人|同学|朋友|家人|老师|他|她).{0,4}(?:说|写|表示|提到).{0,2}(?:他|她|自己)|(?:新闻|电影|书里|课文).{0,6}(?:写|表示|提到)|(?:新闻|电影|书|课文)(?:里|中).{0,4}(?:有人|角色|主人公|他|她)).{0,2}$")
+    negation_prefix = re.compile(r"(?:(?:没|没有|从没|从未|并没有|不会|不再|并不).{0,4}|(?<!得)不)$")
     for pattern in additional_patterns:
         for match in re.finditer(pattern, text):
             prefix = text[max(0, match.start() - 14):match.start()]

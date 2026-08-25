@@ -53,6 +53,7 @@ def get_users(user_id: int | None = None, page: int = 1, size: int = 20, db: Ses
 
 @router.post("/set-admin/{target_user_id}")
 def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Depends(get_db), current_admin: User = Depends(require_admin_teacher)):
+    from api.companion import clear_companion_context_for_user
     target = db.query(User).filter(User.id == target_user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -61,6 +62,7 @@ def set_admin(target_user_id: int, user_id: int | None = None, db: Session = Dep
     before = int(target.is_admin or 0)
     target.is_admin = 1 if not target.is_admin else 0
     # 角色变化后必须重新认证，避免旧学生会话在提权后立即继承教师权限。
+    clear_companion_context_for_user(target.id, db)
     db.query(UserSession).filter(UserSession.user_id == target.id).delete(synchronize_session=False)
     if not target.is_admin:
         db.query(TeacherStudentAssignment).filter(TeacherStudentAssignment.teacher_user_id == target.id).update({"active": 0})

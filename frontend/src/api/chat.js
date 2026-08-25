@@ -14,6 +14,12 @@ export function getChatHistory(userId, sessionId = null) {
 export function completeChatSession(sessionId) {
   return instance.post(`/sessions/${encodeURIComponent(sessionId)}/complete`);
 }
+export function resolveChatSafety(sessionId, currentSafe, contactedTrustedAdult) {
+  return instance.post(`/sessions/${encodeURIComponent(sessionId)}/resolve-safety`, {
+    current_safe: currentSafe,
+    contacted_trusted_adult: contactedTrustedAdult,
+  });
+}
 export function getLatestChatSummary() {
   return instance.get("/sessions/latest-summary");
 }

@@ -35,6 +35,8 @@ def establish_session(response: Response, db: Session, user: User) -> None:
 def clear_session(response: Response, request: Request, db: Session) -> None:
     token = request.cookies.get(settings.SESSION_COOKIE_NAME)
     if token:
+        from api.companion import clear_companion_context_for_token
+        clear_companion_context_for_token(token, db)
         db.query(UserSession).filter(UserSession.token_hash == _token_hash(token)).delete()
         db.commit()
     response.delete_cookie(settings.SESSION_COOKIE_NAME, path="/")
@@ -47,6 +49,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     session = db.query(UserSession).filter(UserSession.token_hash == _token_hash(token)).first()
     if not session or session.expires_at <= datetime.utcnow():
         if session:
+            from api.companion import clear_companion_context_for_token
+            clear_companion_context_for_token(token, db)
             db.delete(session)
             db.commit()
         raise HTTPException(status_code=401, detail="会话已失效，请重新进入")

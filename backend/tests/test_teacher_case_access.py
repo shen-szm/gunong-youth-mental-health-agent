@@ -456,7 +456,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 json={"user_id": self.student_id, "message": "小组活动让我担心说错话"},
             )
             self.assertEqual(routine.status_code, 200)
-            self.assertEqual(routine.json()["conversation_signal"], "continue")
+            self.assertEqual(routine.json()["conversation_signal"], "urgent")
             self.assertNotIn("support", routine.json())
         finally:
             student_client.close()

@@ -95,6 +95,20 @@ class UserSession(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class CompanionSafetyState(Base):
+    """跨进程保存最小派生安全状态；不保存任何聊天原文。"""
+
+    __tablename__ = "companion_safety_states"
+
+    id = Column(Integer, primary_key=True)
+    session_token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    pending_flags_json = Column(Text, nullable=False, default="[]")
+    urgent = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class GuardianCase(Base):
     __tablename__ = "guardian_cases"
 

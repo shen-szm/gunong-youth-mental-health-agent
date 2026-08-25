@@ -157,10 +157,12 @@ async def reset_password(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_teacher),
 ):
+    from api.companion import clear_companion_context_for_user
     user = db.query(User).filter(User.id == target_user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     user.password_hash = get_password_hash(req.new_password)
+    clear_companion_context_for_user(target_user_id, db)
     db.query(UserSession).filter(UserSession.user_id == target_user_id).delete()
     db.commit()
     return {"msg": f"已重置 {user.username} 的密码，并注销其已有会话"}
@@ -172,11 +174,13 @@ async def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from api.companion import clear_companion_context_for_user
     if not verify_password(req.old_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="旧密码错误")
     if req.new_password1 != req.new_password2:
         raise HTTPException(status_code=400, detail="两次输入的新密码不一致")
     current_user.password_hash = get_password_hash(req.new_password1)
+    clear_companion_context_for_user(current_user.id, db)
     db.query(UserSession).filter(UserSession.user_id == current_user.id).delete()
     db.commit()
     return {"msg": "密码修改成功，请重新登录"}

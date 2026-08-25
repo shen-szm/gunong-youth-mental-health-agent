@@ -676,6 +676,7 @@ def teacher_accounts(db: Session = Depends(get_db), admin: User = Depends(requir
 
 @router.patch("/accounts/{account_id}")
 def update_teacher_account(account_id: int, payload: TeacherAccountInput, db: Session = Depends(get_db), admin: User = Depends(require_admin_teacher)):
+    from api.companion import clear_companion_context_for_user
     target = db.query(User).filter(User.id == account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="账号不存在")
@@ -684,6 +685,7 @@ def update_teacher_account(account_id: int, payload: TeacherAccountInput, db: Se
     before = int(target.is_admin or 0)
     target.is_admin = 1 if payload.is_admin else 0
     # 不允许旧会话跨越角色边界；用户须以新角色重新登录。
+    clear_companion_context_for_user(target.id, db)
     db.query(UserSession).filter(UserSession.user_id == target.id).delete(synchronize_session=False)
     if not payload.is_admin:
         db.query(TeacherStudentAssignment).filter(TeacherStudentAssignment.teacher_user_id == target.id).update({"active": 0})
