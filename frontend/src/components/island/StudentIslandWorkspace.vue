@@ -15,7 +15,10 @@
         <p>咕哝 · 心岛探索</p>
         <h2 id="island-title">把心情放进一座能慢慢走的岛</h2>
       </div>
-      <button ref="closeButton" type="button" class="island-close" aria-label="关闭心岛，返回房间" @click="$emit('close')">×</button>
+      <div class="island-header-actions">
+        <button type="button" class="island-games-entry" @click="$emit('fallback')">去小田园和慢钓台</button>
+        <button ref="closeButton" type="button" class="island-close" aria-label="关闭心岛，返回房间" @click="$emit('close')">×</button>
+      </div>
     </header>
 
     <div class="island-layout">
@@ -327,6 +330,8 @@ onBeforeUnmount(() => {
 .island-header p, .island-header h2 { margin: 0; }
 .island-header p { color: #b9dec9; font-size: 11px; font-weight: 800; letter-spacing: .05em; }
 .island-header h2 { margin-top: 3px; font-size: clamp(16px, 2vw, 21px); line-height: 1.35; }
+.island-header-actions { display: flex; align-items: center; gap: 8px; }
+.island-games-entry { min-height: 44px; padding: 0 13px; border: 0; border-radius: 11px; color: #17261f; background: #b9dec9; font-weight: 800; cursor: pointer; }
 .island-close { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; color: #fff; background: rgba(255,255,255,.08); font-size: 24px; cursor: pointer; }
 .island-layout { display: grid; grid-template-columns: minmax(0, 1fr) 326px; min-height: 0; }
 .island-stage-shell { display: grid; place-items: center; align-content: center; min-width: 0; min-height: 0; padding: 18px; background: radial-gradient(circle at 48% 44%, rgba(82,123,132,.2), transparent 62%); }
@@ -391,6 +396,8 @@ onBeforeUnmount(() => {
   .island-header { min-height: 64px; padding: 8px 10px 8px 14px; }
   .island-header h2 { max-width: 245px; font-size: 15px; }
   .island-header p { font-size: 9px; }
+  .island-header-actions { align-items: flex-end; }
+  .island-games-entry { max-width: 110px; min-height: 38px; padding: 5px 8px; font-size: 10px; line-height: 1.3; }
   .island-close { width: 48px; height: 48px; }
   .island-mobile-controls { grid-template-columns: repeat(5, minmax(48px, 1fr)); width: 100%; }
 }

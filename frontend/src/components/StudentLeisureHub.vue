@@ -1,12 +1,15 @@
 <template>
-  <section class="leisure-hub" aria-labelledby="leisure-title" @keydown.esc="$emit('close')">
+  <section ref="dialog" class="leisure-hub" role="dialog" aria-modal="true" aria-labelledby="leisure-title" @keydown="handleDialogKeydown">
     <header class="leisure-header">
       <div>
         <p>像素休闲角</p>
-        <h2 id="leisure-title">先选一种现在想要的节奏</h2>
-        <span>不用完成任务，也没有连续打卡。你的主动选择比点击记录更重要。</span>
+        <h2 id="leisure-title">小田园、慢钓台，都可以真正玩起来</h2>
+        <span>先选一种节奏，再进入完整玩法；没有连续打卡，也不会根据输赢判断情绪。</span>
       </div>
-      <button class="panel-close leisure-close" type="button" aria-label="关闭休闲角" @click="$emit('close')">×</button>
+      <div class="leisure-header-actions">
+        <button class="island-entry" type="button" @click="$emit('open-island')">进入心岛漫游</button>
+        <button class="panel-close leisure-close" type="button" aria-label="关闭休闲角" @click="$emit('close')">×</button>
+      </div>
     </header>
 
     <div class="leisure-layout">
@@ -58,12 +61,18 @@
             </div>
             <strong>收获 {{ leisureState.harvests }} 次</strong>
           </div>
+          <div class="seed-picker" role="group" aria-label="选择要种的作物">
+            <span>种子袋</span>
+            <button v-for="seed in seedTypes" :key="seed.id" type="button" :class="{ active: selectedSeed === seed.id }" :aria-pressed="selectedSeed === seed.id" @click="selectedSeed = seed.id">
+              <i aria-hidden="true">{{ seed.mark }}</i>{{ seed.label }}
+            </button>
+          </div>
           <div class="garden-grid" role="group" aria-label="六块小田地">
             <button
               v-for="(plot, index) in leisureState.plots"
               :key="index"
               type="button"
-              :class="['garden-plot', `stage-${plot.stage}`, { watered: plot.watered }]"
+              :class="['garden-plot', `stage-${plot.stage}`, `crop-${plot.crop || 'sunflower'}`, { watered: plot.watered }]"
               :aria-label="plotLabel(plot, index)"
               @click="tendPlot(index)"
             >
@@ -96,6 +105,10 @@
             <button v-else-if="fishingState === 'waiting'" type="button" disabled>安静等一会</button>
             <button v-else type="button" class="is-biting" @click="reelLine">现在收线</button>
             <p class="game-status" role="status" aria-live="polite">{{ fishingMessage }}</p>
+          </div>
+          <div class="fish-book" aria-label="鱼类图鉴">
+            <span>鱼类图鉴</span>
+            <div v-for="fish in fishTypes" :key="fish.id"><i aria-hidden="true">{{ fish.mark }}</i><strong>{{ fish.label }}</strong><small>× {{ leisureState.fishBook[fish.id] || 0 }}</small></div>
           </div>
         </section>
 
@@ -130,13 +143,14 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onDeactivated, onUnmounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
-  storageScope: { type: String, default: 'student' },
+  storageScope: { type: String, default: '' },
 })
 
-defineEmits(['close', 'open-healing'])
+const emit = defineEmits(['close', 'open-healing', 'open-island'])
+const dialog = ref(null)
 
 const needs = [
   { id: 'quiet', mark: '静', label: '安静一下', hint: '把节奏慢下来' },
@@ -155,24 +169,40 @@ const afterOptions = [
   { id: 'same', label: '差不多' },
   { id: 'switch', label: '想换一种' },
 ]
-const defaultPlots = () => Array.from({ length: 6 }, () => ({ stage: 0, watered: false }))
-const storageKey = computed(() => `shengyu_leisure_v5_${String(props.storageScope || 'student').replace(/[^a-zA-Z0-9_-]/g, '')}`)
+const seedTypes = [
+  { id: 'sunflower', label: '向日葵', mark: '☀' },
+  { id: 'carrot', label: '胡萝卜', mark: '芽' },
+  { id: 'berry', label: '莓果', mark: '果' },
+]
+const fishTypes = [
+  { id: 'silver', label: '银尾小鱼', mark: '◇' },
+  { id: 'square', label: '方鳍鱼', mark: '□' },
+  { id: 'moon', label: '月光鱼', mark: '◐' },
+]
+const defaultPlots = () => Array.from({ length: 6 }, () => ({ stage: 0, watered: false, crop: 'sunflower' }))
+const defaultFishBook = () => Object.fromEntries(fishTypes.map(fish => [fish.id, 0]))
+const defaultState = () => ({ plots: defaultPlots(), harvests: 0, catches: 0, fishBook: defaultFishBook() })
+const normalizedScope = computed(() => String(props.storageScope || '').replace(/[^a-zA-Z0-9_-]/g, ''))
+const storageKey = computed(() => normalizedScope.value ? `shengyu_leisure_v5_${normalizedScope.value}` : '')
 
 function loadState() {
+  if (!storageKey.value) return defaultState()
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey.value) || '{}')
     return {
-      plots: Array.isArray(saved.plots) && saved.plots.length === 6 ? saved.plots.map(plot => ({ stage: Math.max(0, Math.min(2, Number(plot.stage) || 0)), watered: !!plot.watered })) : defaultPlots(),
+      plots: Array.isArray(saved.plots) && saved.plots.length === 6 ? saved.plots.map(plot => ({ stage: Math.max(0, Math.min(2, Number(plot.stage) || 0)), watered: !!plot.watered, crop: seedTypes.some(seed => seed.id === plot.crop) ? plot.crop : 'sunflower' })) : defaultPlots(),
       harvests: Math.max(0, Number(saved.harvests) || 0),
       catches: Math.max(0, Number(saved.catches) || 0),
+      fishBook: Object.fromEntries(fishTypes.map(fish => [fish.id, Math.max(0, Number(saved.fishBook?.[fish.id]) || 0)])),
     }
   } catch {
-    return { plots: defaultPlots(), harvests: 0, catches: 0 }
+    return defaultState()
   }
 }
 
 const leisureState = reactive(loadState())
 const selectedNeed = ref('')
+const selectedSeed = ref('sunflower')
 const activeGame = ref('garden')
 const gardenMessage = ref('选一块空地开始。这里没有倒计时。')
 const fishingState = ref('idle')
@@ -192,17 +222,30 @@ const nextStep = computed(() => ({
   same: '没有变化也很正常。若心里还有话，可以回到倾诉；不想说也可以先休息。',
   switch: activeGame.value === 'garden' ? '可以换到慢钓台，或打开放松工具。' : '可以换到小田园，做一件步骤明确的小事。',
 })[afterFeeling.value] || '')
-const agentStatus = computed(() => afterFeeling.value ? 'ready' : selectedNeed.value ? 'running' : 'standby')
+const agentStatus = computed(() => afterFeeling.value ? 'ready' : (selectedNeed.value || hasPlayed.value) ? 'running' : 'standby')
 const agentSteps = computed(() => [
-  { id: 'intent', label: '理解主动选择', summary: selectedNeed.value ? `已记录“${needs.find(item => item.id === selectedNeed.value)?.label}”` : '等待你选择想要的节奏', status: selectedNeed.value ? 'done' : 'active' },
-  { id: 'boundary', label: '确认安全边界', summary: '不从成绩推断情绪，不做诊断，不设置失败惩罚', status: selectedNeed.value ? 'done' : 'waiting' },
-  { id: 'plan', label: '安排合适玩法', summary: selectedNeed.value ? recommendation.value.title : '选择后生成低负担玩法建议', status: selectedNeed.value ? (hasPlayed.value ? 'done' : 'active') : 'waiting' },
+  { id: 'intent', label: '理解主动选择', summary: selectedNeed.value ? `已记录“${needs.find(item => item.id === selectedNeed.value)?.label}”` : hasPlayed.value ? '你直接选择了玩法，按普通娱乐模式进行' : '等待你选择想要的节奏', status: (selectedNeed.value || hasPlayed.value) ? 'done' : 'active' },
+  { id: 'boundary', label: '确认安全边界', summary: '不从成绩推断情绪，不做诊断，不设置失败惩罚', status: (selectedNeed.value || hasPlayed.value) ? 'done' : 'waiting' },
+  { id: 'plan', label: '安排合适玩法', summary: selectedNeed.value ? recommendation.value.title : hasPlayed.value ? `已进入${activeGame.value === 'garden' ? '小田园' : '慢钓台'}` : '选择后生成低负担玩法建议', status: hasPlayed.value ? 'done' : selectedNeed.value ? 'active' : 'waiting' },
   { id: 'review', label: '完成后回看', summary: afterFeeling.value ? nextStep.value : '只采用你的主观反馈生成下一步', status: afterFeeling.value ? 'done' : hasPlayed.value ? 'active' : 'waiting' },
 ])
 
 watch(leisureState, value => {
-  localStorage.setItem(storageKey.value, JSON.stringify({ plots: value.plots, harvests: value.harvests, catches: value.catches }))
+  if (!storageKey.value) return
+  localStorage.setItem(storageKey.value, JSON.stringify({ plots: value.plots, harvests: value.harvests, catches: value.catches, fishBook: value.fishBook }))
 }, { deep: true })
+
+watch(storageKey, (nextKey, previousKey) => {
+  if (nextKey === previousKey) return
+  clearFishingTimers()
+  Object.assign(leisureState, loadState())
+  selectedNeed.value = ''
+  afterFeeling.value = ''
+  hasPlayed.value = false
+  fishingState.value = 'idle'
+  fishingMessage.value = '准备好时再抛竿。'
+  gardenMessage.value = '选一块空地开始。这里没有倒计时。'
+}, { flush: 'sync' })
 
 function chooseNeed(id) {
   selectedNeed.value = id
@@ -222,12 +265,14 @@ function plotAction(plot) {
 }
 
 function plotLabel(plot, index) {
-  return `第${index + 1}块田，${plotAction(plot)}`
+  const crop = seedTypes.find(seed => seed.id === plot.crop)?.label || '作物'
+  return `第${index + 1}块田，${crop}，${plotAction(plot)}`
 }
 
 function tendPlot(index) {
   const plot = leisureState.plots[index]
   if (plot.stage === 0) {
+    plot.crop = selectedSeed.value
     plot.stage = 1
     gardenMessage.value = '种子已经放好。下一次点击给它一点水。'
   } else if (plot.stage === 1 && !plot.watered) {
@@ -272,14 +317,37 @@ function reelLine() {
   clearFishingTimers()
   leisureState.catches += 1
   fishingState.value = 'result'
-  const fish = ['银尾小鱼', '方鳍鱼', '月光鱼'][leisureState.catches % 3]
-  fishingMessage.value = `遇见了${fish}。不需要继续，先看看现在的感觉。`
+  const fish = fishTypes[(leisureState.catches - 1) % fishTypes.length]
+  leisureState.fishBook[fish.id] = (leisureState.fishBook[fish.id] || 0) + 1
+  fishingMessage.value = `遇见了${fish.label}，已经收进图鉴。不需要继续，先看看现在的感觉。`
 }
 
 function finishReflection(id) {
   afterFeeling.value = id
 }
 
+function handleDialogKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('close')
+    return
+  }
+  if (event.key !== 'Tab' || !dialog.value) return
+  const focusable = [...dialog.value.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+onDeactivated(clearFishingTimers)
 onUnmounted(clearFishingTimers)
 </script>
 
@@ -302,6 +370,8 @@ onUnmounted(clearFishingTimers)
   font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
 }
 .leisure-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.leisure-header-actions { display: flex; align-items: center; gap: 8px; }
+.island-entry { min-height: 42px; padding: 0 13px; border: 0; border-radius: 10px; color: #17231e; background: var(--mint); font-weight: 800; cursor: pointer; }
 .leisure-header p, .leisure-header h2, .leisure-header span { margin: 0; }
 .leisure-header p { color: var(--mint); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
 .leisure-header h2 { margin-top: 4px; font-size: 22px; line-height: 1.35; }
@@ -334,6 +404,11 @@ onUnmounted(clearFishingTimers)
 .game-copy h3 { margin-top: 2px; font-size: 16px; }
 .game-copy span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .game-copy > strong { color: var(--sand); font-size: 11px; white-space: nowrap; }
+.seed-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+.seed-picker > span, .fish-book > span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.seed-picker button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; color: var(--muted); background: rgba(255,255,255,.08); cursor: pointer; }
+.seed-picker button.active { color: #17231e; background: var(--mint); }
+.seed-picker i { display: inline-grid; place-items: center; width: 19px; height: 19px; margin-right: 5px; border-radius: 5px; background: rgba(255,255,255,.28); font-size: 10px; font-style: normal; }
 .garden-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 13px; }
 .garden-plot { position: relative; min-height: 100px; overflow: hidden; border: 2px solid #4f3928; border-radius: 9px; color: #f6ead4; background: #76543a; cursor: pointer; image-rendering: pixelated; }
 .soil-lines { position: absolute; inset: 18px 8px 28px; border-block: 5px solid rgba(46, 28, 19, .4); }
@@ -344,6 +419,8 @@ onUnmounted(clearFishingTimers)
 .stage-1.watered .crop b { height: 7px; }
 .stage-2 .crop i { height: 23px; }
 .stage-2 .crop b { height: 12px; box-shadow: -7px 7px 0 #7bad73, 7px 7px 0 #7bad73, 0 -7px 0 #e8d49b; }
+.stage-2.crop-carrot .crop b { background: #e99655; box-shadow: -6px 6px 0 #7bad73, 6px 6px 0 #7bad73, 0 -6px 0 #e99655; }
+.stage-2.crop-berry .crop b { background: #bd718c; box-shadow: -7px 7px 0 #7bad73, 7px 7px 0 #7bad73, 0 -7px 0 #bd718c; }
 .garden-plot small { position: absolute; left: 0; right: 0; bottom: 0; min-height: 24px; padding: 5px; background: rgba(30, 20, 14, .76); font-size: 10px; font-weight: 800; }
 .game-status { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .pixel-pond { position: relative; height: 218px; margin-top: 13px; overflow: hidden; border: 2px solid #314e55; border-radius: 10px; background: #5e98a0; image-rendering: pixelated; }
@@ -359,6 +436,11 @@ onUnmounted(clearFishingTimers)
 .fishing-action button:disabled { color: rgba(24, 35, 31, .65); background: #aaa687; cursor: wait; }
 .fishing-action button.is-biting { background: var(--mint); }
 .fishing-action .game-status { margin: 0; }
+.fish-book { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+.fish-book div { display: grid; grid-template-columns: 22px auto auto; align-items: center; gap: 5px; min-height: 34px; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.07); }
+.fish-book i { display: grid; place-items: center; width: 22px; height: 22px; color: #19333a; background: #9bc8c9; font-style: normal; }
+.fish-book strong { font-size: 10px; }
+.fish-book small { color: var(--sand); font-size: 9px; }
 .after-play { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 12px 0 0; padding: 11px; border: 1px solid rgba(255, 255, 255, .09); border-radius: 12px; }
 .after-play legend { float: left; margin: 0 5px 0 0; }
 .after-play button { min-height: 36px; padding: 0 11px; border: 0; border-radius: 9px; color: var(--muted); background: rgba(255, 255, 255, .08); cursor: pointer; }
@@ -387,7 +469,6 @@ button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
 @media (max-width: 820px) {
   .leisure-hub { width: calc(100vw - 20px); max-height: calc(100dvh - 28px); padding: 16px; border-radius: 16px; }
   .leisure-layout { grid-template-columns: 1fr; }
-  .leisure-agent { order: -1; }
   .leisure-agent ol { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
   .leisure-agent li { grid-template-columns: 22px minmax(0, 1fr); padding: 7px; border: 0; border-radius: 9px; background: rgba(255, 255, 255, .04); }
   .leisure-agent li em { grid-column: 2; }
@@ -396,6 +477,9 @@ button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
 }
 
 @media (max-width: 520px) {
+  .leisure-header { align-items: stretch; }
+  .leisure-header-actions { flex-direction: column-reverse; align-items: flex-end; }
+  .island-entry { min-height: 38px; font-size: 11px; }
   .leisure-header h2 { font-size: 18px; }
   .leisure-layout { margin-top: 14px; }
   .leisure-agent ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }

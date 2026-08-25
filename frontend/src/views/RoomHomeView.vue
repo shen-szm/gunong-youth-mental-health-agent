@@ -1446,19 +1446,22 @@
     <!-- ══ 休闲角：游戏与 Agent 进度共用一个工作区 ══ -->
     <Transition name="panel-slide">
       <div v-if="showLeisurePanel" class="profile-overlay leisure-overlay" @click.self="closeWorkspacePanel('leisure')">
-        <StudentIslandWorkspace
-          v-if="useIslandWorkspace"
-          :storage-scope="userStore.userId || ''"
-          @close="closeWorkspacePanel('leisure')"
-          @fallback="handleIslandFallback"
-        />
-        <StudentLeisureHub
-          v-else
-          data-workspace="leisure"
-          :storage-scope="userStore.userId || ''"
-          @close="closeWorkspacePanel('leisure')"
-          @open-healing="openWorkspacePanel('healing')"
-        />
+        <KeepAlive>
+          <StudentIslandWorkspace
+            v-if="useIslandWorkspace"
+            :storage-scope="String(userStore.userId || '')"
+            @close="closeWorkspacePanel('leisure')"
+            @fallback="handleIslandFallback"
+          />
+          <StudentLeisureHub
+            v-else
+            data-workspace="leisure"
+            :storage-scope="String(userStore.userId || '')"
+            @close="closeWorkspacePanel('leisure')"
+            @open-island="openIslandWorkspace"
+            @open-healing="openWorkspacePanel('healing')"
+          />
+        </KeepAlive>
       </div>
     </Transition>
 
@@ -1708,9 +1711,9 @@ watch(supportDrawerMode, async () => {
 })
 const showHealingPanel = ref(false)
 const showLeisurePanel = ref(false)
-const islandFallbackRequested = ref(false)
+const leisureWorkspaceMode = ref('games')
 const studentIslandEnabled = import.meta.env.VITE_STUDENT_ISLAND_ALPHA5 !== '0'
-const useIslandWorkspace = computed(() => studentIslandEnabled && !islandFallbackRequested.value)
+const useIslandWorkspace = computed(() => studentIslandEnabled && leisureWorkspaceMode.value === 'island')
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
@@ -1740,7 +1743,7 @@ function roomWorkspacePanels() {
 }
 
 function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement) {
-  if (key === 'leisure') islandFallbackRequested.value = false
+  if (key === 'leisure') leisureWorkspaceMode.value = 'games'
   closeRoomWorkspaces(key)
   selectedRoomFeatureId.value = ''
   const panel = roomWorkspacePanels()[key]
@@ -1755,9 +1758,15 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
 }
 
 async function handleIslandFallback() {
-  islandFallbackRequested.value = true
+  leisureWorkspaceMode.value = 'games'
   await nextTick()
   focusWithoutScroll(document.querySelector('.leisure-hub .leisure-close'))
+}
+
+async function openIslandWorkspace() {
+  leisureWorkspaceMode.value = 'island'
+  await nextTick()
+  focusWithoutScroll(document.querySelector('.island-workspace .island-close'))
 }
 
 function closeWorkspacePanel(key) {
@@ -7008,13 +7017,18 @@ onUnmounted(() => {
 .pet-actions .pet-open-btn { min-width: 0; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; box-shadow: none; }
 .bottom-nav { bottom: calc(18px + env(safe-area-inset-bottom)); }
 .bottom-nav::before {
-  width: 304px;
-  border: 0;
+  width: 316px;
+  height: 64px;
+  border: 1px solid rgba(237, 251, 246, .46);
   border-radius: 15px;
-  background: rgba(16, 22, 28, .78) !important;
-  box-shadow: 0 6px 8px rgba(5, 8, 12, .25) !important;
-  backdrop-filter: blur(20px) saturate(1.15) !important;
+  background: linear-gradient(135deg, rgba(221, 240, 233, .34), rgba(173, 168, 211, .24)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66), inset 0 -1px 0 rgba(91, 108, 118, .18) !important;
+  backdrop-filter: blur(22px) saturate(1.28) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.28) !important;
 }
+.day .bottom-nav::before { background: linear-gradient(135deg, rgba(255,255,255,.62), rgba(198,226,216,.42)) !important; }
+.evening .bottom-nav::before { background: linear-gradient(135deg, rgba(226,211,219,.42), rgba(153,174,196,.34)) !important; }
+.night .bottom-nav::before { background: linear-gradient(135deg, rgba(112,133,154,.46), rgba(113,104,151,.4)) !important; }
 .heart-island-door {
   position: fixed;
   right: clamp(92px, 12vw, 184px);
@@ -7294,7 +7308,7 @@ onUnmounted(() => {
   .room-onboarding-cue { grid-template-columns: auto minmax(0, 1fr) auto; }
 }
 
-/* v5.1.0-alpha.6：原创宠物「咕团」的单一养成工作区。 */
+/* v5.1.0-alpha.7：原创宠物「咕团」与统一休闲探索工作区。 */
 .room-roaming-pet img,
 .pet-panel-frame,
 .pet-stage-frame,

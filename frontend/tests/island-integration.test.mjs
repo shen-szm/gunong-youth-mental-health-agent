@@ -23,6 +23,7 @@ test('heart island is lazy loaded and Phaser is not imported by the student room
   assert.match(workspace, /aria-modal="true"/)
   assert.match(workspace, /aria-hidden="true"/)
   assert.match(workspace, /role="status"/)
+  assert.match(workspace, /去小田园和慢钓台/)
 })
 
 test('island provides real movement, destinations and non-diagnostic agent boundaries', async () => {
