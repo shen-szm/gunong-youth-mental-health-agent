@@ -13,22 +13,13 @@
     <header class="island-header">
       <div class="island-brand">
         <small>咕哝 · 心岛漫游</small>
-        <h2 id="island-title">和咕团沿着光，选一件今晚想做的小事</h2>
+        <h2 id="island-title">和咕团沿着光，选一件此刻想做的小事</h2>
       </div>
 
-      <div class="island-phase-switch" aria-label="预览心岛时间阶段">
-        <span>岛屿光景</span>
-        <div>
-          <button
-            v-for="phase in phases"
-            :key="phase.id"
-            type="button"
-            :class="{ 'is-active': timePhase === phase.id }"
-            :aria-pressed="timePhase === phase.id"
-            :title="phase.period"
-            @click="setTimePhase(phase.id)"
-          >{{ phase.label }}</button>
-        </div>
+      <div class="island-phase-status" role="status" aria-live="polite" aria-label="心岛光景随本地时间自动变化">
+        <span>随时间变化</span>
+        <strong>{{ activePhase.label }}</strong>
+        <small>{{ activePhase.period }}</small>
       </div>
 
       <div class="island-header-actions">
@@ -130,7 +121,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createIslandBridge } from '../../game/island/islandBridge.js'
-import { ISLAND_PHASES, ISLAND_PLACES, loadIslandState, saveIslandState } from '../../game/island/islandState.js'
+import { ISLAND_PHASES, ISLAND_PLACES, loadIslandState, millisecondsUntilNextIslandPhase, resolveIslandPhase, saveIslandState } from '../../game/island/islandState.js'
 
 const props = defineProps({ storageScope: { type: [String, Number], required: true } })
 const emit = defineEmits(['close', 'fallback'])
@@ -166,6 +157,7 @@ let cancelled = false
 let disposers = []
 let gameGeneration = 0
 let startingPromise = null
+let phaseTimer = null
 let movementSource = 'none'
 const pressedDirections = new Set()
 const keyboardDirections = {
@@ -269,11 +261,27 @@ async function startGame() {
   }
 }
 
-function setTimePhase(phase) {
+function syncPhaseWithClock(announce = false) {
+  const phase = resolveIslandPhase()
   if (timePhase.value === phase) return
   timePhase.value = phase
-  persistState()
+  currentState.value = { ...currentState.value, timePhase: phase }
   bridge.emit('command', { type: 'phase', phase })
+  if (announce) liveStatus.value = `心岛已随本地时间进入${activePhase.value.label}，地图与进度保持不变。`
+}
+
+function schedulePhaseSync() {
+  if (phaseTimer) window.clearTimeout(phaseTimer)
+  phaseTimer = window.setTimeout(() => {
+    syncPhaseWithClock(true)
+    schedulePhaseSync()
+  }, millisecondsUntilNextIslandPhase() + 1_000)
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  syncPhaseWithClock(true)
+  schedulePhaseSync()
 }
 
 function agentStepClass(index) {
@@ -384,9 +392,11 @@ onMounted(async () => {
   window.addEventListener('pointerup', stopPointerMoving)
   window.addEventListener('pointercancel', stopPointerMoving)
   window.addEventListener('blur', stopMoving)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   await nextTick()
   closeButton.value?.focus({ preventScroll: true })
   startGame()
+  schedulePhaseSync()
 })
 
 onBeforeUnmount(() => {
@@ -397,6 +407,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', stopPointerMoving)
   window.removeEventListener('pointercancel', stopPointerMoving)
   window.removeEventListener('blur', stopMoving)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (phaseTimer) window.clearTimeout(phaseTimer)
+  phaseTimer = null
   disposers.forEach(dispose => dispose())
   disposers = []
   game?.destroy(true)
@@ -435,12 +448,10 @@ onBeforeUnmount(() => {
 .island-brand small, .island-brand h2 { display: block; margin: 0; }
 .island-brand small { color: #f1cf86; font-size: 10px; font-weight: 800; }
 .island-brand h2 { margin-top: 3px; overflow: hidden; font-size: 15px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.island-phase-switch { display: flex; align-items: center; gap: 9px; }
-.island-phase-switch > span { color: var(--island-muted); font-size: 10px; }
-.island-phase-switch > div { display: flex; padding: 3px; border-radius: 12px; background: rgba(255,255,255,.07); }
-.island-phase-switch button { min-width: 58px; min-height: 36px; border: 0; border-radius: 9px; color: rgba(255,248,234,.72); background: transparent; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.island-phase-switch button:hover { background: rgba(255,255,255,.08); }
-.island-phase-switch button.is-active { color: #292034; background: #f1cf86; }
+.island-phase-status { display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 9px; min-width: 144px; padding: 7px 11px; border-radius: 12px; background: rgba(255,255,255,.07); }
+.island-phase-status > span { grid-row: 1 / 3; color: var(--island-muted); font-size: 9px; }
+.island-phase-status strong { color: #f1cf86; font-size: 12px; }
+.island-phase-status small { color: var(--island-muted); font-size: 8px; }
 .island-header-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .island-classic-entry, .island-close { min-height: 44px; border: 0; border-radius: 11px; color: var(--island-ink); background: rgba(255,255,255,.08); font: inherit; cursor: pointer; }
 .island-classic-entry { padding: 0 13px; font-size: 11px; font-weight: 700; }
@@ -517,7 +528,7 @@ onBeforeUnmount(() => {
   .island-workspace { grid-template-rows: auto minmax(0, 1fr); }
   .island-header { grid-template-columns: 1fr auto; gap: 8px; padding: 8px 10px; }
   .island-brand h2 { max-width: 56vw; font-size: 12px; }
-  .island-phase-switch { grid-column: 1 / -1; grid-row: 2; justify-content: center; }
+  .island-phase-status { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .island-header-actions { grid-column: 2; grid-row: 1; }
   .island-classic-entry { display: none; }
   .island-stage-shell { align-content: start; padding: 8px 8px calc(150px + env(safe-area-inset-bottom)); overflow-y: auto; }
@@ -539,8 +550,7 @@ onBeforeUnmount(() => {
   .island-mobile-controls .is-interact { color: #2a2130; background: #f1cf86; font-size: 11px; }
 }
 @media (max-width: 520px) {
-  .island-phase-switch > span { display: none; }
-  .island-phase-switch button { min-width: 72px; }
+  .island-phase-status { min-width: 132px; }
   .island-game-surface { min-height: 62vw; }
   .island-mission-glass strong { font-size: 12px; }
 }

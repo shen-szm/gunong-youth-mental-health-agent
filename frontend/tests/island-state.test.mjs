@@ -5,6 +5,7 @@ import {
   clampIslandPosition,
   islandStorageKey,
   loadIslandState,
+  millisecondsUntilNextIslandPhase,
   resolveIslandPhase,
   saveIslandState,
 } from '../src/game/island/islandState.js'
@@ -30,6 +31,9 @@ test('island resolves day, dusk and night deterministically', () => {
   assert.equal(resolveIslandPhase(18), 'dusk')
   assert.equal(resolveIslandPhase(23), 'night')
   assert.equal(resolveIslandPhase(4), 'night')
+  assert.equal(millisecondsUntilNextIslandPhase(new Date(2026, 0, 1, 5, 30)), 30 * 60 * 1000)
+  assert.equal(millisecondsUntilNextIslandPhase(new Date(2026, 0, 1, 16, 45)), 15 * 60 * 1000)
+  assert.equal(millisecondsUntilNextIslandPhase(new Date(2026, 0, 1, 19, 59, 30)), 30 * 1000)
 })
 
 test('island saves are scoped per student and contain no emotion inference', () => {
@@ -37,9 +41,11 @@ test('island saves are scoped per student and contain no emotion inference', () 
   saveIslandState('student-1', { position: { x: 250, y: 220 }, lastPlace: 'garden', timePhase: 'dusk' }, storage)
   saveIslandState('student-2', { position: { x: 700, y: 330 }, lastPlace: 'dock', timePhase: 'night' }, storage)
   assert.equal(loadIslandState('student-1', storage).lastPlace, 'garden')
-  assert.equal(loadIslandState('student-1', storage).timePhase, 'dusk')
+  assert.equal(loadIslandState('student-1', storage).timePhase, resolveIslandPhase())
   assert.equal(loadIslandState('student-2', storage).lastPlace, 'dock')
   assert.notEqual(islandStorageKey('student-1'), islandStorageKey('student-2'))
+  assert.equal(JSON.parse(storage.getItem(islandStorageKey('student-1'))).version, 3)
+  assert.equal('timePhase' in JSON.parse(storage.getItem(islandStorageKey('student-1'))), false)
   assert.deepEqual(Object.keys(loadIslandState('student-1', storage)).sort(), ['lastPlace', 'position', 'timePhase'])
 })
 

@@ -38,6 +38,22 @@ export function normalizeIslandPhase(value, fallback = resolveIslandPhase()) {
   return ISLAND_PHASES.some(phase => phase.id === value) ? value : fallback
 }
 
+export function millisecondsUntilNextIslandPhase(now = new Date()) {
+  const current = now instanceof Date ? new Date(now.getTime()) : new Date(now)
+  if (Number.isNaN(current.getTime())) return 60_000
+  const next = new Date(current.getTime())
+  next.setMinutes(0, 0, 0)
+  const hour = current.getHours()
+  if (hour < 6) next.setHours(6)
+  else if (hour < 17) next.setHours(17)
+  else if (hour < 20) next.setHours(20)
+  else {
+    next.setDate(next.getDate() + 1)
+    next.setHours(6)
+  }
+  return Math.max(1_000, next.getTime() - current.getTime())
+}
+
 export function islandStorageKey(scope) {
   const safeScope = String(scope || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48)
   return safeScope ? `shengyu_island_v5_1_${safeScope}` : ''
@@ -50,7 +66,7 @@ export function loadIslandState(scope, storage = globalThis.localStorage) {
   try {
     const parsed = JSON.parse(storage.getItem(key) || '{}')
     const lastPlace = ISLAND_PLACES.some(place => place.id === parsed.lastPlace) ? parsed.lastPlace : 'home'
-    return { position: clampIslandPosition(parsed.position), lastPlace, timePhase: normalizeIslandPhase(parsed.timePhase) }
+    return { position: clampIslandPosition(parsed.position), lastPlace, timePhase: resolveIslandPhase() }
   } catch {
     return defaultState
   }
@@ -61,10 +77,9 @@ export function saveIslandState(scope, state, storage = globalThis.localStorage)
   if (!storage || !key) return
   try {
     storage.setItem(key, JSON.stringify({
-      version: 2,
+      version: 3,
       position: clampIslandPosition(state?.position),
       lastPlace: ISLAND_PLACES.some(place => place.id === state?.lastPlace) ? state.lastPlace : 'home',
-      timePhase: normalizeIslandPhase(state?.timePhase),
     }))
   } catch {
     // Storage can be unavailable in private/restricted contexts; the island stays usable in memory.
