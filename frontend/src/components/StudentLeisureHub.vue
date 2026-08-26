@@ -118,24 +118,30 @@
         <section v-else class="game-board happiness-board" aria-labelledby="happiness-title">
           <div class="game-copy">
             <div>
-              <p>留下一束光，换一束光</p>
+              <p>留下一束光，换一张灵感卡</p>
               <h3 id="happiness-title">幸福交换树</h3>
-              <span>写下一件真实发生、让你觉得还不错的小事，换取一张心岛幸福卡。</span>
+              <span>写下一件真实发生、让你觉得还不错的小事，换取一张咕哝预写的幸福灵感卡。</span>
             </div>
             <strong>交换 {{ leisureState.exchanges }} 次</strong>
           </div>
           <div class="happiness-exchange">
             <label for="happiness-note">一件令你幸福的小事</label>
             <textarea id="happiness-note" v-model="happinessInput" maxlength="80" rows="3" placeholder="例如：放学路上看见一只晒太阳的小猫。"></textarea>
-            <div><small>{{ happinessInput.length }}/80，仅保存在你的浏览器中</small><button type="button" :disabled="!happinessInput.trim()" @click="exchangeHappiness">放进树洞并交换</button></div>
+            <div><small>{{ happinessInput.length }}/80，仅存此设备当前账号，30天后清理；共享设备上的其他使用者可能看到，请勿填写姓名、学校、电话或地址</small><button type="button" :disabled="!happinessInput.trim()" @click="exchangeHappiness">放进树洞并交换</button></div>
           </div>
-          <article v-if="receivedHappiness" class="happiness-reply" aria-live="polite">
-            <small>你换到的心岛幸福卡</small>
+          <section v-if="happinessUrgent" class="happiness-safety" role="alert" aria-live="assertive">
+            <h4>先确认你现在的安全</h4>
+            <p>这些话可能表示你现在无法保证安全。请先不要独处，马上去到一位可信成年人身边；刚才的文字不会存入幸福册。</p>
+            <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a><button type="button" @click="$emit('open-chat')">打开倾诉求助</button></div>
+            <small>如果家人可能是伤害来源，请联系可信老师、其他安全成年人或报警。AI 不能替代真人危机干预。</small>
+          </section>
+          <article v-else-if="receivedHappiness" class="happiness-reply" aria-live="polite">
+            <small>咕哝预写的幸福灵感卡 · 不是其他用户的实时分享</small>
             <p>{{ receivedHappiness }}</p>
             <button type="button" @click="drawAnotherHappiness">再换一张</button>
           </article>
           <div v-if="leisureState.happinessNotes.length" class="happiness-book">
-            <strong>我的幸福册</strong>
+            <div><strong>我的幸福册</strong><button type="button" @click="clearHappinessBook">清空全部</button></div>
             <ul>
               <li v-for="(note, index) in leisureState.happinessNotes" :key="`${note}-${index}`"><span>{{ note }}</span><button type="button" :aria-label="`删除幸福小事：${note}`" @click="removeHappiness(index)">删除</button></li>
             </ul>
@@ -175,13 +181,14 @@
 
 <script setup>
 import { computed, onDeactivated, onUnmounted, reactive, ref, watch } from 'vue'
+import { isOfflineCompanionUrgent } from '../utils/companionSafety.js'
 
 const props = defineProps({
   storageScope: { type: String, default: '' },
   initialGame: { type: String, default: 'garden' },
 })
 
-const emit = defineEmits(['close', 'open-healing', 'open-island'])
+const emit = defineEmits(['close', 'open-healing', 'open-island', 'open-chat'])
 const dialog = ref(null)
 
 const needs = [
@@ -220,10 +227,11 @@ const happinessCards = [
   '回家时，咕团一样的小云朵跟了我一路。',
 ]
 const validGames = new Set(['garden', 'fishing', 'exchange'])
+const HAPPINESS_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const normalizeGame = value => validGames.has(value) ? value : 'garden'
 const defaultPlots = () => Array.from({ length: 6 }, () => ({ stage: 0, watered: false, crop: 'sunflower' }))
 const defaultFishBook = () => Object.fromEntries(fishTypes.map(fish => [fish.id, 0]))
-const defaultState = () => ({ plots: defaultPlots(), harvests: 0, catches: 0, fishBook: defaultFishBook(), exchanges: 0, happinessNotes: [] })
+const defaultState = () => ({ plots: defaultPlots(), harvests: 0, catches: 0, fishBook: defaultFishBook(), exchanges: 0, happinessNotes: [], happinessUpdatedAt: 0 })
 const normalizedScope = computed(() => String(props.storageScope || '').replace(/[^a-zA-Z0-9_-]/g, ''))
 const storageKey = computed(() => normalizedScope.value ? `shengyu_leisure_v5_${normalizedScope.value}` : '')
 
@@ -231,14 +239,21 @@ function loadState() {
   if (!storageKey.value) return defaultState()
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey.value) || '{}')
-    return {
+    const happinessUpdatedAt = Math.max(0, Number(saved.happinessUpdatedAt) || 0)
+    const happinessIsCurrent = happinessUpdatedAt > 0 && Date.now() - happinessUpdatedAt < HAPPINESS_RETENTION_MS
+    const result = {
       plots: Array.isArray(saved.plots) && saved.plots.length === 6 ? saved.plots.map(plot => ({ stage: Math.max(0, Math.min(2, Number(plot.stage) || 0)), watered: !!plot.watered, crop: seedTypes.some(seed => seed.id === plot.crop) ? plot.crop : 'sunflower' })) : defaultPlots(),
       harvests: Math.max(0, Number(saved.harvests) || 0),
       catches: Math.max(0, Number(saved.catches) || 0),
       fishBook: Object.fromEntries(fishTypes.map(fish => [fish.id, Math.max(0, Number(saved.fishBook?.[fish.id]) || 0)])),
       exchanges: Math.max(0, Number(saved.exchanges) || 0),
-      happinessNotes: Array.isArray(saved.happinessNotes) ? saved.happinessNotes.filter(note => typeof note === 'string').map(note => note.trim().slice(0, 80)).filter(Boolean).slice(-12) : [],
+      happinessNotes: happinessIsCurrent && Array.isArray(saved.happinessNotes) ? saved.happinessNotes.filter(note => typeof note === 'string').map(note => note.trim().slice(0, 80)).filter(Boolean).slice(-12) : [],
+      happinessUpdatedAt: happinessIsCurrent ? happinessUpdatedAt : 0,
     }
+    if (!happinessIsCurrent && Array.isArray(saved.happinessNotes) && saved.happinessNotes.length) {
+      try { localStorage.setItem(storageKey.value, JSON.stringify(result)) } catch { /* UI still withholds expired text */ }
+    }
+    return result
   } catch {
     return defaultState()
   }
@@ -253,7 +268,9 @@ const fishingState = ref('idle')
 const fishingMessage = ref('准备好时再抛竿。')
 const happinessInput = ref('')
 const receivedHappiness = ref('')
+const happinessUrgent = ref(false)
 const happinessMessage = ref('写下一件小事后，心岛会为你换一张卡。')
+const storageError = ref(false)
 const hasPlayed = ref(false)
 const afterFeeling = ref('')
 let biteTimer = null
@@ -279,8 +296,13 @@ const agentSteps = computed(() => [
 
 watch(leisureState, value => {
   if (!storageKey.value) return
-  localStorage.setItem(storageKey.value, JSON.stringify({ plots: value.plots, harvests: value.harvests, catches: value.catches, fishBook: value.fishBook, exchanges: value.exchanges, happinessNotes: value.happinessNotes }))
-}, { deep: true })
+  try {
+    localStorage.setItem(storageKey.value, JSON.stringify({ plots: value.plots, harvests: value.harvests, catches: value.catches, fishBook: value.fishBook, exchanges: value.exchanges, happinessNotes: value.happinessNotes, happinessUpdatedAt: value.happinessUpdatedAt }))
+    storageError.value = false
+  } catch {
+    storageError.value = true
+  }
+}, { deep: true, flush: 'sync' })
 
 watch(storageKey, (nextKey, previousKey) => {
   if (nextKey === previousKey) return
@@ -294,6 +316,8 @@ watch(storageKey, (nextKey, previousKey) => {
   gardenMessage.value = '选一块空地开始。这里没有倒计时。'
   happinessInput.value = ''
   receivedHappiness.value = ''
+  happinessUrgent.value = false
+  storageError.value = false
   happinessMessage.value = '写下一件小事后，心岛会为你换一张卡。'
 }, { flush: 'sync' })
 
@@ -388,18 +412,34 @@ function drawAnotherHappiness() {
 function exchangeHappiness() {
   const note = happinessInput.value.trim().replace(/\s+/g, ' ').slice(0, 80)
   if (!note) return
+  if (isOfflineCompanionUrgent(note)) {
+    happinessInput.value = ''
+    receivedHappiness.value = ''
+    happinessUrgent.value = true
+    happinessMessage.value = '普通交换已停止。请优先联系可信成年人和真人安全支持。'
+    return
+  }
+  happinessUrgent.value = false
   leisureState.happinessNotes.push(note)
   if (leisureState.happinessNotes.length > 12) leisureState.happinessNotes.shift()
   leisureState.exchanges += 1
+  leisureState.happinessUpdatedAt = Date.now()
   receivedHappiness.value = happinessCards[(leisureState.exchanges - 1) % happinessCards.length]
   happinessInput.value = ''
-  happinessMessage.value = '你的这件小事已经收进幸福册，也换来了一张心岛幸福卡。'
+  happinessMessage.value = storageError.value ? '浏览器未能保存；这件小事只在当前页面暂时显示。' : '你的这件小事已经收进幸福册，也换来了一张心岛幸福卡。'
   hasPlayed.value = true
 }
 
 function removeHappiness(index) {
   leisureState.happinessNotes.splice(index, 1)
-  happinessMessage.value = '已从你的幸福册删除。'
+  leisureState.happinessUpdatedAt = leisureState.happinessNotes.length ? Date.now() : 0
+  happinessMessage.value = storageError.value ? '浏览器未能写入删除结果，请勿把它视为已从设备清除。' : '已从你的幸福册删除。'
+}
+
+function clearHappinessBook() {
+  leisureState.happinessNotes.splice(0)
+  leisureState.happinessUpdatedAt = 0
+  happinessMessage.value = storageError.value ? '浏览器未能写入清空结果，请勿把它视为已从设备清除。' : '幸福册已清空。'
 }
 
 function finishReflection(id) {
@@ -533,8 +573,16 @@ onUnmounted(clearFishingTimers)
 .happiness-reply small { font-size: 9px; font-weight: 800; }
 .happiness-reply p { margin: 6px 0 10px; font-size: 13px; line-height: 1.55; }
 .happiness-reply button { color: var(--ink); background: rgba(24,35,31,.78); }
+.happiness-safety { margin-top: 10px; padding: 14px; border: 2px solid #d9907d; border-radius: 12px; color: #fff7ee; background: rgba(112, 42, 39, .9); }
+.happiness-safety h4 { margin: 0; font-size: 14px; }
+.happiness-safety p { margin: 7px 0; font-size: 11px; line-height: 1.6; }
+.happiness-safety > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.happiness-safety a, .happiness-safety button { display: inline-grid; min-height: 40px; padding: 0 11px; place-items: center; border: 0; border-radius: 9px; color: #3f2422; background: #ffe1b2; font: inherit; font-size: 10px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.happiness-safety small { display: block; margin-top: 8px; color: rgba(255,247,238,.8); font-size: 9px; line-height: 1.5; }
 .happiness-book { margin-top: 11px; }
-.happiness-book > strong { font-size: 11px; }
+.happiness-book > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.happiness-book > div strong { font-size: 11px; }
+.happiness-book > div button { min-height: 34px; border: 0; color: var(--muted); background: transparent; cursor: pointer; }
 .happiness-book ul { display: grid; gap: 6px; margin: 7px 0 0; padding: 0; list-style: none; }
 .happiness-book li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.06); }
 .happiness-book li span { font-size: 11px; line-height: 1.45; }

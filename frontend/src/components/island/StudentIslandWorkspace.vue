@@ -67,11 +67,11 @@
         </aside>
 
         <section v-if="arrivalCard" class="island-arrival-card" aria-live="polite">
-          <button type="button" class="arrival-dismiss" aria-label="关闭到达提示" @click.stop="arrivalCard = null">×</button>
+          <button type="button" class="arrival-dismiss" aria-label="关闭到达提示" @click.stop="dismissArrival">×</button>
           <small>已经到达</small>
           <strong>{{ arrivalCard.label }}</strong>
           <p>{{ arrivalCard.hint }}</p>
-          <button type="button" class="arrival-primary" @click.stop="openArrivalActivity">{{ arrivalActivityLabel }}</button>
+          <button ref="arrivalPrimary" type="button" class="arrival-primary" @click.stop="openArrivalActivity">{{ arrivalActivityLabel }}</button>
         </section>
 
         <div v-if="loading" class="island-loading" role="status">
@@ -131,6 +131,7 @@ const props = defineProps({ storageScope: { type: [String, Number], required: tr
 const emit = defineEmits(['close', 'fallback', 'activity'])
 const dialog = ref(null)
 const closeButton = ref(null)
+const arrivalPrimary = ref(null)
 const gameHost = ref(null)
 const gameSurface = ref(null)
 const loading = ref(true)
@@ -230,6 +231,7 @@ function bindBridge(activeBridge, generation, scope) {
       arrivalCard.value = event
       liveStatus.value = `已到达${event.label}。${event.hint}`
       persistState({ position: event.position, lastPlace: event.place })
+      nextTick(() => arrivalPrimary.value?.focus({ preventScroll: true }))
     }),
   ]
 }
@@ -330,6 +332,10 @@ function interact() { bridge.emit('command', { type: 'interact' }) }
 function openArrivalActivity() {
   if (!arrivalCard.value?.place) return
   emit('activity', arrivalCard.value.place)
+}
+function dismissArrival() {
+  arrivalCard.value = null
+  nextTick(focusGameSurface)
 }
 function visitPlace(place) {
   arrivalCard.value = null

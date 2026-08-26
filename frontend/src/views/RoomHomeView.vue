@@ -1462,6 +1462,7 @@
             @close="closeWorkspacePanel('leisure')"
             @open-island="openIslandWorkspace"
             @open-healing="openWorkspacePanel('healing')"
+            @open-chat="handleLeisureSafetyHandoff"
           />
         </KeepAlive>
       </div>
@@ -1793,6 +1794,12 @@ async function openIslandWorkspace() {
   leisureWorkspaceMode.value = 'island'
   await nextTick()
   focusWithoutScroll(document.querySelector('.island-workspace .island-close'))
+}
+
+async function handleLeisureSafetyHandoff() {
+  closeWorkspacePanel('leisure')
+  await nextTick()
+  goToChat()
 }
 
 function closeWorkspacePanel(key) {

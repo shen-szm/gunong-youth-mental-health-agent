@@ -75,6 +75,8 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.match(workspace, /向左上移动/)
   assert.match(workspace, /向右下移动/)
   assert.match(workspace, /emit\('activity', arrivalCard\.value\.place\)/)
+  assert.match(workspace, /arrivalPrimary\.value\?\.focus/)
+  assert.match(workspace, /function dismissArrival/)
   assert.match(game, /targetLabel: place\.label/)
   assert.match(workspace, /不从游戏成绩推断情绪/)
   assert.match(workspace, /不进行心理诊断/)

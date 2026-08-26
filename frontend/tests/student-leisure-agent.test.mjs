@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { isOfflineCompanionUrgent } from '../src/utils/companionSafety.js'
 
 const roomUrl = new URL('../src/views/RoomHomeView.vue', import.meta.url)
 const hubUrl = new URL('../src/components/StudentLeisureHub.vue', import.meta.url)
@@ -51,6 +52,14 @@ test('leisure games use deterministic local state and explicit student feedback'
   assert.match(hub, /const storageKey = computed\(\(\) => normalizedScope\.value \? `shengyu_leisure_v5_\$\{normalizedScope\.value\}` : ''\)/)
   assert.match(hub, /happinessNotes/)
   assert.match(hub, /exchangeHappiness/)
+  assert.match(hub, /isOfflineCompanionUrgent\(note\)/)
+  assert.match(hub, /tel:12356/)
+  assert.match(hub, /tel:110/)
+  assert.match(hub, /tel:120/)
+  assert.match(hub, /happinessUpdatedAt/)
+  assert.match(hub, /HAPPINESS_RETENTION_MS/)
+  assert.match(hub, /clearHappinessBook/)
+  assert.match(hub, /storageError/)
   assert.match(hub, /if \(!storageKey\.value\) return/)
   assert.match(hub, /watch\(storageKey/)
   assert.doesNotMatch(hub, /props\.storageScope \|\| 'student'/)
@@ -59,6 +68,15 @@ test('leisure games use deterministic local state and explicit student feedback'
   assert.match(hub, /玩完后，此刻更接近/)
   assert.match(hub, /finishReflection/)
   assert.doesNotMatch(hub, /抑郁|焦虑|心理评分|量表分数|连续签到|排行榜/)
+})
+
+test('happiness exchange safety gate blocks direct danger but respects denial and quotation', () => {
+  for (const content of ['我不想活了', '我刚刚吞了很多药', '爸爸刚才打我，我不敢回家']) {
+    assert.equal(isOfflineCompanionUrgent(content), true, content)
+  }
+  for (const content of ['我没有不想活，只是今天有点累', '新闻里提到有人想死，我觉得很难过', '谢谢你，我想继续交换小事']) {
+    assert.equal(isOfflineCompanionUrgent(content), false, content)
+  }
 })
 
 test('leisure agent reports verifiable states and keeps psychological boundaries visible', async () => {
