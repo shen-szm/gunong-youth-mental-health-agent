@@ -5,11 +5,12 @@
 - Source visual truth: `C:\Users\31795\.codex\generated_images\01a022bd-7794-7f20-a859-96ad33344392\exec-6f18324d-0543-41a5-8833-cc69bede5367.png`
 - Implementation: `http://127.0.0.1:5175/` 中学生端“探索 → 进入心岛漫游”
 - Implementation screenshot: `D:\桌面文件\大学文件\一些比赛\讯飞杯\shengyu-web\design-qa-prototype-final.jpg`
+- Mobile implementation screenshot: `D:\桌面文件\大学文件\一些比赛\讯飞杯\shengyu-web\design-qa-mobile.png`
 - Combined comparison: `D:\桌面文件\大学文件\一些比赛\讯飞杯\shengyu-web\design-qa-comparison.jpg`
-- Viewport: 1081 × 898 CSS px，device scale factor 1
-- Source pixels: 1536 × 1024；implementation pixels: 1081 × 898
-- Normalization: comparison preview统一到 720 px 高度，源图约 1080 × 720，实装约 867 × 720，中间 8 px 分隔；未裁切关键 UI。
-- State: 设备本地时间 11:57，对应白天光景；Agent 轨迹展开，学生与咕团位于月光钓鱼湾附近。
+- Viewport: 1366 × 900 CSS px，device scale factor 1；另检查 390 × 844 移动端。
+- Source pixels: 1536 × 1024；implementation pixels: 1366 × 900。
+- Normalization: comparison preview统一到 720 px 高度，源图约 1080 × 720，实装约 1093 × 720，中间 8 px 分隔；未裁切关键 UI。
+- State: 设备本地时间对应白天光景；Agent 轨迹展开，学生与咕团完成二维寻路并到达月光钓鱼湾。
 
 ## Full-view comparison evidence
 
@@ -29,7 +30,8 @@
 
 - 当前没有残留 P0 / P1 / P2 视觉问题。
 - [P3] 实装为保证五个地点可达，比源图少一些近景电影感；如后续增加镜头跟随，可在不改变地图坐标的情况下进一步接近源图。
-- [P3] 当前 Product Design 参考为桌面图；移动端已实现专用地点横向导航、触控方向键、安全区和折叠 Agent，但本轮没有同源移动端视觉稿可做逐像素比较。
+- [P3] 当前 Product Design 参考为桌面图；移动端已实现五地点网格、触控方向键、安全区和折叠 Agent，但本轮没有同源移动端视觉稿可做逐像素比较。
+- 本轮端到端测试发现并修复两个真实交互缺陷：角色空闲动画与坐标寻路竞争导致卡在首个路点；到达卡片被地点导航遮挡导致主按钮无法点击。修复后桌面与移动端完整流程均通过。
 
 ## Comparison history
 
@@ -42,8 +44,10 @@
 
 - 白天、傍晚、夜晚按本地时间解析、跨时段自动更新与无障碍状态播报。
 - WASD / 方向键移动、Enter 互动、地点快捷寻路。
+- 二维八方向自由移动、障碍物碰撞、A* 绕行，以及从月光钓鱼湾直接进入慢钓台。
+- 小田园、慢钓台、幸福交换三种实际玩法；幸福小事可写入、换卡、保存与删除。
 - Agent 轨迹展开、Esc 关闭、焦点可见状态。
-- 本地页面加载、地图与角色资产加载、版本徽标 `5.1.0-alpha.9`；浏览器交互过程中未出现页面级错误。
+- 本地页面加载、地图与角色资产加载、版本徽标 `5.1.0-alpha.10`；浏览器交互过程中未出现页面级错误。
 
 ## Implementation checklist
 
@@ -51,6 +55,7 @@
 - [x] 同一地图依据本地时间自动进入白天、傍晚、夜晚连续阶段，无手动覆盖入口。
 - [x] 学生与咕团真实位图角色进入地图。
 - [x] 五个地点、Agent 轨迹、键盘和触控入口完整。
+- [x] 五个地点均接入实际功能；移动端显示全部地点与 3×3 八方向控制，不依赖隐藏横向滚动。
 - [x] 修复所有 P0 / P1 / P2 并完成二次视觉比较。
 
 final result: passed

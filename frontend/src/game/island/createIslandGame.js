@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { clampIslandPosition, ISLAND_PHASES, ISLAND_PLACES, ISLAND_WORLD, normalizeIslandPhase } from './islandState.js'
+import { findIslandPath, resolveIslandMovement } from './islandNavigation.js'
 
 const PHASE_LIGHTING = Object.freeze({
   day: { tint: 0xffffff, veil: 0xfff0c7, veilAlpha: 0.02, lamps: 0.08, stars: 0 },
@@ -17,6 +18,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     constructor() {
       super('HeartIsland')
       this.target = null
+      this.path = []
       this.activePlace = initialState.lastPlace || 'home'
       this.timePhase = normalizeIslandPhase(initialState.timePhase)
     }
@@ -34,7 +36,8 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
       this.applyPhase(this.timePhase)
       this.input.on('pointerdown', pointer => {
         if (pointer.y < 64 || pointer.y > ISLAND_WORLD.height - 62) return
-        this.target = clampIslandPosition({ x: pointer.worldX, y: pointer.worldY })
+        this.path = findIslandPath(this.player, { x: pointer.worldX, y: pointer.worldY })
+        this.target = this.path.shift() || null
         bridge.emit('agent', { phase: 'moving', text: '已经安排路线，正陪你向目的地走去', targetLabel: '地图上的位置' })
       })
       this.commandOff = bridge.on('command', command => this.handleCommand(command))
@@ -75,8 +78,10 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
         .setDisplaySize(58, 58)
         .setDepth(8)
       if (!reducedMotion) {
-        this.tweens.add({ targets: this.player, y: this.player.y - 2, yoyo: true, repeat: -1, duration: 820 })
-        this.tweens.add({ targets: this.companion, y: this.companion.y - 3, yoyo: true, repeat: -1, duration: 1100 })
+        // Idle motion must never write to x/y: position tweens fight the
+        // navigation loop and can trap a character on the first waypoint.
+        this.tweens.add({ targets: this.player, angle: -1, yoyo: true, repeat: -1, duration: 820 })
+        this.tweens.add({ targets: this.companion, angle: 2, yoyo: true, repeat: -1, duration: 1100 })
       }
     }
 
@@ -113,6 +118,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     handleCommand(command) {
       if (command?.type === 'move') {
         this.target = null
+        this.path = []
         this.manualVector = command.direction || null
       }
       if (command?.type === 'stop') this.manualVector = null
@@ -120,7 +126,8 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
       if (command?.type === 'visit') {
         const place = ISLAND_PLACES.find(item => item.id === command.placeId)
         if (place) {
-          this.target = { x: place.x, y: place.y }
+          this.path = findIslandPath(this.player, place)
+          this.target = this.path.shift() || null
           bridge.emit('agent', { phase: 'moving', text: `已经找到合适路线：前往${place.label}`, targetLabel: place.label })
         }
       }
@@ -138,8 +145,8 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
         const dy = this.target.y - this.player.y
         const distance = Math.hypot(dx, dy)
         if (distance < 7) {
-          this.target = null
-          this.interact()
+          this.target = this.path.shift() || null
+          if (!this.target) this.interact()
         } else {
           this.movePlayer(dx / distance * delta * 0.14, dy / distance * delta * 0.14)
         }
@@ -148,7 +155,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     }
 
     movePlayer(dx, dy) {
-      const next = clampIslandPosition({ x: this.player.x + dx, y: this.player.y + dy })
+      const next = resolveIslandMovement(this.player, { x: this.player.x + dx, y: this.player.y + dy })
       this.player.setPosition(next.x, next.y)
       if (dx) this.player.setFlipX(dx < 0)
       const followX = next.x + (dx < 0 ? 34 : -34)

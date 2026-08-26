@@ -1452,11 +1452,13 @@
             :storage-scope="String(userStore.userId || '')"
             @close="closeWorkspacePanel('leisure')"
             @fallback="handleIslandFallback"
+            @activity="handleIslandActivity"
           />
           <StudentLeisureHub
             v-else
             data-workspace="leisure"
             :storage-scope="String(userStore.userId || '')"
+            :initial-game="leisureInitialGame"
             @close="closeWorkspacePanel('leisure')"
             @open-island="openIslandWorkspace"
             @open-healing="openWorkspacePanel('healing')"
@@ -1712,6 +1714,7 @@ watch(supportDrawerMode, async () => {
 const showHealingPanel = ref(false)
 const showLeisurePanel = ref(false)
 const leisureWorkspaceMode = ref('games')
+const leisureInitialGame = ref('garden')
 const studentIslandEnabled = import.meta.env.VITE_STUDENT_ISLAND_ALPHA5 !== '0'
 const useIslandWorkspace = computed(() => studentIslandEnabled && leisureWorkspaceMode.value === 'island')
 const showTreeHolePanel = ref(false)
@@ -1758,9 +1761,32 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
 }
 
 async function handleIslandFallback() {
+  leisureInitialGame.value = 'garden'
   leisureWorkspaceMode.value = 'games'
   await nextTick()
   focusWithoutScroll(document.querySelector('.leisure-hub .leisure-close'))
+}
+
+async function handleIslandActivity(placeId) {
+  if (placeId === 'home') {
+    closeWorkspacePanel('leisure')
+    await nextTick()
+    openWorkspacePanel('pet')
+    return
+  }
+  if (placeId === 'rest') {
+    closeWorkspacePanel('leisure')
+    await nextTick()
+    openWorkspacePanel('healing')
+    return
+  }
+  leisureInitialGame.value = placeId === 'dock' ? 'fishing' : placeId === 'exchange' ? 'exchange' : 'garden'
+  leisureWorkspaceMode.value = 'games'
+  await nextTick()
+  const activityTarget = placeId === 'exchange'
+    ? document.querySelector('#happiness-note')
+    : document.querySelector('.leisure-hub .game-board button:not([disabled])')
+  focusWithoutScroll(activityTarget || document.querySelector('.leisure-hub .leisure-close'))
 }
 
 async function openIslandWorkspace() {

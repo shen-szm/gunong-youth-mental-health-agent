@@ -20,6 +20,7 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
       if (/createIslandGame|phaser/i.test(request.url())) islandRequests.push(request.url())
     })
     await page.addInitScript(() => {
+      localStorage.clear()
       localStorage.setItem('shengyu_first_run_guide_completed_version', '4.3.0')
     })
 
@@ -30,10 +31,10 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
       assert.equal(await page.locator('.island-game-host canvas').count(), 0)
       assert.equal(islandRequests.length, 0)
 
-      const explore = page.getByRole('button', { name: '探索', exact: true })
+      const explore = page.getByRole('button', { name: '进入心岛探索' })
       for (let cycle = 0; cycle < 3; cycle += 1) {
         await explore.click()
-        const dialog = page.getByRole('dialog', { name: '和咕团沿着光，选一件今晚想做的小事' })
+        const dialog = page.getByRole('dialog', { name: '和咕团沿着光，选一件此刻想做的小事' })
         await dialog.waitFor({ state: 'visible' })
         await page.locator('.island-game-host canvas').waitFor({ state: 'visible' })
         assert.equal(await page.locator('.island-game-host canvas').count(), 1)
@@ -49,20 +50,40 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
       const surface = page.getByLabel('心岛地图控制区')
       await surface.press('ArrowRight')
       await surface.press('ArrowDown')
-      await page.getByRole('button', { name: /云顶暖房/ }).click()
-      assert.match(await page.locator('#island-live-status').textContent(), /正在前往云顶暖房/)
+      await page.getByRole('button', { name: /月光钓鱼湾/ }).click()
+      assert.match(await page.locator('#island-live-status').textContent(), /正在前往月光钓鱼湾/)
+      const fishingEntry = page.getByRole('button', { name: '坐到水边钓鱼' })
+      await fishingEntry.waitFor({ state: 'visible', timeout: 20_000 })
+      await fishingEntry.click()
+      await page.getByRole('heading', { name: '慢钓台', exact: true }).waitFor({ state: 'visible' })
+      assert.equal(await page.locator('.game-tabs').getByRole('button', { name: /慢钓台/ }).getAttribute('aria-current'), 'page')
+
+      await page.getByRole('button', { name: /幸福交换/ }).click()
+      const happinessInput = page.getByLabel('一件令你幸福的小事')
+      await happinessInput.fill('今天放学时，风吹过树叶的声音很好听。')
+      await page.getByRole('button', { name: '放进树洞并交换' }).click()
+      await page.getByText('你换到的心岛幸福卡').waitFor({ state: 'visible' })
+      assert.match(await page.getByText('我的幸福册').locator('..').textContent(), /风吹过树叶/)
+
+      await page.getByRole('button', { name: '进入心岛漫游' }).click()
+      await page.locator('.island-game-host canvas').waitFor({ state: 'visible' })
+      if (screenshotDir) {
+        await page.screenshot({ path: path.join(screenshotDir, 'design-qa-prototype-final.jpg'), type: 'jpeg', quality: 92 })
+      }
 
       await page.setViewportSize({ width: 390, height: 844 })
       await page.waitForTimeout(200)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
       assert.equal(await page.locator('.island-mobile-controls').evaluate(element => getComputedStyle(element).display), 'grid')
+      assert.equal(await page.locator('.island-mobile-controls button').count(), 9)
+      assert.equal(await page.getByRole('button', { name: '向右下移动' }).count(), 1)
       const up = page.getByRole('button', { name: '向上移动' })
       await up.dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', isPrimary: true })
       await page.waitForTimeout(120)
       await up.dispatchEvent('pointercancel', { pointerId: 7, pointerType: 'touch', isPrimary: true })
 
       if (screenshotDir) {
-        await page.screenshot({ path: path.join(screenshotDir, 'heart-island-e2e-mobile.png') })
+        await page.screenshot({ path: path.join(screenshotDir, 'design-qa-mobile.png') })
       }
       assert.deepEqual(errors, [])
     } finally {

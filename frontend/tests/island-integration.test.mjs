@@ -6,6 +6,7 @@ const roomUrl = new URL('../src/views/RoomHomeView.vue', import.meta.url)
 const workspaceUrl = new URL('../src/components/island/StudentIslandWorkspace.vue', import.meta.url)
 const gameUrl = new URL('../src/game/island/createIslandGame.js', import.meta.url)
 const stateUrl = new URL('../src/game/island/islandState.js', import.meta.url)
+const navigationUrl = new URL('../src/game/island/islandNavigation.js', import.meta.url)
 const packageUrl = new URL('../package.json', import.meta.url)
 
 test('heart island is lazy loaded and Phaser is not imported by the student room', async () => {
@@ -36,10 +37,11 @@ test('heart island is lazy loaded and Phaser is not imported by the student room
 })
 
 test('island provides real movement, destinations and non-diagnostic agent boundaries', async () => {
-  const [workspace, game, state] = await Promise.all([
+  const [workspace, game, state, navigation] = await Promise.all([
     readFile(workspaceUrl, 'utf8'),
     readFile(gameUrl, 'utf8'),
     readFile(stateUrl, 'utf8'),
+    readFile(navigationUrl, 'utf8'),
   ])
   for (const label of ['咕团家园', '云顶暖房', '月光钓鱼湾', '幸福交换树', '星灯休息台']) assert.match(workspace + game + state, new RegExp(label))
   assert.match(workspace, /ArrowUp/)
@@ -66,6 +68,13 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.match(game, /heart-island-base\.png/)
   assert.match(game, /guguan-idle\.png/)
   assert.match(game, /PHASE_LIGHTING/)
+  assert.match(game, /findIslandPath/)
+  assert.match(game, /resolveIslandMovement/)
+  assert.match(navigation, /ISLAND_BLOCKERS/)
+  assert.match(navigation, /directions = \[/)
+  assert.match(workspace, /向左上移动/)
+  assert.match(workspace, /向右下移动/)
+  assert.match(workspace, /emit\('activity', arrivalCard\.value\.place\)/)
   assert.match(game, /targetLabel: place\.label/)
   assert.match(workspace, /不从游戏成绩推断情绪/)
   assert.match(workspace, /不进行心理诊断/)

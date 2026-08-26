@@ -71,7 +71,7 @@
           <small>已经到达</small>
           <strong>{{ arrivalCard.label }}</strong>
           <p>{{ arrivalCard.hint }}</p>
-          <button type="button" class="arrival-primary" @click.stop="$emit('fallback')">打开对应休闲活动</button>
+          <button type="button" class="arrival-primary" @click.stop="openArrivalActivity">{{ arrivalActivityLabel }}</button>
         </section>
 
         <div v-if="loading" class="island-loading" role="status">
@@ -108,11 +108,15 @@
       <p id="island-live-status" class="sr-only" role="status" aria-live="polite">{{ liveStatus }}</p>
 
       <div class="island-mobile-controls" aria-label="心岛移动控制">
+        <button type="button" aria-label="向左上移动" @pointerdown="startPointerMove($event, -1, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↖</button>
         <button type="button" aria-label="向上移动" @pointerdown="startPointerMove($event, 0, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↑</button>
+        <button type="button" aria-label="向右上移动" @pointerdown="startPointerMove($event, 1, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↗</button>
         <button type="button" aria-label="向左移动" @pointerdown="startPointerMove($event, -1, 0)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">←</button>
         <button type="button" class="is-interact" @click="interact">互动</button>
         <button type="button" aria-label="向右移动" @pointerdown="startPointerMove($event, 1, 0)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">→</button>
+        <button type="button" aria-label="向左下移动" @pointerdown="startPointerMove($event, -1, 1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↙</button>
         <button type="button" aria-label="向下移动" @pointerdown="startPointerMove($event, 0, 1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↓</button>
+        <button type="button" aria-label="向右下移动" @pointerdown="startPointerMove($event, 1, 1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↘</button>
       </div>
     </main>
   </section>
@@ -124,7 +128,7 @@ import { createIslandBridge } from '../../game/island/islandBridge.js'
 import { ISLAND_PHASES, ISLAND_PLACES, loadIslandState, millisecondsUntilNextIslandPhase, resolveIslandPhase, saveIslandState } from '../../game/island/islandState.js'
 
 const props = defineProps({ storageScope: { type: [String, Number], required: true } })
-const emit = defineEmits(['close', 'fallback'])
+const emit = defineEmits(['close', 'fallback', 'activity'])
 const dialog = ref(null)
 const closeButton = ref(null)
 const gameHost = ref(null)
@@ -133,7 +137,8 @@ const loading = ref(true)
 const loadError = ref(false)
 const agentPhase = ref('ready')
 const agentText = ref('正在听懂你想去的方向')
-const compactViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches
+const viewportQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 900px)') : null
+const compactViewport = !!viewportQuery?.matches
 const agentExpanded = ref(!compactViewport)
 const liveStatus = ref('心岛地图正在准备')
 const nearby = ref('星灯小径')
@@ -146,6 +151,13 @@ const currentState = ref(loadIslandState(props.storageScope))
 const timePhase = ref(currentState.value.timePhase)
 const activePhase = computed(() => phases.find(phase => phase.id === timePhase.value) || phases[0])
 const currentPlaceLabel = computed(() => nearby.value || '星灯小径')
+const arrivalActivityLabel = computed(() => ({
+  home: '进入咕团家园',
+  garden: '开始照料田园',
+  dock: '坐到水边钓鱼',
+  exchange: '交换幸福小事',
+  rest: '打开放松工具',
+})[arrivalCard.value?.place] || '打开这里的活动')
 const agentStepIndex = computed(() => agentPhase.value === 'arrived' ? 2 : agentPhase.value === 'moving' ? 1 : 0)
 const agentSteps = computed(() => [
   { title: '听懂此刻', detail: '以你的主动选择为准' },
@@ -284,6 +296,10 @@ function handleVisibilityChange() {
   schedulePhaseSync()
 }
 
+function handleViewportChange(event) {
+  if (event.matches) agentExpanded.value = false
+}
+
 function agentStepClass(index) {
   if (index < agentStepIndex.value) return 'is-complete'
   if (index === agentStepIndex.value) return 'is-running'
@@ -311,6 +327,10 @@ function stopKeyboardMoving() {
 }
 function stopPointerMoving() { if (movementSource === 'pointer') stopMoving() }
 function interact() { bridge.emit('command', { type: 'interact' }) }
+function openArrivalActivity() {
+  if (!arrivalCard.value?.place) return
+  emit('activity', arrivalCard.value.place)
+}
 function visitPlace(place) {
   arrivalCard.value = null
   targetPlaceLabel.value = place.label
@@ -393,6 +413,7 @@ onMounted(async () => {
   window.addEventListener('pointercancel', stopPointerMoving)
   window.addEventListener('blur', stopMoving)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  viewportQuery?.addEventListener?.('change', handleViewportChange)
   await nextTick()
   closeButton.value?.focus({ preventScroll: true })
   startGame()
@@ -408,6 +429,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointercancel', stopPointerMoving)
   window.removeEventListener('blur', stopMoving)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  viewportQuery?.removeEventListener?.('change', handleViewportChange)
   if (phaseTimer) window.clearTimeout(phaseTimer)
   phaseTimer = null
   disposers.forEach(dispose => dispose())
@@ -498,7 +520,7 @@ onBeforeUnmount(() => {
 .agent-rail-body li small { margin-top: 2px; color: var(--island-muted); font-size: 9px; line-height: 1.35; }
 .agent-boundary { margin-top: 8px; color: rgba(255,248,234,.58); font-size: 9px; line-height: 1.45; }
 
-.island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 6; width: min(300px, calc(100% - 32px)); padding: 14px; border-radius: 13px; color: #2b2230; background: rgba(255, 239, 198, .94); box-shadow: 0 7px 8px rgba(6,9,22,.28); backdrop-filter: blur(16px); }
+.island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 12; width: min(300px, calc(100% - 32px)); padding: 14px; border-radius: 13px; color: #2b2230; background: rgba(255, 239, 198, .94); box-shadow: 0 7px 8px rgba(6,9,22,.28); backdrop-filter: blur(16px); }
 .island-arrival-card small, .island-arrival-card strong { display: block; }
 .island-arrival-card small { color: #765337; font-size: 9px; font-weight: 800; }
 .island-arrival-card strong { margin-top: 3px; font-size: 16px; }
@@ -531,7 +553,7 @@ onBeforeUnmount(() => {
   .island-phase-status { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .island-header-actions { grid-column: 2; grid-row: 1; }
   .island-classic-entry { display: none; }
-  .island-stage-shell { align-content: start; padding: 8px 8px calc(150px + env(safe-area-inset-bottom)); overflow-y: auto; }
+  .island-stage-shell { align-content: start; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); overflow-y: auto; }
   .island-game-surface { width: 100%; min-height: 54vw; border-radius: 12px; }
   .island-mission-glass { top: 8px; left: 8px; width: min(230px, calc(100% - 64px)); padding: 9px 10px; }
   .island-mission-glass p { display: none; }
@@ -542,11 +564,11 @@ onBeforeUnmount(() => {
   .island-agent-rail:not(.is-expanded) .agent-rail-toggle strong { font-size: 0; }
   .island-agent-rail:not(.is-expanded) .agent-rail-toggle strong::after { content: 'AI'; font-size: 10px; }
   .island-arrival-card { right: 8px; bottom: 8px; }
-  .island-place-dock { position: absolute; right: auto; bottom: calc(78px + env(safe-area-inset-bottom)); left: 8px; width: calc(100% - 16px); margin-top: 0; overflow-x: auto; transform: none; }
-  .island-place-dock button { flex: 0 0 118px; }
+  .island-place-dock { position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; margin-top: 8px; overflow: visible; transform: none; }
+  .island-place-dock button { min-height: 46px; }
   .island-instructions { display: none; }
-  .island-mobile-controls { position: absolute; right: 8px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 8; display: grid; grid-template-columns: repeat(5, minmax(48px, 1fr)); width: calc(100% - 16px); gap: 6px; }
-  .island-mobile-controls button { min-height: 52px; border: 0; border-radius: 11px; color: var(--island-ink); background: rgba(30,29,48,.88); font-size: 17px; font-weight: 800; backdrop-filter: blur(16px); touch-action: none; }
+  .island-mobile-controls { position: static; z-index: 8; display: grid; grid-template-columns: repeat(3, 46px); justify-self: end; width: 146px; margin: 8px 4px 0 0; gap: 4px; }
+  .island-mobile-controls button { min-height: 44px; border: 0; border-radius: 10px; color: var(--island-ink); background: rgba(30,29,48,.88); font-size: 16px; font-weight: 800; backdrop-filter: blur(16px); touch-action: none; }
   .island-mobile-controls .is-interact { color: #2a2130; background: #f1cf86; font-size: 11px; }
 }
 @media (max-width: 520px) {
