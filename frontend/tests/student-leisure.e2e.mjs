@@ -33,7 +33,7 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
       const explore = page.getByRole('button', { name: '探索', exact: true })
       for (let cycle = 0; cycle < 3; cycle += 1) {
         await explore.click()
-        const dialog = page.getByRole('dialog', { name: '把心情放进一座能慢慢走的岛' })
+        const dialog = page.getByRole('dialog', { name: '和咕团沿着光，选一件今晚想做的小事' })
         await dialog.waitFor({ state: 'visible' })
         await page.locator('.island-game-host canvas').waitFor({ state: 'visible' })
         assert.equal(await page.locator('.island-game-host canvas').count(), 1)
@@ -49,8 +49,8 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
       const surface = page.getByLabel('心岛地图控制区')
       await surface.press('ArrowRight')
       await surface.press('ArrowDown')
-      await page.getByRole('button', { name: /心田/ }).click()
-      assert.match(await page.locator('#island-live-status').textContent(), /正在前往心田/)
+      await page.getByRole('button', { name: /云顶暖房/ }).click()
+      assert.match(await page.locator('#island-live-status').textContent(), /正在前往云顶暖房/)
 
       await page.setViewportSize({ width: 390, height: 844 })
       await page.waitForTimeout(200)

@@ -1,18 +1,16 @@
 import Phaser from 'phaser'
-import { clampIslandPosition, ISLAND_PLACES, ISLAND_WORLD } from './islandState.js'
+import { clampIslandPosition, ISLAND_PHASES, ISLAND_PLACES, ISLAND_WORLD, normalizeIslandPhase } from './islandState.js'
 
-const COLORS = {
-  water: 0x213b58,
-  waterLight: 0x2e5970,
-  shore: 0xe8c98c,
-  grass: 0x6ea889,
-  grassDark: 0x477963,
-  path: 0xd7b980,
-  glass: 0x172635,
-  mint: 0xb9e0c8,
-  coral: 0xe59b87,
-  lavender: 0xa8a5dc,
-}
+const PHASE_LIGHTING = Object.freeze({
+  day: { tint: 0xffffff, veil: 0xfff0c7, veilAlpha: 0.02, lamps: 0.08, stars: 0 },
+  dusk: { tint: 0xffd5bd, veil: 0x6d385f, veilAlpha: 0.16, lamps: 0.46, stars: 0.18 },
+  night: { tint: 0x8f9ccf, veil: 0x101b48, veilAlpha: 0.38, lamps: 0.9, stars: 0.82 },
+})
+
+const LAMP_POINTS = Object.freeze([
+  [137, 352], [252, 387], [365, 405], [472, 385], [574, 330], [668, 275],
+  [748, 242], [721, 158], [602, 138], [532, 184], [335, 280], [190, 292],
+])
 
 export async function createIslandGame({ parent, bridge, initialState, reducedMotion = false }) {
   class IslandScene extends Phaser.Scene {
@@ -20,87 +18,95 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
       super('HeartIsland')
       this.target = null
       this.activePlace = initialState.lastPlace || 'home'
+      this.timePhase = normalizeIslandPhase(initialState.timePhase)
+    }
+
+    preload() {
+      this.load.image('heart-island-base', '/images/island/heart-island-base.png')
+      this.load.image('guguan-companion', '/images/guguan/guguan-idle.png')
+      this.load.image('island-student-back', '/images/island/student-back.png')
     }
 
     create() {
-      this.drawWorld()
-      this.createPlayer(initialState.position)
+      this.createWorld()
       this.createPlaces()
+      this.createPlayer(initialState.position)
+      this.applyPhase(this.timePhase)
       this.input.on('pointerdown', pointer => {
-        if (pointer.y < 68) return
+        if (pointer.y < 64 || pointer.y > ISLAND_WORLD.height - 62) return
         this.target = clampIslandPosition({ x: pointer.worldX, y: pointer.worldY })
-        bridge.emit('agent', { phase: 'moving', text: '陪伴行动正在进行：前往你选择的位置' })
+        bridge.emit('agent', { phase: 'moving', text: '已经安排路线，正陪你向目的地走去', targetLabel: '地图上的位置' })
       })
       this.commandOff = bridge.on('command', command => this.handleCommand(command))
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.commandOff?.())
-      bridge.emit('ready', { place: this.activePlace })
+      bridge.emit('ready', { place: this.activePlace, timePhase: this.timePhase })
       this.reportPosition(true)
     }
 
-    drawWorld() {
-      this.cameras.main.setBackgroundColor(COLORS.water)
-      const sea = this.add.graphics().setDepth(0)
-      sea.fillStyle(COLORS.waterLight, 0.34)
-      for (let y = 22; y < ISLAND_WORLD.height; y += 34) {
-        for (let x = (y / 34) % 2 ? 18 : 2; x < ISLAND_WORLD.width; x += 52) {
-          sea.fillRect(x, y, 23, 3)
-          sea.fillStyle(COLORS.waterLight, 0.18)
-          sea.fillRect(x + 24, y + 8, 12, 2)
-          sea.fillStyle(COLORS.waterLight, 0.34)
-        }
+    createWorld() {
+      this.cameras.main.setBackgroundColor(0x18264a)
+      this.background = this.add.image(ISLAND_WORLD.width / 2, ISLAND_WORLD.height / 2, 'heart-island-base')
+        .setDisplaySize(ISLAND_WORLD.width, ISLAND_WORLD.height)
+        .setDepth(0)
+      this.phaseVeil = this.add.rectangle(
+        ISLAND_WORLD.width / 2,
+        ISLAND_WORLD.height / 2,
+        ISLAND_WORLD.width,
+        ISLAND_WORLD.height,
+        0xffffff,
+        0,
+      ).setDepth(1).setBlendMode(Phaser.BlendModes.MULTIPLY)
+
+      this.stars = this.add.container(0, 0).setDepth(2)
+      for (const [x, y, size] of [[78,42,2],[142,82,1],[232,45,2],[309,74,1],[556,48,1],[636,70,2],[762,45,1],[846,80,2],[906,39,1]]) {
+        this.stars.add(this.add.circle(x, y, size + 1, 0xffe5a1, 1))
       }
-
-      const island = this.add.graphics().setDepth(1)
-      island.fillStyle(COLORS.shore, 1)
-      island.fillRoundedRect(126, 105, 708, 354, 92)
-      island.fillStyle(COLORS.grassDark, 1)
-      island.fillRoundedRect(145, 121, 670, 319, 78)
-      island.fillStyle(COLORS.grass, 1)
-      island.fillRoundedRect(158, 132, 644, 292, 68)
-
-      island.lineStyle(18, COLORS.path, 1)
-      island.beginPath()
-      island.moveTo(480, 405)
-      island.lineTo(480, 300)
-      island.lineTo(285, 270)
-      island.moveTo(480, 300)
-      island.lineTo(600, 185)
-      island.moveTo(480, 300)
-      island.lineTo(745, 338)
-      island.strokePath()
-
-      const details = this.add.graphics().setDepth(2)
-      details.fillStyle(0x365f50, 1)
-      for (const [x, y] of [[200,180],[240,372],[680,390],[745,185],[360,160],[170,300]]) {
-        details.fillRect(x, y, 10, 26)
-        details.fillStyle(0x87be8d, 1)
-        details.fillRect(x - 12, y - 12, 34, 18)
-        details.fillStyle(0x365f50, 1)
-      }
+      this.lamps = LAMP_POINTS.map(([x, y]) => {
+        const glow = this.add.circle(x, y, 15, 0xffc862, 0).setDepth(3).setBlendMode(Phaser.BlendModes.ADD)
+        const core = this.add.circle(x, y, 3, 0xffe8aa, 0).setDepth(4)
+        return { glow, core }
+      })
     }
 
     createPlayer(position) {
-      const texture = this.make.graphics({ x: 0, y: 0, add: false })
-      texture.fillStyle(0x3d314f, 1).fillRect(7, 4, 18, 22)
-      texture.fillStyle(0xf1c7a4, 1).fillRect(9, 6, 14, 10)
-      texture.fillStyle(0xf4d68e, 1).fillRect(5, 16, 22, 13)
-      texture.fillStyle(0x28384e, 1).fillRect(7, 29, 8, 7).fillRect(18, 29, 8, 7)
-      texture.generateTexture('island-student', 32, 38)
-      texture.destroy()
-      this.player = this.add.image(position.x, position.y, 'island-student').setDepth(8)
+      this.player = this.add.image(position.x, position.y, 'island-student-back').setDisplaySize(31, 72).setDepth(9)
       this.player.setData('lastReport', 0)
-      if (!reducedMotion) this.tweens.add({ targets: this.player, scaleY: 0.97, yoyo: true, repeat: -1, duration: 820 })
+      this.companion = this.add.image(position.x + 34, position.y + 5, 'guguan-companion')
+        .setDisplaySize(58, 58)
+        .setDepth(8)
+      if (!reducedMotion) {
+        this.tweens.add({ targets: this.player, y: this.player.y - 2, yoyo: true, repeat: -1, duration: 820 })
+        this.tweens.add({ targets: this.companion, y: this.companion.y - 3, yoyo: true, repeat: -1, duration: 1100 })
+      }
     }
 
     createPlaces() {
-      const colors = { home: COLORS.mint, garden: 0x97c28b, dock: COLORS.lavender, exchange: COLORS.coral }
+      this.placeMarkers = new Map()
       for (const place of ISLAND_PLACES) {
-        const marker = this.add.rectangle(place.x, place.y, 66, 48, colors[place.id], 0.96).setDepth(5)
-        marker.setStrokeStyle(4, COLORS.glass, 0.74)
-        this.add.text(place.x, place.y + 39, place.label, {
-          fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '15px', color: '#fff9e9',
-          backgroundColor: '#172635cc', padding: { x: 8, y: 4 },
+        const marker = this.add.circle(place.x, place.y, 19, 0xf2cf83, 0.12).setDepth(5)
+        marker.setStrokeStyle(2, 0xffdf98, 0.82)
+        const label = this.add.text(place.x, place.y + 27, place.label, {
+          fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '13px', color: '#fff8e8',
+          backgroundColor: '#171a2dcc', padding: { x: 8, y: 5 },
         }).setOrigin(0.5).setDepth(6)
+        this.placeMarkers.set(place.id, { marker, label })
+      }
+    }
+
+    applyPhase(phase, announce = false) {
+      this.timePhase = normalizeIslandPhase(phase)
+      const lighting = PHASE_LIGHTING[this.timePhase]
+      const phaseMeta = ISLAND_PHASES.find(item => item.id === this.timePhase)
+      this.background.setTint(lighting.tint)
+      this.phaseVeil.setFillStyle(lighting.veil, lighting.veilAlpha)
+      this.stars.setAlpha(lighting.stars)
+      this.lamps.forEach(({ glow, core }) => {
+        glow.setAlpha(lighting.lamps * 0.42)
+        core.setAlpha(lighting.lamps)
+      })
+      if (announce) {
+        bridge.emit('phase', { phase: this.timePhase, label: phaseMeta.label })
+        bridge.emit('status', { text: `心岛已切换到${phaseMeta.label}，地图与进度保持不变。` })
       }
     }
 
@@ -110,11 +116,12 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
         this.manualVector = command.direction || null
       }
       if (command?.type === 'stop') this.manualVector = null
+      if (command?.type === 'phase') this.applyPhase(command.phase, true)
       if (command?.type === 'visit') {
         const place = ISLAND_PLACES.find(item => item.id === command.placeId)
         if (place) {
           this.target = { x: place.x, y: place.y }
-          bridge.emit('agent', { phase: 'moving', text: `已规划路线：前往${place.label}` })
+          bridge.emit('agent', { phase: 'moving', text: `已经找到合适路线：前往${place.label}`, targetLabel: place.label })
         }
       }
       if (command?.type === 'interact') this.interact()
@@ -144,6 +151,13 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
       const next = clampIslandPosition({ x: this.player.x + dx, y: this.player.y + dy })
       this.player.setPosition(next.x, next.y)
       if (dx) this.player.setFlipX(dx < 0)
+      const followX = next.x + (dx < 0 ? 34 : -34)
+      const followY = next.y + 7
+      this.companion.setPosition(
+        Phaser.Math.Linear(this.companion.x, followX, reducedMotion ? 1 : 0.18),
+        Phaser.Math.Linear(this.companion.y, followY, reducedMotion ? 1 : 0.18),
+      )
+      this.companion.setFlipX(dx > 0)
     }
 
     nearestPlace() {
@@ -155,13 +169,13 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
 
     interact() {
       const place = this.nearestPlace()
-      if (!place || place.distance > 62) {
-        bridge.emit('status', { text: '这里很安静。靠近一个地点后可以互动。', place: this.activePlace })
+      if (!place || place.distance > 64) {
+        bridge.emit('status', { text: '沿着星灯再走近一点，就能和这里互动。', place: this.activePlace })
         return
       }
       this.activePlace = place.id
       bridge.emit('arrive', { place: place.id, label: place.label, hint: place.hint, position: { x: this.player.x, y: this.player.y } })
-      bridge.emit('agent', { phase: 'arrived', text: `已完成路线并到达${place.label}，等待你的下一步` })
+      bridge.emit('agent', { phase: 'arrived', text: `已到达${place.label}，正在准备适合此处的轻量活动`, targetLabel: place.label })
     }
 
     reportPosition(force) {
@@ -176,7 +190,8 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
       bridge.emit('position', {
         position: currentPosition,
         place: this.activePlace,
-        nearby: place?.distance < 92 ? place.label : '岛屿小径',
+        nearby: place?.distance < 92 ? place.label : '星灯小径',
+        timePhase: this.timePhase,
       })
     }
   }
@@ -186,7 +201,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     parent,
     width: ISLAND_WORLD.width,
     height: ISLAND_WORLD.height,
-    backgroundColor: COLORS.water,
+    backgroundColor: 0x18264a,
     pixelArt: true,
     antialias: false,
     roundPixels: true,

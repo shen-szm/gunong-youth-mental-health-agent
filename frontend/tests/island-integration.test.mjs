@@ -9,21 +9,27 @@ const stateUrl = new URL('../src/game/island/islandState.js', import.meta.url)
 const packageUrl = new URL('../package.json', import.meta.url)
 
 test('heart island is lazy loaded and Phaser is not imported by the student room', async () => {
-  const [room, workspace, pkgText] = await Promise.all([
+  const [room, workspace, state, pkgText] = await Promise.all([
     readFile(roomUrl, 'utf8'),
     readFile(workspaceUrl, 'utf8'),
+    readFile(stateUrl, 'utf8'),
     readFile(packageUrl, 'utf8'),
   ])
   const pkg = JSON.parse(pkgText)
   assert.equal(pkg.dependencies.phaser, '3.90.0')
   assert.doesNotMatch(room, /from ['"]phaser['"]/)
+  assert.match(room, /openWorkspacePanel\('leisure', \$event\.currentTarget, 'island'\)/)
   assert.match(workspace, /await import\('\.\.\/\.\.\/game\/island\/createIslandGame\.js'\)/)
   assert.match(workspace, /game\?\.destroy\(true\)/)
   assert.match(workspace, /role="dialog"/)
   assert.match(workspace, /aria-modal="true"/)
   assert.match(workspace, /aria-hidden="true"/)
   assert.match(workspace, /role="status"/)
-  assert.match(workspace, /去小田园和慢钓台/)
+  assert.match(workspace, /经典休闲角/)
+  assert.match(workspace, /预览心岛时间阶段/)
+  assert.match(state, /白天/)
+  assert.match(state, /傍晚/)
+  assert.match(state, /夜晚/)
 })
 
 test('island provides real movement, destinations and non-diagnostic agent boundaries', async () => {
@@ -32,17 +38,33 @@ test('island provides real movement, destinations and non-diagnostic agent bound
     readFile(gameUrl, 'utf8'),
     readFile(stateUrl, 'utf8'),
   ])
-  for (const label of ['潮汐小屋', '心田', '慢钓码头', '幸福交换站']) assert.match(workspace + game + state, new RegExp(label))
+  for (const label of ['咕团家园', '云顶暖房', '月光钓鱼湾', '幸福交换树', '星灯休息台']) assert.match(workspace + game + state, new RegExp(label))
   assert.match(workspace, /ArrowUp/)
   assert.match(workspace, /pointercancel/)
   assert.match(workspace, /setPointerCapture/)
   assert.match(workspace, /window\.addEventListener\('pointerup', stopPointerMoving\)/)
   assert.match(workspace, /const pressedDirections = new Set\(\)/)
   assert.match(workspace, /function handleGameKeyup/)
+  assert.match(workspace, /const agentExpanded = ref\(!compactViewport\)/)
+  assert.match(workspace, /targetPlaceLabel\.value = place\.label/)
+  assert.match(workspace, /正在前往\$\{targetPlaceLabel\.value/)
+  assert.match(workspace, /watch\(\(\) => props\.storageScope/)
+  assert.match(workspace, /currentState\.value = loadIslandState\(nextScope\)/)
+  assert.match(workspace, /let gameGeneration = 0/)
+  assert.match(workspace, /let startingPromise = null/)
+  assert.match(workspace, /generation === gameGeneration/)
+  assert.match(workspace, /activeBridge !== bridge/)
+  assert.match(workspace, /createdGame\?\.destroy\(true\)/)
+  assert.match(workspace, /bridge = createIslandBridge\(\)/)
+  assert.match(workspace, /game\?\.destroy\(true\)/)
   assert.match(game, /this\.input\.on\('pointerdown'/)
   assert.doesNotMatch(game, /createCursorKeys|addKeys\('W,A,S,D'\)/)
   assert.match(game, /Phaser\.Scale\.FIT/)
-  assert.match(workspace, /不从走路与成绩推断情绪/)
+  assert.match(game, /heart-island-base\.png/)
+  assert.match(game, /guguan-idle\.png/)
+  assert.match(game, /PHASE_LIGHTING/)
+  assert.match(game, /targetLabel: place\.label/)
+  assert.match(workspace, /不从游戏成绩推断情绪/)
   assert.match(workspace, /不进行心理诊断/)
   assert.match(workspace, /aria-label="心岛地图控制区"/)
   assert.doesNotMatch(workspace + game, /抑郁评分|焦虑评分|量表分数|心理概率/)

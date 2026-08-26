@@ -186,7 +186,7 @@
       type="button"
       class="heart-island-door"
       aria-label="进入心岛探索"
-      @click.stop="openWorkspacePanel('leisure', $event.currentTarget)"
+      @click.stop="openWorkspacePanel('leisure', $event.currentTarget, 'island')"
     >
       <span class="heart-island-door-glow" aria-hidden="true"></span>
       <span class="heart-island-door-copy"><strong>心岛</strong><small>走进去探索</small></span>
@@ -1742,8 +1742,8 @@ function roomWorkspacePanels() {
   }
 }
 
-function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement) {
-  if (key === 'leisure') leisureWorkspaceMode.value = 'games'
+function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement, leisureMode = 'games') {
+  if (key === 'leisure') leisureWorkspaceMode.value = leisureMode
   closeRoomWorkspaces(key)
   selectedRoomFeatureId.value = ''
   const panel = roomWorkspacePanels()[key]

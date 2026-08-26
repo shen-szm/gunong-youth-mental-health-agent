@@ -1,48 +1,56 @@
-# Design QA — v5.0.0-alpha.3
+# 心岛漫游设计 QA
 
-## Comparison contract
+## Comparison target
 
-- Source truth: `C:\Users\31795\.codex\generated_images\01a022bd-7794-7f20-a859-96ad33344392\exec-1250ece5-4cd3-4dca-8cf4-7d789bb470de.png`
-- Source dimensions: `1670 × 942` (16:9)
-- Implementation: `frontend/src/views/RoomHomeView.vue` at `http://127.0.0.1:5174/`
-- Implementation capture: Codex in-app browser capture from the `studentTab4` rendered state, `1280 × 720` CSS viewport, after a successful non-crisis chat message.
-- Teacher implementation: `frontend/src/views/AdminView.vue` at `http://127.0.0.1:5174/admin`
-- Reference state: original pixel-art bedroom remains visible; dark translucent right-side action drawer is open; “做一个小行动” is selected; summary, one action, three decision buttons and the help link are visible.
-- Rendered state: same room, navigation, pet and daily card remain in place; chat closes only after a successful safe response; the action drawer opens on the right with the same information hierarchy and working controls.
+- Source visual truth: `C:\Users\31795\.codex\generated_images\01a022bd-7794-7f20-a859-96ad33344392\exec-6f18324d-0543-41a5-8833-cc69bede5367.png`
+- Implementation: `http://127.0.0.1:5175/` 中学生端“探索 → 进入心岛漫游”
+- Implementation screenshot: `D:\桌面文件\大学文件\一些比赛\讯飞杯\shengyu-web\design-qa-prototype-final.jpg`
+- Combined comparison: `D:\桌面文件\大学文件\一些比赛\讯飞杯\shengyu-web\design-qa-comparison.jpg`
+- Viewport: 1081 × 898 CSS px，device scale factor 1
+- Source pixels: 1536 × 1024；implementation pixels: 1081 × 898
+- Normalization: comparison preview统一到 720 px 高度，源图约 1080 × 720，实装约 867 × 720，中间 8 px 分隔；未裁切关键 UI。
+- State: 傍晚光景、Agent 轨迹展开、学生与咕团位于幸福交换树附近。
 
-## Combined visual comparison
+## Full-view comparison evidence
 
-The selected source image and the rendered in-app-browser capture were inspected together at matching 16:9 states. The implementation preserves the source composition: the room remains the primary visual anchor, the drawer occupies the right third without replacing the room, and the dark glass surface, mint action color, compact type scale and quiet borders match the existing liquid-glass system. The implementation intentionally retains the current production room background and existing bottom navigation instead of recreating either asset.
+- 实装保留了选定图的第三人称斜俯视岛屿、暖木建筑、陶土屋顶、琥珀光、深靛蓝外壳、学生与宠物同行、右侧 Agent 轨迹和低干扰玻璃界面。
+- 因新增“白天 / 傍晚 / 夜晚”要求，实装将时间切换放入顶部稳定控制区；五个目的地保持同一地图和坐标，不因光景切换重置。
+- 实装比源图略微拉远，以便同屏保留五个可到达区域和快捷导航。这是可玩性约束下的有意调整，没有改变核心视觉方向。
 
-## Interaction and accessibility checks
+## Focused-region comparison evidence
 
-- Student core path: enter room → open chat → submit a safe concern → drawer opens → switch need → cycle action → open help-card flow.
-- Crisis path: `需要立即协助` responses do not open the ordinary action drawer.
-- Summary can be edited and saved; “愿意试试” and the help card persist on the device.
-- Drawer uses an `aside` landmark, labelled heading, labelled close button, fieldset/legend and live feedback region.
-- Keyboard focus indicators inherit the existing button/input focus system; reduced-motion media query disables drawer transition.
-- Mobile breakpoint changes the drawer to an inset bottom sheet, stacks choice/action controls and caps height at 75vh.
-- Teacher core path: permission-gated student selection → execute work order → inspect pipeline/evidence/conflict/decision → confirm tasks.
-- Browser console: no warnings or errors in the tested student and teacher states.
-- Desktop visual captures were produced from the live student drawer and teacher workbench states; focus entry, Escape close/return and the visible help-card path were exercised in the same browser session.
+- Typography: 使用现有中文系统字体栈；标题、地点标签与 Agent 小字均保持清晰层级，没有溢出或异常换行。
+- Spacing and rhythm: 顶部控制、地图、地点导航形成三层稳定结构；地图覆盖层不遮挡主要路径，关闭按钮和 Agent 轨迹保持可见。
+- Colors and tokens: 傍晚使用陶土橙与薰衣草暮色，夜晚使用靛蓝与琥珀灯光，白天回到柔和金色日照；控制选中态同时使用文字和高对比底色。
+- Image quality: 地图为原创高清像素资产；学生角色与咕团均使用真实位图资产，像素边缘清晰，无占位图、字符画或临时方块。
+- Copy: 保留“主动选择、不用解释原因、非诊断”的产品边界；Agent 只展示可核验状态，不展示私有思维链。
 
-## Issue history
+## Findings
 
-1. P1 — business UI exposed development/competition labels and seeded labels such as “演示/合成”. Fixed by replacing business copy and sanitizing display names without changing source records.
-2. P1 — student need selector initially did not change the delivered action. Fixed by mapping each need to a distinct next step and defaulting to the selected reference state “做一个小行动”.
-3. P1 — help flow only changed transient UI. Fixed by generating a persistent help card containing the chosen trusted adult and only the summary the student explicitly agreed to share.
-4. P1 — secondary drawer text could fall below AA contrast over bright room areas. Fixed with a darker near-opaque glass surface and higher-opacity secondary text.
-5. P1 — administrator direct work-product IDs changed on each refresh, losing confirmed task state. Fixed by reusing the same audited snapshot cutoff within the current day; the regression test waits across the former one-second boundary.
-6. P1 — family-harm phrases and older crisis evidence could be missed. Fixed by extending household-person rules and appending all urgent records from the authorized 30-day scope even when ordinary display rows exceed 50.
-7. P1 — reusing an administrator snapshot could hide a crisis signal that arrived later the same day. Fixed with an incremental SafetyGate; a new urgent signal creates a microsecond-unique safety revision and does not inherit prior ordinary-task confirmations.
-8. P1 — an approved ordinary-teacher snapshot could hide a crisis signal that arrived after approval. Fixed with a redacted safety revision: urgent actions override immediately, while post-approval original text remains unavailable until a new approval.
-9. P1 — household harm rules were too narrow for tool-based assault, coerced sexual contact and confinement. Fixed with category-level patterns and direct regression cases across the shared student/teacher SafetyGate.
-10. P2 — initial build output was locked by a running preview audio file. Verified the same Vite production build in an isolated output directory instead; no source or user asset was removed.
+- 当前没有残留 P0 / P1 / P2 视觉问题。
+- [P3] 实装为保证五个地点可达，比源图少一些近景电影感；如后续增加镜头跟随，可在不改变地图坐标的情况下进一步接近源图。
+- [P3] 当前 Product Design 参考为桌面图；移动端已实现专用地点横向导航、触控方向键、安全区和折叠 Agent，但本轮没有同源移动端视觉稿可做逐像素比较。
 
-## Final result
+## Comparison history
 
-`passed`
+1. 初次比较发现旧版方块学生角色与高清场景不一致，且地图上方留白过多（P2）。
+2. 修复：生成并接入透明背景学生像素角色；地图改为顶部对齐；地点导航紧接地图；咕团继续跟随角色。
+3. 第二次比较曾尝试将地图放大至 118%，导致任务卡和 Agent 轨迹在窄桌面视口被裁切（P2 回归）。
+4. 修复：恢复 100% 地图宽度并保留顶部对齐。最终截图确认任务卡、Agent、五个目的地和地点导航均完整可见，页面无横向溢出。
 
-- Visual P0: 0
-- Visual P1: 0
-- Visual P2: 0
+## Primary interactions checked
+
+- 白天、傍晚、夜晚切换与 `aria-pressed` 状态。
+- WASD / 方向键移动、Enter 互动、地点快捷寻路。
+- Agent 轨迹展开、Esc 关闭、焦点可见状态。
+- 本地页面加载、地图与角色资产加载、版本徽标 `5.1.0-alpha.8`；浏览器交互过程中未出现页面级错误。
+
+## Implementation checklist
+
+- [x] 保持暖色像素主视觉和液态玻璃控制层。
+- [x] 同一地图支持白天、傍晚、夜晚连续阶段。
+- [x] 学生与咕团真实位图角色进入地图。
+- [x] 五个地点、Agent 轨迹、键盘和触控入口完整。
+- [x] 修复所有 P0 / P1 / P2 并完成二次视觉比较。
+
+final result: passed
