@@ -1,6 +1,31 @@
 # Third-party notices
 
-This project uses the following open-source runtime components in the student Heart Island workspace. The island map, player graphic, markers, interface and game logic added in `5.1.0-alpha.5` are original code-native drawings; no Phaser template assets, telemetry scripts or third-party game artwork were copied.
+This project uses the following open-source runtime components in the student Heart Island workspace. The island map, player graphic, markers and interface artwork remain project-specific; no Phaser example assets, telemetry scripts or third-party game artwork were copied.
+
+## 2048 garden rule adaptation
+
+- Project: <https://github.com/gabrielecirulli/2048>
+- License: MIT
+- Use: the direction traversal and single-merge-per-move model was selectively adapted in `frontend/src/game/island/gardenMergeEngine.js`; the crop tiers, harvest loop, state format, UI and tests are Heart Island-specific.
+- Copyright: Copyright (c) 2014 Gabriele Cirulli
+
+The original MIT license is reproduced in `licenses/2048-LICENSE.txt` and is available at <https://github.com/gabrielecirulli/2048/blob/master/LICENSE.txt>.
+
+## Swiper 12.2.0
+
+- Project: <https://github.com/nolimits4web/swiper>
+- License: MIT
+- Use: accessible card deck interaction for the Happiness Exchange Tree
+- Copyright: Copyright (c) 2019 Vladimir Kharlampidi
+
+The installed-package MIT license is reproduced in `licenses/swiper-LICENSE.txt` and available at <https://github.com/nolimits4web/swiper/blob/master/LICENSE>.
+
+## Phaser Examples source patterns
+
+- Project: <https://github.com/phaserjs/examples>
+- License: MIT for source code; example assets are explicitly excluded
+- Use: Scene, timed-event, tween and input patterns referenced for `createFishingGame.js`
+- Asset policy: no assets from the examples repository are included.
 
 ## Phaser 3.90.0
 

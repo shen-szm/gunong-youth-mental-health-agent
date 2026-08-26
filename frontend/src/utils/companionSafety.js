@@ -15,6 +15,10 @@ const OFFLINE_URGENT_PATTERNS = [
   /(?:手里|身边|旁边).{0,5}(?:有|拿着|放着).{0,4}(?:刀|刀片|大量药|一瓶药|绳)/,
   /(?:买|准备|备|藏)(?:好|好了).{0,5}(?:炭|木炭|安眠药|刀片|绳)/,
   /(?:爸爸|妈妈|父亲|母亲|继父|继母|家人|监护人|家里有人|有人|他|她).{0,12}(?:打我|揍我|殴打我|扇我|踹我|掐我|勒我|烫我|拿刀威胁我|伤害我)/,
+  /(?:爸爸|妈妈|父亲|母亲|继父|继母|哥哥|弟弟|姐姐|妹妹|叔叔|舅舅|爷爷|奶奶|外公|外婆|家人|监护人|家里有人|亲戚).{0,14}(?:拿刀|用刀|拿棍|用棍|用皮带).{0,8}(?:威胁我|打我|抽我|伤害我)/,
+  /(?:爸爸|妈妈|父亲|母亲|继父|继母|哥哥|弟弟|姐姐|妹妹|叔叔|舅舅|爷爷|奶奶|外公|外婆|家人|监护人|家里有人|亲戚).{0,14}(?:把我关|把我锁|关着我|锁着我|不让我出去)/,
+  /我被(?:爸爸|妈妈|父亲|母亲|继父|继母|哥哥|弟弟|姐姐|妹妹|叔叔|舅舅|爷爷|奶奶|外公|外婆|家人|监护人|亲戚).{0,6}(?:打|揍|殴打|扇|踹|掐|勒|烫|威胁|伤害)(?:了|过|着)?/,
+  /(?:爸爸|妈妈|父亲|母亲|继父|继母|哥哥|弟弟|姐姐|妹妹|叔叔|舅舅|爷爷|奶奶|外公|外婆|家人|监护人|亲戚).{0,12}(?:逼我|强迫我).{0,10}(?:发生关系|做那种事|脱衣|接触隐私部位)/,
   /(?:性侵|猥亵|性伤害|强迫我脱衣|摸我隐私部位)/,
   /(?:不敢|不能|没法|不安全|害怕).{0,6}(?:回家|回去)/,
 ]
@@ -25,9 +29,11 @@ const QUOTED_PREFIX = /(?:(?:别人|同学|朋友|家人|老师|他|她).{0,4}(?
 export function isOfflineCompanionUrgent(content) {
   const text = String(content || '').replace(/\s+/g, '')
   return OFFLINE_URGENT_PATTERNS.some(pattern => {
-    const match = pattern.exec(text)
-    if (!match) return false
-    const prefix = text.slice(Math.max(0, match.index - 18), match.index)
-    return !NEGATED_PREFIX.test(prefix) && !QUOTED_PREFIX.test(prefix)
+    const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)
+    for (const match of text.matchAll(matcher)) {
+      const prefix = text.slice(Math.max(0, match.index - 18), match.index)
+      if (!NEGATED_PREFIX.test(prefix) && !QUOTED_PREFIX.test(prefix)) return true
+    }
+    return false
   })
 }

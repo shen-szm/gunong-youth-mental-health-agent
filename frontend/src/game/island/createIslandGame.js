@@ -3,9 +3,9 @@ import { clampIslandPosition, ISLAND_PHASES, ISLAND_PLACES, ISLAND_WORLD, normal
 import { findIslandPath, resolveIslandMovement } from './islandNavigation.js'
 
 const PHASE_LIGHTING = Object.freeze({
-  day: { tint: 0xffffff, veil: 0xfff0c7, veilAlpha: 0.02, lamps: 0.08, stars: 0 },
-  dusk: { tint: 0xffd5bd, veil: 0x6d385f, veilAlpha: 0.16, lamps: 0.46, stars: 0.18 },
-  night: { tint: 0x8f9ccf, veil: 0x101b48, veilAlpha: 0.38, lamps: 0.9, stars: 0.82 },
+  day: { tint: 0xfff1d2, veil: 0xffd09c, veilAlpha: 0.03, lamps: 0.06, stars: 0 },
+  dusk: { tint: 0xffc2a0, veil: 0x8d4d54, veilAlpha: 0.18, lamps: 0.5, stars: 0.18 },
+  night: { tint: 0xd0a1ad, veil: 0x3b2339, veilAlpha: 0.42, lamps: 0.94, stars: 0.84 },
 })
 
 const LAMP_POINTS = Object.freeze([
@@ -47,7 +47,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     }
 
     createWorld() {
-      this.cameras.main.setBackgroundColor(0x18264a)
+      this.cameras.main.setBackgroundColor(0x6f433a)
       this.background = this.add.image(ISLAND_WORLD.width / 2, ISLAND_WORLD.height / 2, 'heart-island-base')
         .setDisplaySize(ISLAND_WORLD.width, ISLAND_WORLD.height)
         .setDepth(0)
@@ -92,7 +92,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
         marker.setStrokeStyle(2, 0xffdf98, 0.82)
         const label = this.add.text(place.x, place.y + 27, place.label, {
           fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '13px', color: '#fff8e8',
-          backgroundColor: '#171a2dcc', padding: { x: 8, y: 5 },
+          backgroundColor: '#6b3f36dd', padding: { x: 8, y: 5 },
         }).setOrigin(0.5).setDepth(6)
         this.placeMarkers.set(place.id, { marker, label })
       }
@@ -208,7 +208,7 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     parent,
     width: ISLAND_WORLD.width,
     height: ISLAND_WORLD.height,
-    backgroundColor: 0x18264a,
+    backgroundColor: 0x6f433a,
     pixelArt: true,
     antialias: false,
     roundPixels: true,

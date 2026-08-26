@@ -12,8 +12,8 @@
   >
     <header class="island-header">
       <div class="island-brand">
-        <small>咕哝 · 心岛漫游</small>
-        <h2 id="island-title">和咕团沿着光，选一件此刻想做的小事</h2>
+        <small>咕哝 · 心岛</small>
+        <h2 id="island-title">走进一座会陪你生活、游戏和交换微光的小岛</h2>
       </div>
 
       <div class="island-phase-status" role="status" aria-live="polite" aria-label="心岛光景随本地时间自动变化">
@@ -23,7 +23,7 @@
       </div>
 
       <div class="island-header-actions">
-        <button type="button" class="island-classic-entry" @click="$emit('fallback')">经典休闲角</button>
+        <span class="island-version">v{{ version }}</span>
         <button ref="closeButton" type="button" class="island-close" aria-label="关闭心岛，返回房间" @click="$emit('close')">×</button>
       </div>
     </header>
@@ -51,18 +51,19 @@
         <aside :class="['island-agent-rail', { 'is-expanded': agentExpanded }]" aria-label="心岛陪伴 Agent 工作进度">
           <button type="button" class="agent-rail-toggle" :aria-expanded="agentExpanded" @click.stop="agentExpanded = !agentExpanded">
             <span :class="['agent-state-dot', `is-${agentPhase}`]" aria-hidden="true"></span>
-            <strong>Agent</strong>
+            <strong>心岛陪伴 Agent</strong>
             <small>{{ agentExpanded ? '收起' : '进度' }}</small>
           </button>
+          <p class="sr-only" role="status" aria-live="polite">{{ agentText }}</p>
           <div class="agent-rail-body">
             <p>{{ agentText }}</p>
             <ol>
-              <li v-for="(step, index) in agentSteps" :key="step.title" :class="agentStepClass(index)">
+              <li v-for="(step, index) in agentSteps" :key="step.title" :class="agentStepClass(index)" :aria-current="index === agentStepIndex ? 'step' : undefined">
                 <span aria-hidden="true">{{ index < agentStepIndex ? '✓' : index === agentStepIndex ? '•' : '·' }}</span>
-                <div><strong>{{ step.title }}</strong><small>{{ step.detail }}</small></div>
+                <div><strong>{{ step.title }}</strong><span class="sr-only">{{ agentStepStatusLabel(index) }}：</span><small>{{ step.detail }}</small></div>
               </li>
             </ol>
-            <small class="agent-boundary">不从游戏成绩推断情绪，不进行心理诊断。</small>
+            <small class="agent-boundary">Agent 只使用你的主动选择和回看反馈，不从游戏成绩推断情绪，不进行心理诊断。</small>
           </div>
         </aside>
 
@@ -81,15 +82,35 @@
         </div>
         <div v-else-if="loadError" class="island-error" role="alert">
           <strong>心岛暂时没有展开</strong>
-          <p>房间与原有休闲内容都还在，可以重试或进入经典休闲角。</p>
+          <p>聊天和房间内容都还在，可以重新准备心岛或先返回房间。</p>
           <div>
             <button type="button" @click="startGame">重新尝试</button>
-            <button type="button" @click="$emit('fallback')">打开经典休闲角</button>
+            <button type="button" @click="$emit('close')">返回房间</button>
           </div>
         </div>
       </div>
 
-      <nav class="island-place-dock" aria-label="心岛地点快捷导航">
+      <section v-if="activeActivity" ref="activityPanel" class="island-activity-panel" :aria-label="`${activeActivityLabel}玩法`">
+        <header class="activity-panel-header">
+          <button ref="activityBack" type="button" :disabled="safetyLocked" @click="closeActivity">返回岛上</button>
+          <nav aria-label="切换心岛玩法">
+            <button v-for="activity in activityTabs" :key="activity.id" type="button" :disabled="safetyLocked" :class="{ active: activeActivity === activity.id }" :aria-current="activeActivity === activity.id ? 'page' : undefined" @click="selectActivity(activity.id)">{{ activity.label }}</button>
+          </nav>
+        </header>
+        <div class="activity-panel-body">
+          <IslandGardenGame v-if="activeActivity === 'garden'" :garden="activityState.garden" @update:garden="updateGarden" @played="handleActivityPlayed" />
+          <IslandFishingGame v-else-if="activeActivity === 'fishing'" :fishing="activityState.fishing" @update:fishing="updateFishing" @played="handleActivityPlayed" />
+          <IslandHappinessExchange v-else :happiness="activityState.happiness" :storage-error="storageError" @update:happiness="updateHappiness" @played="handleActivityPlayed" @open-chat="$emit('open-chat')" />
+
+          <fieldset v-if="activityPlayed && !safetyLocked" class="island-reflection">
+            <legend>结束这一小轮后，此刻更接近</legend>
+            <button v-for="option in reflectionOptions" :key="option.id" type="button" :class="{ active: activityState.reflection === option.id }" @click="finishReflection(option.id)">{{ option.label }}</button>
+            <p v-if="reflectionCopy">{{ reflectionCopy }}</p>
+          </fieldset>
+        </div>
+      </section>
+
+      <nav v-if="!activeActivity" class="island-place-dock" aria-label="心岛地点快捷导航">
         <button
           v-for="place in places"
           :key="place.id"
@@ -124,14 +145,21 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import IslandFishingGame from './IslandFishingGame.vue'
+import IslandGardenGame from './IslandGardenGame.vue'
+import IslandHappinessExchange from './IslandHappinessExchange.vue'
 import { createIslandBridge } from '../../game/island/islandBridge.js'
+import { loadActivityState, saveActivityState } from '../../game/island/islandActivityState.js'
 import { ISLAND_PHASES, ISLAND_PLACES, loadIslandState, millisecondsUntilNextIslandPhase, resolveIslandPhase, saveIslandState } from '../../game/island/islandState.js'
 
 const props = defineProps({ storageScope: { type: [String, Number], required: true } })
-const emit = defineEmits(['close', 'fallback', 'activity'])
+const emit = defineEmits(['close', 'activity', 'open-chat', 'safety'])
+const version = import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || 'local'
 const dialog = ref(null)
 const closeButton = ref(null)
 const arrivalPrimary = ref(null)
+const activityBack = ref(null)
+const activityPanel = ref(null)
 const gameHost = ref(null)
 const gameSurface = ref(null)
 const loading = ref(true)
@@ -145,10 +173,15 @@ const liveStatus = ref('心岛地图正在准备')
 const nearby = ref('星灯小径')
 const targetPlaceLabel = ref('')
 const arrivalCard = ref(null)
+const activeActivity = ref('')
+const activityPlayed = ref(false)
+const safetyLocked = ref(false)
+const storageError = ref(false)
 const places = ISLAND_PLACES
 const phases = ISLAND_PHASES
 let bridge = createIslandBridge()
 const currentState = ref(loadIslandState(props.storageScope))
+const activityState = ref(loadActivityState(props.storageScope))
 const timePhase = ref(currentState.value.timePhase)
 const activePhase = computed(() => phases.find(phase => phase.id === timePhase.value) || phases[0])
 const currentPlaceLabel = computed(() => nearby.value || '星灯小径')
@@ -159,12 +192,30 @@ const arrivalActivityLabel = computed(() => ({
   exchange: '交换幸福小事',
   rest: '打开放松工具',
 })[arrivalCard.value?.place] || '打开这里的活动')
-const agentStepIndex = computed(() => agentPhase.value === 'arrived' ? 2 : agentPhase.value === 'moving' ? 1 : 0)
-const agentSteps = computed(() => [
-  { title: '听懂此刻', detail: '以你的主动选择为准' },
-  { title: '安排活动', detail: agentPhase.value === 'moving' ? `正在前往${targetPlaceLabel.value || '地图上的位置'}` : '等待你选择目的地' },
-  { title: '陪你回看', detail: agentPhase.value === 'arrived' ? '由你决定是否记录感受' : '到达后再轻轻回看' },
+const activityTabs = Object.freeze([
+  { id: 'garden', label: '云顶暖房' },
+  { id: 'fishing', label: '月光钓鱼湾' },
+  { id: 'exchange', label: '幸福交换树' },
 ])
+const reflectionOptions = Object.freeze([
+  { id: 'lighter', label: '轻松一点' },
+  { id: 'same', label: '差不多' },
+  { id: 'switch', label: '想换一种' },
+])
+const activeActivityLabel = computed(() => activityTabs.find(item => item.id === activeActivity.value)?.label || '')
+const agentStepIndex = computed(() => safetyLocked.value ? 1 : activityState.value.reflection ? 4 : activityPlayed.value ? 3 : activeActivity.value ? 2 : agentPhase.value === 'moving' ? 1 : 0)
+const agentSteps = computed(() => [
+  { title: '理解你的选择', detail: activeActivity.value ? `你选择了${activeActivityLabel.value}` : '等待你主动选择目的地' },
+  { title: '确认安全边界', detail: safetyLocked.value ? '需要立即协助，正在保持真人安全支持' : '不诊断，不用成绩推断情绪' },
+  { title: '组织合适玩法', detail: safetyLocked.value ? '普通玩法已暂停' : activeActivity.value ? `正在运行${activeActivityLabel.value}完整玩法` : agentPhase.value === 'moving' ? `正在前往${targetPlaceLabel.value || '地图上的位置'}` : '到达后再加载玩法' },
+  { title: '观察过程反馈', detail: activityPlayed.value ? '仅记录操作进度，不分析输赢' : '等待一次真实互动' },
+  { title: '整理下一步', detail: activityState.value.reflection ? '已根据你的主观反馈生成建议' : '由你决定是否回看感受' },
+])
+const reflectionCopy = computed(() => ({
+  lighter: '把这点轻松留住就好。可以回到岛上走走，也可以直接结束。',
+  same: '没有变化也很正常。可以换一种玩法，或回房间继续倾诉。',
+  switch: activeActivity.value === 'garden' ? '可以去月光钓鱼湾换个节奏。' : activeActivity.value === 'fishing' ? '可以去云顶暖房做几步明确的小事。' : '可以回到岛上种田或钓鱼。',
+})[activityState.value.reflection] || '')
 let game = null
 let cancelled = false
 let disposers = []
@@ -264,7 +315,7 @@ async function startGame() {
       console.error('Heart Island failed to start', error)
       loading.value = false
       loadError.value = true
-      liveStatus.value = '心岛加载失败，可以重试或进入经典休闲角。'
+      liveStatus.value = '心岛加载失败，可以重试或先返回房间。'
     }
   })()
   startingPromise = promise
@@ -307,6 +358,9 @@ function agentStepClass(index) {
   if (index === agentStepIndex.value) return 'is-running'
   return 'is-waiting'
 }
+function agentStepStatusLabel(index) {
+  return index < agentStepIndex.value ? '已完成' : index === agentStepIndex.value ? '进行中' : '等待'
+}
 
 function focusGameSurface() { gameSurface.value?.focus({ preventScroll: true }) }
 function startMoving(x, y, source = 'keyboard') {
@@ -331,7 +385,71 @@ function stopPointerMoving() { if (movementSource === 'pointer') stopMoving() }
 function interact() { bridge.emit('command', { type: 'interact' }) }
 function openArrivalActivity() {
   if (!arrivalCard.value?.place) return
-  emit('activity', arrivalCard.value.place)
+  const place = arrivalCard.value.place
+  if (['garden', 'dock', 'exchange'].includes(place)) {
+    selectActivity(place === 'dock' ? 'fishing' : place)
+    arrivalCard.value = null
+    return
+  }
+  emit('activity', place)
+}
+function persistActivityState() {
+  storageError.value = !saveActivityState(props.storageScope, activityState.value)
+}
+function selectActivity(activity) {
+  if (safetyLocked.value) return
+  if (!activityTabs.some(item => item.id === activity)) return
+  stopMoving()
+  activeActivity.value = activity
+  activityPlayed.value = false
+  activityState.value = { ...activityState.value, reflection: '' }
+  persistActivityState()
+  agentPhase.value = 'arrived'
+  agentText.value = `已完成安全边界检查，正在运行${activityTabs.find(item => item.id === activity)?.label}`
+  liveStatus.value = `已打开${activityTabs.find(item => item.id === activity)?.label}。`
+  nextTick(() => activityBack.value?.focus({ preventScroll: true }))
+}
+function closeActivity() {
+  if (safetyLocked.value) {
+    nextTick(() => activityPanel.value?.querySelector('.happiness-safety')?.focus({ preventScroll: true }))
+    return
+  }
+  activeActivity.value = ''
+  activityPlayed.value = false
+  liveStatus.value = '已回到心岛地图。'
+  nextTick(focusGameSurface)
+}
+function updateGarden(garden) {
+  activityState.value = { ...activityState.value, garden }
+  persistActivityState()
+}
+function updateFishing(fishing) {
+  activityState.value = { ...activityState.value, fishing }
+  persistActivityState()
+}
+function updateHappiness(happiness) {
+  activityState.value = { ...activityState.value, happiness }
+  persistActivityState()
+}
+function handleActivityPlayed(event) {
+  if (event?.action === 'safety') {
+    safetyLocked.value = true
+    activityPlayed.value = false
+    agentPhase.value = 'urgent'
+    agentText.value = '普通玩法已暂停，当前优先连接真人安全支持'
+    liveStatus.value = '检测到需要立即协助的安全信号，普通玩法和回看已经暂停。'
+    emit('safety', { source: 'happiness_exchange' })
+    return
+  }
+  activityPlayed.value = true
+  agentText.value = '正在记录本轮操作进度，等待你主动回看'
+}
+function finishReflection(id) {
+  if (!reflectionOptions.some(option => option.id === id)) return
+  activityState.value = { ...activityState.value, reflection: id }
+  persistActivityState()
+  agentText.value = '已根据你的主观反馈整理下一步'
+  liveStatus.value = reflectionCopy.value
 }
 function dismissArrival() {
   arrivalCard.value = null
@@ -372,11 +490,20 @@ function handleDialogKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault()
     stopMoving()
+    if (activeActivity.value) {
+      if (safetyLocked.value) {
+        nextTick(() => activityPanel.value?.querySelector('.happiness-safety')?.focus({ preventScroll: true }))
+        return
+      }
+      closeActivity()
+      return
+    }
     emit('close')
     return
   }
   if (event.key !== 'Tab') return
-  const focusable = [...dialog.value.querySelectorAll('button:not([disabled]), [tabindex="0"]')]
+  const focusable = [...dialog.value.querySelectorAll('button:not([disabled]), a[href], textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]')]
+    .filter(element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
   if (!focusable.length) return
   const first = focusable[0]
   const last = focusable[focusable.length - 1]
@@ -401,11 +528,16 @@ watch(() => props.storageScope, async (nextScope, previousScope) => {
   bridge.clear()
   bridge = createIslandBridge()
   arrivalCard.value = null
+  activeActivity.value = ''
+  activityPlayed.value = false
+  safetyLocked.value = false
   nearby.value = '星灯小径'
   targetPlaceLabel.value = ''
   agentPhase.value = 'ready'
   agentText.value = '正在听懂你想去的方向'
   currentState.value = loadIslandState(nextScope)
+  activityState.value = loadActivityState(nextScope)
+  storageError.value = false
   timePhase.value = currentState.value.timePhase
   loading.value = true
   loadError.value = false
@@ -448,9 +580,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .island-workspace {
-  --island-ink: #fff8ea;
-  --island-muted: rgba(255, 248, 234, .72);
-  --island-glass: rgba(25, 26, 45, .76);
+  --island-ink: #fff4df;
+  --island-muted: #f1ccb2;
+  --island-glass: rgba(111, 59, 48, .84);
   position: fixed;
   inset: 0;
   z-index: 410;
@@ -458,7 +590,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 72px minmax(0, 1fr);
   overflow: hidden;
   color: var(--island-ink);
-  background: #172447;
+  background: #7a4638;
   font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
 }
 .island-header {
@@ -468,30 +600,31 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 10px 14px 10px 20px;
-  background: rgba(22, 24, 42, .9);
-  box-shadow: 0 5px 8px rgba(6, 9, 22, .28);
-  backdrop-filter: blur(18px) saturate(1.08);
+  border-bottom: 1px solid rgba(255, 226, 185, .18);
+  background: rgba(139, 72, 53, .92);
+  box-shadow: 0 8px 24px rgba(70, 31, 27, .22);
+  backdrop-filter: blur(22px) saturate(1.05);
 }
 .island-brand { min-width: 0; }
 .island-brand small, .island-brand h2 { display: block; margin: 0; }
-.island-brand small { color: #f1cf86; font-size: 10px; font-weight: 800; }
+.island-brand small { color: #ffd083; font-size: 10px; font-weight: 800; }
 .island-brand h2 { margin-top: 3px; overflow: hidden; font-size: 15px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .island-phase-status { display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 9px; min-width: 144px; padding: 7px 11px; border-radius: 12px; background: rgba(255,255,255,.07); }
 .island-phase-status > span { grid-row: 1 / 3; color: var(--island-muted); font-size: 9px; }
-.island-phase-status strong { color: #f1cf86; font-size: 12px; }
+.island-phase-status strong { color: #ffd083; font-size: 12px; }
 .island-phase-status small { color: var(--island-muted); font-size: 8px; }
 .island-header-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.island-classic-entry, .island-close { min-height: 44px; border: 0; border-radius: 11px; color: var(--island-ink); background: rgba(255,255,255,.08); font: inherit; cursor: pointer; }
-.island-classic-entry { padding: 0 13px; font-size: 11px; font-weight: 700; }
+.island-version { align-self: center; color: #f1ccb2; font-size: 10px; font-variant-numeric: tabular-nums; }
+.island-close { min-height: 44px; border: 1px solid rgba(255,226,185,.18); border-radius: 11px; color: var(--island-ink); background: rgba(92,46,42,.45); font: inherit; cursor: pointer; }
 .island-close { width: 48px; font-size: 23px; }
 
-.island-stage-shell { position: relative; display: grid; align-content: start; align-items: start; justify-items: center; min-width: 0; min-height: 0; padding: 12px 16px 86px; overflow: hidden; }
-.island-game-surface { position: relative; width: min(100%, 1420px); aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; background: #1a3157; box-shadow: 0 7px 8px rgba(5, 8, 20, .34); touch-action: none; }
+.island-stage-shell { position: relative; display: grid; align-content: start; align-items: start; justify-items: center; min-width: 0; min-height: 0; padding: 12px 16px 20px; overflow: hidden; }
+.island-game-surface { position: relative; z-index: 1; width: min(100%, 1420px); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid rgba(255,226,185,.18); border-radius: 18px; background: #7a4638; box-shadow: 0 22px 52px rgba(63, 28, 27, .28); touch-action: none; }
 .island-game-host, .island-game-host :deep(canvas) { width: 100%; height: 100%; image-rendering: pixelated; }
 .island-game-host :deep(canvas) { display: block; }
 .island-mission-glass {
   position: absolute;
-  top: 16px;
+  bottom: 16px;
   left: 16px;
   z-index: 4;
   width: min(310px, calc(100% - 100px));
@@ -499,48 +632,49 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   color: var(--island-ink);
   background: var(--island-glass);
-  box-shadow: 0 5px 8px rgba(6, 9, 20, .22);
-  backdrop-filter: blur(16px) saturate(1.08);
+  border: 1px solid rgba(255,226,185,.2);
+  box-shadow: 0 12px 28px rgba(67,30,27,.2);
+  backdrop-filter: blur(20px) saturate(1.04);
   pointer-events: none;
 }
 .island-mission-glass small, .island-mission-glass strong { display: block; }
-.island-mission-glass small { color: #f1cf86; font-size: 10px; font-weight: 800; }
+.island-mission-glass small { color: #ffd083; font-size: 10px; font-weight: 800; }
 .island-mission-glass strong { margin-top: 3px; font-size: 15px; }
 .island-mission-glass p { margin: 4px 0 0; color: var(--island-muted); font-size: 10px; line-height: 1.45; }
 
-.island-agent-rail { position: absolute; top: 16px; right: 16px; z-index: 5; width: 214px; border-radius: 13px; color: var(--island-ink); background: rgba(25, 26, 45, .82); box-shadow: 0 5px 8px rgba(6,9,22,.25); backdrop-filter: blur(18px) saturate(1.08); }
+.island-agent-rail { position: absolute; top: 16px; right: 16px; z-index: 15; width: 232px; border: 1px solid rgba(255,226,185,.2); border-radius: 16px; color: var(--island-ink); background: rgba(105, 55, 48, .88); box-shadow: 0 16px 34px rgba(67,30,27,.25); backdrop-filter: blur(22px) saturate(1.04); }
 .agent-rail-toggle { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 8px; width: 100%; min-height: 46px; padding: 8px 11px; border: 0; border-radius: inherit; color: inherit; background: transparent; text-align: left; cursor: pointer; }
 .agent-rail-toggle small { color: var(--island-muted); font-size: 9px; }
-.agent-state-dot { width: 8px; height: 8px; border-radius: 3px; background: #f1cf86; }
-.agent-state-dot.is-arrived { background: #a8d4c1; }
+.agent-state-dot { width: 8px; height: 8px; border-radius: 3px; background: #ffd083; }
+.agent-state-dot.is-arrived { background: #a8c38b; }
 .agent-rail-body { display: none; padding: 0 12px 12px; }
 .island-agent-rail.is-expanded .agent-rail-body { display: block; }
 .agent-rail-body > p { margin: 0 0 8px; color: var(--island-muted); font-size: 10px; line-height: 1.45; }
 .agent-rail-body ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-rail-body li { display: grid; grid-template-columns: 22px 1fr; gap: 7px; align-items: start; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.08); }
 .agent-rail-body li > span { display: grid; width: 21px; height: 21px; place-items: center; border-radius: 7px; color: rgba(255,248,234,.65); background: rgba(255,255,255,.07); font-size: 11px; }
-.agent-rail-body li.is-complete > span { color: #17231f; background: #a8d4c1; }
-.agent-rail-body li.is-running > span { color: #2d2532; background: #f1cf86; }
+.agent-rail-body li.is-complete > span { color: #3c2b24; background: #a8c38b; }
+.agent-rail-body li.is-running > span { color: #4a2b22; background: #ffd083; }
 .agent-rail-body strong, .agent-rail-body small { display: block; }
 .agent-rail-body strong { font-size: 10px; }
 .agent-rail-body li small { margin-top: 2px; color: var(--island-muted); font-size: 9px; line-height: 1.35; }
 .agent-boundary { margin-top: 8px; color: rgba(255,248,234,.58); font-size: 9px; line-height: 1.45; }
 
-.island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 12; width: min(300px, calc(100% - 32px)); padding: 14px; border-radius: 13px; color: #2b2230; background: rgba(255, 239, 198, .94); box-shadow: 0 7px 8px rgba(6,9,22,.28); backdrop-filter: blur(16px); }
+.island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 12; width: min(300px, calc(100% - 32px)); padding: 14px; border: 1px solid #fff0bd; border-radius: 15px; color: #4a2b22; background: rgba(255, 224, 169, .95); box-shadow: 0 16px 34px rgba(67,30,27,.28); backdrop-filter: blur(18px); }
 .island-arrival-card small, .island-arrival-card strong { display: block; }
 .island-arrival-card small { color: #765337; font-size: 9px; font-weight: 800; }
 .island-arrival-card strong { margin-top: 3px; font-size: 16px; }
 .island-arrival-card p { margin: 5px 26px 10px 0; color: #594759; font-size: 11px; line-height: 1.5; }
 .arrival-dismiss { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; border-radius: 9px; color: #594759; background: rgba(89,71,89,.08); font-size: 18px; cursor: pointer; }
-.arrival-primary { min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; color: #fff8ea; background: #60465e; font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
+.arrival-primary { min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; color: #fff4df; background: #744336; font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
 
-.island-place-dock { position: static; z-index: 8; display: flex; width: min(900px, calc(100% - 32px)); margin-top: 12px; padding: 5px; border-radius: 14px; background: rgba(30, 29, 48, .84); box-shadow: 0 5px 8px rgba(6,9,22,.3); backdrop-filter: blur(18px) saturate(1.08); }
+.island-place-dock { position: absolute; top: 26px; left: 50%; z-index: 8; display: flex; width: min(680px, calc(100% - 520px)); margin: 0; padding: 5px; border: 1px solid rgba(255,226,185,.2); border-radius: 15px; background: rgba(106, 57, 49, .84); box-shadow: 0 12px 28px rgba(67,30,27,.22); backdrop-filter: blur(20px) saturate(1.04); transform: translateX(-50%); }
 .island-place-dock button { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 6px 10px; border: 0; border-radius: 10px; color: rgba(255,248,234,.72); background: transparent; font: inherit; cursor: pointer; }
-.island-place-dock button:hover, .island-place-dock button.is-current { color: #2a2130; background: #f1cf86; }
+.island-place-dock button:hover, .island-place-dock button.is-current { color: #4a2b22; background: #ffd083; }
 .island-place-dock strong, .island-place-dock small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .island-place-dock strong { font-size: 11px; }
 .island-place-dock small { margin-top: 2px; font-size: 9px; opacity: .76; }
-.island-instructions { position: absolute; left: 18px; bottom: 7px; margin: 0; color: rgba(255,248,234,.62); font-size: 9px; }
+.island-instructions { position: absolute; right: 26px; bottom: 5px; margin: 0; color: #e7bfa5; font-size: 9px; }
 .island-mobile-controls { display: none; }
 .island-loading, .island-error { position: absolute; inset: 0; z-index: 10; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; color: var(--island-ink); text-align: center; background: rgba(25,31,54,.94); }
 .island-loading span { width: 27px; height: 27px; border: 4px solid rgba(255,255,255,.17); border-top-color: #f1cf86; border-radius: 50%; animation: island-spin .9s linear infinite; }
@@ -548,6 +682,34 @@ onBeforeUnmount(() => {
 .island-error p { max-width: 420px; margin: 0; line-height: 1.6; }
 .island-error div { display: flex; gap: 8px; }
 .island-error button { min-height: 44px; padding: 0 13px; border: 0; border-radius: 10px; color: #2a2130; background: #f1cf86; font-weight: 800; cursor: pointer; }
+.island-activity-panel {
+  position: absolute;
+  inset: 74px 28px 24px;
+  z-index: 30;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(255, 226, 185, .28);
+  border-radius: 22px;
+  color: #fff4df;
+  background: rgba(92, 52, 46, .96);
+  box-shadow: 0 28px 64px rgba(54, 24, 25, .36);
+  backdrop-filter: blur(26px) saturate(1.04);
+}
+@media (min-width: 1101px) {
+  .island-activity-panel { right: 276px; }
+}
+.activity-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; border-bottom: 1px solid rgba(255, 226, 185, .16); background: #6d4038; }
+.activity-panel-header > button, .activity-panel-header nav button { min-height: 42px; padding: 0 13px; border: 1px solid rgba(255, 226, 185, .18); border-radius: 11px; color: #f3cdb2; background: #70443a; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.activity-panel-header button:disabled { opacity: .56; cursor: not-allowed; }
+.activity-panel-header nav { display: flex; gap: 6px; }
+.activity-panel-header nav button.active { color: #4a2b22; background: #ffd083; }
+.activity-panel-body { overflow: auto; padding: 18px 22px 24px; }
+.island-reflection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 18px 0 0; padding: 14px 0 0; border: 0; border-top: 1px solid rgba(255, 226, 185, .16); }
+.island-reflection legend { width: 100%; margin-bottom: 2px; color: #f3cdb2; font-size: 12px; font-weight: 800; }
+.island-reflection button { min-height: 42px; padding: 0 13px; border: 1px solid #b96e52; border-radius: 11px; color: #fff4df; background: #75463b; font: inherit; font-weight: 800; cursor: pointer; }
+.island-reflection button.active { color: #4a2b22; background: #ffd083; }
+.island-reflection p { flex: 1 1 300px; margin: 0 0 0 8px; color: #f3cdb2; font-size: 12px; line-height: 1.5; }
 .island-workspace button:focus-visible, .island-game-surface:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @keyframes island-spin { to { transform: rotate(360deg); } }
@@ -558,10 +720,9 @@ onBeforeUnmount(() => {
   .island-brand h2 { max-width: 56vw; font-size: 12px; }
   .island-phase-status { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .island-header-actions { grid-column: 2; grid-row: 1; }
-  .island-classic-entry { display: none; }
   .island-stage-shell { align-content: start; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); overflow-y: auto; }
   .island-game-surface { width: 100%; min-height: 54vw; border-radius: 12px; }
-  .island-mission-glass { top: 8px; left: 8px; width: min(230px, calc(100% - 64px)); padding: 9px 10px; }
+  .island-mission-glass { top: 8px; bottom: auto; left: 8px; width: min(230px, calc(100% - 64px)); padding: 9px 10px; }
   .island-mission-glass p { display: none; }
   .island-agent-rail { top: 8px; right: 8px; width: 54px; }
   .island-agent-rail.is-expanded { width: min(220px, calc(100% - 16px)); }

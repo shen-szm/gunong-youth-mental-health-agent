@@ -26,7 +26,7 @@ test('heart island is lazy loaded and Phaser is not imported by the student room
   assert.match(workspace, /aria-modal="true"/)
   assert.match(workspace, /aria-hidden="true"/)
   assert.match(workspace, /role="status"/)
-  assert.match(workspace, /经典休闲角/)
+  assert.doesNotMatch(workspace, /经典休闲角/)
   assert.match(workspace, /心岛光景随本地时间自动变化/)
   assert.match(workspace, /schedulePhaseSync/)
   assert.match(workspace, /millisecondsUntilNextIslandPhase/)
@@ -74,7 +74,9 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.match(navigation, /directions = \[/)
   assert.match(workspace, /向左上移动/)
   assert.match(workspace, /向右下移动/)
-  assert.match(workspace, /emit\('activity', arrivalCard\.value\.place\)/)
+  assert.match(workspace, /\['garden', 'dock', 'exchange'\]\.includes\(place\)/)
+  assert.match(workspace, /selectActivity\(place === 'dock' \? 'fishing' : place\)/)
+  assert.match(workspace, /emit\('activity', place\)/)
   assert.match(workspace, /arrivalPrimary\.value\?\.focus/)
   assert.match(workspace, /function dismissArrival/)
   assert.match(game, /targetLabel: place\.label/)
@@ -84,10 +86,8 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.doesNotMatch(workspace + game, /抑郁评分|焦虑评分|量表分数|心理概率/)
 })
 
-test('fallback and legacy panels retain focusable dialog boundaries', async () => {
+test('legacy room panels retain focusable dialog boundaries', async () => {
   const room = await readFile(roomUrl, 'utf8')
-  assert.match(room, /function handleIslandFallback/)
-  assert.match(room, /focusWithoutScroll\(document\.querySelector\('\.leisure-hub \.leisure-close'\)\)/)
   for (const key of ['profile', 'treehole', 'report']) {
     assert.match(room, new RegExp(`data-workspace="${key}"[\\s\\S]{0,160}role="dialog"`))
     assert.match(room, new RegExp(`closeWorkspacePanel\\('${key}'\\)`))

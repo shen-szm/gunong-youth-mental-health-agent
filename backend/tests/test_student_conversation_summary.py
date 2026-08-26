@@ -19,7 +19,7 @@ from api.chat import NON_DIAGNOSTIC_BOUNDARY, _detect_emotion, _detect_end_candi
 from api.user import router as user_router
 from config import Settings, settings
 from database import Base, get_db
-from models import StudentChatSession, StudentConversationSummary
+from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentConversationSummary
 
 
 class StudentConversationSummaryApiTests(unittest.TestCase):
@@ -126,6 +126,27 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         finally:
             db.close()
         self.assertEqual(self.client_two.get("/api/chat/sessions/latest-summary").json()["status"], "empty")
+
+    def test_happiness_safety_handoff_creates_owned_urgent_session_without_raw_text(self):
+        response = self.client_one.post("/api/chat/sessions/safety-handoff", json={
+            "source": "happiness_exchange"
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "urgent")
+        self.assertEqual(self.client_one.post("/api/chat/sessions", json={"force_new": False}).json()["session_id"], payload["session_id"])
+        self.assertEqual(self.client_two.post("/api/chat/sessions", json={"force_new": False}).json()["status"], "active")
+        db = self.Session()
+        try:
+            session = db.query(StudentChatSession).filter(StudentChatSession.session_code == payload["session_id"]).one()
+            self.assertEqual(session.risk_level, "urgent")
+            self.assertEqual(db.query(ChatMessage).filter(ChatMessage.session_id == session.id).count(), 0)
+            audit = db.query(SensitiveAccessLog).filter(
+                SensitiveAccessLog.action == "create_student_safety_handoff"
+            ).one()
+            self.assertEqual(audit.result, "minimal_signal:happiness_exchange")
+        finally:
+            db.close()
 
     def test_end_candidate_requires_unambiguous_own_expression(self):
         self.assertTrue(_detect_end_candidate("谢谢你"))

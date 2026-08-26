@@ -87,6 +87,11 @@ class SafetyResolutionRequest(BaseModel):
     contacted_trusted_adult: bool
 
 
+class SafetyHandoffRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: Literal["happiness_exchange"]
+
+
 class SafetyResolutionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: Literal["resolved"]
@@ -229,6 +234,39 @@ def resolve_safety_session(session_code: str, payload: SafetyResolutionRequest, 
     ))
     db.commit()
     return SafetyResolutionResponse(status="resolved")
+
+
+@router.post("/sessions/safety-handoff", response_model=SessionResponse)
+def create_safety_handoff(payload: SafetyHandoffRequest, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """将客户端确定性安全门的最小化状态交接给倾诉流程，不接收或保存原文。"""
+    active = db.query(StudentChatSession).filter(
+        StudentChatSession.user_id == current_user.id,
+        StudentChatSession.status.in_(["active", "urgent"]),
+    ).order_by(StudentChatSession.started_at.desc()).first()
+    if active and active.status == "urgent":
+        return SessionResponse(session_id=active.session_code, status="urgent", started_at=active.started_at)
+    if active:
+        active.status = "abandoned"
+        active.ended_at = datetime.utcnow()
+    row = StudentChatSession(
+        session_code=f"SC-{datetime.now():%Y%m%d}-{secrets.token_hex(4).upper()}",
+        user_id=current_user.id,
+        status="urgent",
+        risk_level="urgent",
+    )
+    db.add(row)
+    db.flush()
+    db.add(SensitiveAccessLog(
+        actor_user_id=current_user.id,
+        action="create_student_safety_handoff",
+        resource_type="student_chat_session",
+        resource_id=row.session_code,
+        result=f"minimal_signal:{payload.source}",
+    ))
+    db.commit()
+    db.refresh(row)
+    return SessionResponse(session_id=row.session_code, status="urgent", started_at=row.started_at)
 
 
 @router.post("/send", response_model=ChatResponse)

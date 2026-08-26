@@ -20,6 +20,9 @@ export function resolveChatSafety(sessionId, currentSafe, contactedTrustedAdult)
     contacted_trusted_adult: contactedTrustedAdult,
   });
 }
+export function createChatSafetyHandoff(source = "happiness_exchange") {
+  return instance.post("/sessions/safety-handoff", { source });
+}
 export function getLatestChatSummary() {
   return instance.get("/sessions/latest-summary");
 }

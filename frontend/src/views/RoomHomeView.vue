@@ -1446,25 +1446,13 @@
     <!-- ══ 休闲角：游戏与 Agent 进度共用一个工作区 ══ -->
     <Transition name="panel-slide">
       <div v-if="showLeisurePanel" class="profile-overlay leisure-overlay" @click.self="closeWorkspacePanel('leisure')">
-        <KeepAlive>
-          <StudentIslandWorkspace
-            v-if="useIslandWorkspace"
-            :storage-scope="String(userStore.userId || '')"
-            @close="closeWorkspacePanel('leisure')"
-            @fallback="handleIslandFallback"
-            @activity="handleIslandActivity"
-          />
-          <StudentLeisureHub
-            v-else
-            data-workspace="leisure"
-            :storage-scope="String(userStore.userId || '')"
-            :initial-game="leisureInitialGame"
-            @close="closeWorkspacePanel('leisure')"
-            @open-island="openIslandWorkspace"
-            @open-healing="openWorkspacePanel('healing')"
-            @open-chat="handleLeisureSafetyHandoff"
-          />
-        </KeepAlive>
+        <StudentIslandWorkspace
+          :storage-scope="String(userStore.userId || '')"
+          @close="closeWorkspacePanel('leisure')"
+          @activity="handleIslandActivity"
+          @safety="handleLeisureSafetySignal"
+          @open-chat="handleLeisureSafetyHandoff"
+        />
       </div>
     </Transition>
 
@@ -1603,6 +1591,7 @@ import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage 
 import { isOfflineCompanionUrgent } from '../utils/companionSafety'
 import {
   completeChatSession,
+  createChatSafetyHandoff,
   deleteChatSummary,
   getChatHistory,
   getLatestChatSummary,
@@ -1614,7 +1603,6 @@ import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
-import StudentLeisureHub from '../components/StudentLeisureHub.vue'
 import StudentIslandWorkspace from '../components/island/StudentIslandWorkspace.vue'
 
 const router = useRouter()
@@ -1640,6 +1628,7 @@ const safetyCurrentSafe = ref(false)
 const safetyContactedAdult = ref(false)
 const safetyResolving = ref(false)
 const safetyResolveError = ref('')
+const leisureSafetyHandoffFailed = ref(false)
 const summarySessionId = ref('')
 const showEndConfirmation = ref(false)
 const summaryStatus = ref('idle')
@@ -1650,6 +1639,7 @@ const selectedRoomFeatureId = ref('')
 let roomFeatureTrigger = null
 let workspaceTrigger = null
 let activeWorkspaceKey = ''
+let leisureSafetyHandoffPromise = null
 const studentAgentState = reactive({
   status: 'standby',
   phase: 'waiting',
@@ -1714,10 +1704,6 @@ watch(supportDrawerMode, async () => {
 })
 const showHealingPanel = ref(false)
 const showLeisurePanel = ref(false)
-const leisureWorkspaceMode = ref('games')
-const leisureInitialGame = ref('garden')
-const studentIslandEnabled = import.meta.env.VITE_STUDENT_ISLAND_ALPHA5 !== '0'
-const useIslandWorkspace = computed(() => studentIslandEnabled && leisureWorkspaceMode.value === 'island')
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
@@ -1746,8 +1732,7 @@ function roomWorkspacePanels() {
   }
 }
 
-function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement, leisureMode = 'games') {
-  if (key === 'leisure') leisureWorkspaceMode.value = leisureMode
+function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.activeElement) {
   closeRoomWorkspaces(key)
   selectedRoomFeatureId.value = ''
   const panel = roomWorkspacePanels()[key]
@@ -1759,13 +1744,6 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
     const focusTarget = document.querySelector(`[data-workspace="${key}"] .panel-close, [data-workspace="${key}"] .pet-panel-close`)
     focusWithoutScroll(focusTarget)
   })
-}
-
-async function handleIslandFallback() {
-  leisureInitialGame.value = 'garden'
-  leisureWorkspaceMode.value = 'games'
-  await nextTick()
-  focusWithoutScroll(document.querySelector('.leisure-hub .leisure-close'))
 }
 
 async function handleIslandActivity(placeId) {
@@ -1781,25 +1759,35 @@ async function handleIslandActivity(placeId) {
     openWorkspacePanel('healing')
     return
   }
-  leisureInitialGame.value = placeId === 'dock' ? 'fishing' : placeId === 'exchange' ? 'exchange' : 'garden'
-  leisureWorkspaceMode.value = 'games'
-  await nextTick()
-  const activityTarget = placeId === 'exchange'
-    ? document.querySelector('#happiness-note')
-    : document.querySelector('.leisure-hub .game-board button:not([disabled])')
-  focusWithoutScroll(activityTarget || document.querySelector('.leisure-hub .leisure-close'))
 }
 
-async function openIslandWorkspace() {
-  leisureWorkspaceMode.value = 'island'
-  await nextTick()
-  focusWithoutScroll(document.querySelector('.island-workspace .island-close'))
+async function handleLeisureSafetySignal() {
+  applyChatSessionStatus('urgent')
+  leisureSafetyHandoffFailed.value = false
+  const request = createChatSafetyHandoff('happiness_exchange')
+    .then(response => {
+      chatSessionId.value = response.data.session_id
+      return response
+    })
+    .catch(() => {
+      leisureSafetyHandoffFailed.value = true
+      return null
+    })
+    .finally(() => {
+      if (leisureSafetyHandoffPromise === request) leisureSafetyHandoffPromise = null
+    })
+  leisureSafetyHandoffPromise = request
+  await request
 }
 
 async function handleLeisureSafetyHandoff() {
   closeWorkspacePanel('leisure')
   await nextTick()
-  goToChat()
+  await openChatPanel()
+  if (leisureSafetyHandoffFailed.value) {
+    applyChatSessionStatus('urgent')
+    safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
+  }
 }
 
 function closeWorkspacePanel(key) {
@@ -4151,6 +4139,8 @@ function playTTS(text) {
 }
 
 async function openChatPanel() {
+  const pendingSafetyHandoff = leisureSafetyHandoffPromise
+  if (pendingSafetyHandoff) await pendingSafetyHandoff
   openWorkspacePanel('chat')
   chatInput.value = ''
   try {
@@ -4162,6 +4152,10 @@ async function openChatPanel() {
     else chatMessages.value = []
     scrollChatBottom()
   } catch {}
+  if (leisureSafetyHandoffFailed.value) {
+    applyChatSessionStatus('urgent')
+    safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
+  }
 }
 
 async function loadLatestConversationSummary() {
