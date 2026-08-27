@@ -102,6 +102,17 @@
                 <div class="privacy-notice"><strong>授权范围：近30天原文</strong><span>仅用于本工单，不得传播，不得作为诊断依据。所有敏感访问均记录审计。</span></div>
                 <button class="primary-btn" :disabled="contextLoading" @click="loadCaseContext">{{ contextLoading ? '数字员工正在执行…' : (workProduct ? '重新执行工单' : '执行支持工单') }}</button>
 
+                <section v-if="contextLoading" class="desktop-case-agent-live" role="status" aria-live="polite" aria-label="数字员工当前执行进度">
+                  <div><span class="section-kicker">实时任务轨迹</span><h4>正在把已授权记录转成可执行工单</h4><p>权限已核验；EvidenceAgent 正在读取固定授权范围。后续步骤将在真实接口返回后标记完成。</p></div>
+                  <ol>
+                    <li class="complete"><i>✓</i><span><strong>AccessGate</strong><small>权限与审计范围已确认</small></span></li>
+                    <li class="running"><i>•</i><span><strong>EvidenceAgent</strong><small>读取经授权的原始证据</small></span></li>
+                    <li><i>·</i><span><strong>SafetyGate</strong><small>等待证据输入</small></span></li>
+                    <li><i>·</i><span><strong>CrossReviewer</strong><small>等待安全与引用复核</small></span></li>
+                    <li><i>·</i><span><strong>Coordinator</strong><small>等待生成可确认任务</small></span></li>
+                  </ol>
+                </section>
+
                 <template v-if="workProduct">
                   <div class="case-command-head">
                     <div><span class="section-kicker">{{ workProduct.case_id }}</span><h4>工单协作画布</h4></div>
@@ -1063,6 +1074,20 @@ textarea { min-height: 96px; resize: vertical; }
 .agent-pipeline article strong { color: #27483d; font-size: 14px; }
 .agent-pipeline article small { color: #4d625a; }
 .agent-pipeline article em { color: #3d765f; font-style: normal; font-size: 12px; font-weight: 700; }
+.desktop-case-agent-live { display:none; }
+@media (min-width:1024px) {
+  .desktop-case-agent-live { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.6fr); gap:18px; margin:14px 0; padding:16px; border:1px solid #dce8e2; border-radius:14px; background:linear-gradient(145deg,#f7fbf9,#fffaf2); }
+  .desktop-case-agent-live h4 { margin:4px 0 6px; color:#29483d; }
+  .desktop-case-agent-live p { margin:0; color:#53665f; font-size:12px; line-height:1.55; }
+  .desktop-case-agent-live ol { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin:0; padding:0; list-style:none; }
+  .desktop-case-agent-live li { display:flex; gap:7px; min-width:0; padding:9px; border-radius:10px; background:#eef3f0; }
+  .desktop-case-agent-live li i { display:grid; place-items:center; width:20px; height:20px; flex:0 0 auto; border-radius:6px; color:#6d7b76; background:#dde6e2; font-style:normal; }
+  .desktop-case-agent-live li.complete i { color:#fff; background:#4e8069; }
+  .desktop-case-agent-live li.running i { color:#523d19; background:#e4c379; }
+  .desktop-case-agent-live li span,.desktop-case-agent-live li strong,.desktop-case-agent-live li small { display:block; min-width:0; }
+  .desktop-case-agent-live li strong { overflow:hidden; color:#314c42; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+  .desktop-case-agent-live li small { margin-top:3px; color:#687a73; font-size:9px; line-height:1.35; }
+}
 .work-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .assessment-brief { margin-top: 12px; padding: 16px; border: 1px solid rgba(104,82,64,.16); border-radius: 16px; background: rgba(255,250,242,.72); }
 .assessment-emotion { color: #5e4b3f; font-weight: 700; }

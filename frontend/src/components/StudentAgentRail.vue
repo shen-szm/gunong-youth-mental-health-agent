@@ -26,8 +26,8 @@
       >
         <header class="agent-rail-header">
           <div>
-            <p>倾诉协作进度</p>
-            <h2 id="student-agent-title">咕哝正在做什么</h2>
+            <p>{{ taskEyebrow }}</p>
+            <h2 id="student-agent-title">多 Agent 协作轨迹</h2>
           </div>
           <button ref="closeButton" class="agent-rail-close" type="button" aria-label="收起智能体进度" @click="$emit('close')">×</button>
         </header>
@@ -36,6 +36,10 @@
           <span :class="`is-${state.status}`" aria-hidden="true"></span>
           {{ state.lastEvent }}
         </p>
+
+        <div class="agent-role-row" aria-label="当前协作角色">
+          <span v-for="role in activeRoles" :key="role">{{ role }}</span>
+        </div>
 
         <ol class="agent-step-list">
           <li v-for="step in steps" :key="step.id" :class="`is-${step.status}`">
@@ -86,6 +90,23 @@ const compactStatus = computed(() => {
     error: '等待重试',
   }
   return labels[props.state.status] || '等待倾听'
+})
+
+const taskEyebrow = computed(() => ({
+  waiting: '当前任务 · 等待学生表达',
+  chat: '当前任务 · 本轮倾诉回应',
+  responded: '当前任务 · 继续倾听',
+  end_candidate: '当前任务 · 等待学生决定',
+  summary: '当前任务 · 完整会话小结',
+  complete: '已交付 · 情绪小结与下一步',
+  urgent: '安全任务 · 真人支持交接',
+  chat_error: '当前任务 · 等待安全重试',
+})[props.state.phase] || '当前任务 · 学生支持')
+
+const activeRoles = computed(() => {
+  if (props.state.status === 'urgent') return ['SafetyGate', 'SafetyCoordinator']
+  if (props.state.phase === 'summary' || props.state.phase === 'complete') return ['Observer', 'SafetyGate', 'Synthesizer', 'Planner', 'Reviewer']
+  return ['Observer', 'SafetyGate', 'EmotionAgent', 'ResponseAgent']
 })
 
 const riskLabel = computed(() => {
@@ -202,6 +223,8 @@ watch(() => props.open, async (value, previous) => {
 .agent-rail-event span.is-running { background: #d9bd79; }
 .agent-rail-event span.is-ready { background: #91c8aa; }
 .agent-rail-event span.is-urgent, .agent-rail-event span.is-error { background: #e49b84; }
+.agent-role-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+.agent-role-row span { padding: 4px 7px; border: 1px solid rgba(185,217,201,.2); border-radius: 7px; color: rgba(213,235,224,.84); background: rgba(185,217,201,.065); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .agent-step-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-step-list li {
   display: grid;
@@ -246,6 +269,11 @@ watch(() => props.open, async (value, previous) => {
 @media (min-width: 900px) {
   .student-agent-shell.is-open .student-agent-toggle { width: 46px; justify-content: center; }
   .student-agent-shell.is-open .agent-toggle-copy { display: none; }
+}
+
+@media (min-width: 1024px) {
+  .student-agent-shell { top: 82px; right: 22px; }
+  .student-agent-rail { width: 360px; max-height: calc(100vh - 116px); border: 1px solid rgba(255,255,255,.1); background: linear-gradient(145deg, rgba(25,31,36,.96), rgba(35,31,29,.93)); }
 }
 
 @media (max-width: 899px) {

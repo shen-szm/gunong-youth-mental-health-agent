@@ -11,7 +11,22 @@
 
     <div v-if="loading" class="assessment-state" role="status">正在读取自评状态…</div>
 
-    <template v-else-if="!editing && !result">
+    <aside v-else class="desktop-agent-lifecycle" aria-label="自评 Agent 当前工作阶段">
+      <div>
+        <span>任务编排</span>
+        <strong>{{ lifecycleTitle }}</strong>
+        <small>{{ lifecycleSummary }}</small>
+      </div>
+      <ol>
+        <li v-for="step in lifecycleSteps" :key="step.label" :class="`is-${step.status}`">
+          <i aria-hidden="true">{{ step.status === 'complete' ? '✓' : step.status === 'running' ? '•' : '·' }}</i>
+          <span><strong>{{ step.label }}</strong><small>{{ step.status === 'complete' ? '已核验' : step.status === 'running' ? '执行中' : '等待' }}</small></span>
+        </li>
+      </ol>
+      <p>只显示任务状态和可核验结果，不展示模型私有思维过程。</p>
+    </aside>
+
+    <template v-if="!loading && !editing && !result">
       <div class="assessment-boundary">
         <strong>它能做什么</strong>
         <p>识别你主动报告的情绪和功能影响，完成安全分流，并生成一项可以执行的下一步。</p>
@@ -152,6 +167,30 @@ const safety = reactive({ self_harm: '', unsafe_home: '' })
 const emotions = ref([])
 const useExternalAi = ref(false)
 
+const lifecycleTitle = computed(() => {
+  if (submitting.value) return '正在执行安全分流与支持编排'
+  if (result.value) return '支持建议已交付，等待学生决定'
+  if (editing.value) return '正在收集主动输入'
+  return '等待开始本次自评'
+})
+const lifecycleSummary = computed(() => {
+  if (submitting.value) return '后端将按固定顺序运行 SafetyGate、Assessor、Planner 与 CrossReviewer。'
+  if (result.value) return `${result.value.pipeline?.length || 0} 个公开步骤已返回，风险裁决由确定性规则优先。`
+  if (editing.value) return '此阶段仅构建结构化输入，尚未调用分析 Agent。'
+  return '开始后先理解任务边界，提交前不生成心理结论。'
+})
+const lifecycleSteps = computed(() => {
+  if (result.value?.pipeline?.length) return result.value.pipeline.map(step => ({ label: step.agent, status: step.status === 'completed' ? 'complete' : step.status }))
+  if (submitting.value) return [
+    { label: 'TaskInterpreter', status: 'complete' }, { label: 'SafetyGate', status: 'running' },
+    { label: 'Assessor', status: 'waiting' }, { label: 'Planner', status: 'waiting' }, { label: 'CrossReviewer', status: 'waiting' },
+  ]
+  return [
+    { label: 'TaskInterpreter', status: editing.value ? 'complete' : 'waiting' }, { label: 'SafetyGate', status: 'waiting' },
+    { label: 'Assessor', status: 'waiting' }, { label: 'Planner', status: 'waiting' }, { label: 'CrossReviewer', status: 'waiting' },
+  ]
+})
+
 const complete = computed(() => {
   const questionIds = (schema.value?.groups || []).flatMap(group => group.questions.map(item => item.id))
   return questionIds.every(id => answers[id]) && safety.self_harm && safety.unsafe_home
@@ -272,6 +311,24 @@ legend small { color:#8a7769; font-weight:500; }
 .agent-progress { margin-top:14px; padding:15px; border-radius:17px; background:rgba(255,255,255,.55); }.agent-progress summary { cursor:pointer; font-weight:800; }.agent-progress ol { list-style:none; padding:0; margin:14px 0; }.agent-progress li { display:flex; gap:10px; padding:9px 0; border-top:1px solid rgba(94,69,50,.1); }.agent-progress li>span { width:9px; height:9px; margin-top:5px; border-radius:50%; background:#6f9c7e; }.agent-progress li.attention>span { background:#d47348; }.agent-progress li.blocked>span { background:#a69d96; }.agent-progress strong,.agent-progress p { display:block; margin:0; }.agent-progress p { margin-top:2px; color:#6c5e54; font-size:13px; line-height:1.5; }
 .urgent-actions { margin-top:14px; padding:17px; border-radius:17px; background:#fff1ed; border:1px solid #d89c8e; }.urgent-actions ol { padding-left:20px; line-height:1.7; }.hotline-actions { display:flex; flex-wrap:wrap; gap:8px; }.hotline-actions a { background:#9e332d; color:#fff; }
 .information-gaps { color:#6f6258; font-size:13px; }.danger { color:#9a3b34; }
+.desktop-agent-lifecycle { display:none; }
+@media (min-width:1024px) {
+  .desktop-agent-lifecycle { display:grid; grid-template-columns:minmax(220px,.8fr) minmax(0,2fr); gap:18px; margin:18px 0 4px; padding:16px 18px; border:1px solid rgba(111,78,53,.15); border-radius:16px; background:rgba(255,255,255,.52); }
+  .desktop-agent-lifecycle>div { align-self:center; }
+  .desktop-agent-lifecycle>div>span { color:#854f2a; font-size:11px; font-weight:850; }
+  .desktop-agent-lifecycle>div>strong,.desktop-agent-lifecycle>div>small { display:block; }
+  .desktop-agent-lifecycle>div>strong { margin:5px 0; font-size:15px; }
+  .desktop-agent-lifecycle>div>small,.desktop-agent-lifecycle>p { color:#746559; line-height:1.5; }
+  .desktop-agent-lifecycle ol { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin:0; padding:0; list-style:none; }
+  .desktop-agent-lifecycle li { display:flex; gap:7px; min-width:0; padding:9px; border-radius:11px; background:rgba(100,73,52,.055); }
+  .desktop-agent-lifecycle li i { display:grid; place-items:center; width:19px; height:19px; flex:0 0 auto; border-radius:6px; color:#77675b; background:#e7ded4; font-style:normal; }
+  .desktop-agent-lifecycle li.is-complete i { color:#fff; background:#62836e; }
+  .desktop-agent-lifecycle li.is-running i { color:#4a321f; background:#e4bc78; }
+  .desktop-agent-lifecycle li span,.desktop-agent-lifecycle li strong,.desktop-agent-lifecycle li small { display:block; min-width:0; }
+  .desktop-agent-lifecycle li strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+  .desktop-agent-lifecycle li small { margin-top:3px; color:#7d6e62; font-size:9px; }
+  .desktop-agent-lifecycle>p { grid-column:1/-1; margin:0; font-size:11px; }
+}
 @media (max-width:720px) { .wellbeing-card { padding:16px; border-radius:20px; }.wellbeing-head { display:block; }.risk-chip { display:inline-block; margin-top:10px; }.domain-grid { grid-template-columns:1fr; }.frequency-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.frequency-options span { text-align:center; }.assessment-actions { flex-direction:column-reverse; }.assessment-actions button { width:100%; } }
 @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
 </style>

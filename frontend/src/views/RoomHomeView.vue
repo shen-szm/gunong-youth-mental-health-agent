@@ -1690,6 +1690,7 @@ const studentAgentState = reactive({
   messageCount: 0,
   lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
 })
+const isDesktopAgentViewport = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
 const studentAgentSteps = computed(() => {
   const phase = studentAgentState.phase
   const urgent = studentAgentState.status === 'urgent'
@@ -3770,6 +3771,7 @@ async function sendChatMsg(text) {
   studentAgentState.verifiedSteps = []
   studentAgentState.messageCount = chatMessages.value.filter(item => item.role === 'user').length
   studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
+  if (isDesktopAgentViewport()) showAgentRail.value = true
   await nextTick()
   scrollChatBottom()
   chatLoading.value = true
@@ -4172,6 +4174,7 @@ async function openChatPanel() {
   const pendingSafetyHandoff = leisureSafetyHandoffPromise
   if (pendingSafetyHandoff) await pendingSafetyHandoff
   openWorkspacePanel('chat')
+  if (isDesktopAgentViewport()) showAgentRail.value = true
   chatInput.value = ''
   try {
     const session = await startChatSession(false)
