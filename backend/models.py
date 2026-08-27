@@ -85,6 +85,51 @@ class StudentConversationSummary(Base):
     __table_args__ = (Index("idx_student_summary_user_expiry", "user_id", "expires_at"),)
 
 
+class StudentWellbeingAssessment(Base):
+    """学生主动完成的结构化心理状态评估；结果不是医学诊断。"""
+
+    __tablename__ = "student_wellbeing_assessments"
+
+    id = Column(Integer, primary_key=True)
+    assessment_code = Column(String(40), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    period = Column(String(16), nullable=False, default="past_14_days")
+    answers_json = Column(Text, nullable=False)
+    result_json = Column(Text, nullable=False)
+    risk_level = Column(String(16), nullable=False, default="routine", index=True)
+    review_status = Column(String(32), nullable=False, default="student_self_review")
+    external_ai_consent_version = Column(String(32), nullable=True)
+    model_name = Column(String(80), nullable=False, default="deterministic-assessment")
+    prompt_version = Column(String(32), nullable=False, default="wellbeing-assessment-v1")
+    degraded = Column(Integer, nullable=False, default=0)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (Index("idx_wellbeing_user_expiry", "user_id", "expires_at"),)
+
+
+class StudentAssessmentAgentRun(Base):
+    """一次评估中每个 Agent 的可核验运行结果，不保存思维链。"""
+
+    __tablename__ = "student_assessment_agent_runs"
+
+    id = Column(Integer, primary_key=True)
+    run_code = Column(String(48), nullable=False, unique=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("student_wellbeing_assessments.id"), nullable=False, index=True)
+    agent_type = Column(String(32), nullable=False)
+    status = Column(String(24), nullable=False, default="completed")
+    summary = Column(Text, nullable=False)
+    output_json = Column(Text, nullable=False, default="{}")
+    evidence_json = Column(Text, nullable=False, default="[]")
+    model_name = Column(String(80), nullable=False, default="deterministic-assessment")
+    prompt_version = Column(String(32), nullable=False, default="wellbeing-assessment-v1")
+    degraded = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (Index("idx_assessment_agent_run", "assessment_id", "agent_type"),)
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
@@ -282,3 +327,90 @@ class TeacherWorkProductTaskDecision(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (Index("idx_work_product_task_decision", "product_id", "task_index", "teacher_user_id", unique=True),)
+
+
+# ── 心岛守护者多智能体系统 ────────────────────────────────
+
+class IslandCommand(Base):
+    """
+    心岛指令表：Agent 通过此表下发环境控制指令，前端轮询或 WebSocket 接收并执行。
+    这是 Agent "调用工具改变游戏环境" 的核心机制。
+    """
+    __tablename__ = "island_commands"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    command_type = Column(String(32), nullable=False)  # set_phase/set_weather/pet_action/toast/recommend
+    payload_json = Column(Text, nullable=False, default="{}")
+    reason = Column(String(200), nullable=False, default="")
+    status = Column(String(16), nullable=False, default="pending", index=True)  # pending/acknowledged/expired
+    delivered_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    __table_args__ = (Index("idx_island_cmd_user_status", "user_id", "status"),)
+
+
+class GameBehaviorLog(Base):
+    """游戏行为日志：感知 Agent 的数据来源。"""
+    __tablename__ = "game_behavior_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False)  # place_enter/activity_start/activity_finish/reflection/pet_interaction/login
+    place = Column(String(32), nullable=True)
+    activity = Column(String(32), nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    __table_args__ = (Index("idx_behavior_user_time", "user_id", "created_at"),)
+
+
+class IslandAgentRun(Base):
+    """心岛 Agent 运行记录：可审计的多 Agent 执行轨迹。"""
+    __tablename__ = "island_agent_runs"
+
+    id = Column(Integer, primary_key=True)
+    run_code = Column(String(40), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    trigger = Column(String(32), nullable=False, default="login")  # login/activity_end/manual/scheduled
+    perception_result = Column(Text, nullable=False, default="{}")
+    plan_result = Column(Text, nullable=False, default="{}")
+    companion_result = Column(Text, nullable=False, default="{}")
+    safety_status = Column(String(16), nullable=False, default="routine")  # routine/watch/urgent
+    commands_issued = Column(Integer, nullable=False, default=0)
+    model_used = Column(String(80), nullable=False, default="deterministic")
+    degraded = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class PetState(Base):
+    """咕团状态：陪伴 Agent 管理的宠物持久化状态。"""
+    __tablename__ = "pet_states"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    intimacy = Column(Integer, nullable=False, default=0)  # 亲密度 0-1000
+    mood = Column(String(16), nullable=False, default="content")  # content/happy/curious/sleepy/concerned
+    today_fed = Column(Integer, nullable=False, default=0)
+    today_groomed = Column(Integer, nullable=False, default=0)
+    consecutive_days = Column(Integer, nullable=False, default=0)  # 连续互动天数
+    last_interaction = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class IslandReport(Base):
+    """心岛情绪报告：报告 Agent 交付的可验收成果。"""
+    __tablename__ = "island_reports"
+
+    id = Column(Integer, primary_key=True)
+    report_code = Column(String(40), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    period_days = Column(Integer, nullable=False, default=7)
+    report_json = Column(Text, nullable=False, default="{}")
+    pdf_path = Column(String(255), nullable=True)
+    model_name = Column(String(80), nullable=False, default="deterministic")
+    degraded = Column(Integer, nullable=False, default=0)
+    generated_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    __table_args__ = (Index("idx_island_report_user_time", "user_id", "generated_at"),)

@@ -116,6 +116,15 @@
                     <section class="evidence-brief"><span class="section-kicker">观察摘要</span><h4>{{ workProduct.observation.headline }}</h4><p>{{ workProduct.observation.latest_signal }}</p><div class="evidence-links"><button v-for="id in workProduct.observation.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div></section>
                     <section class="decision-brief"><span class="section-kicker">安全裁决</span><h4>教师需要确认的下一步</h4><p>{{ workProduct.decision }}</p><div class="evidence-links"><button v-for="id in workProduct.decision_evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div><ul><li v-for="rule in workProduct.guardrails" :key="rule">{{ rule }}</li></ul></section>
                   </div>
+                  <section v-if="workProduct.assessment_summary" class="assessment-brief">
+                    <div class="original-list-head"><div><span class="section-kicker">学生主动自评</span><h4>近两周支持需求观察</h4></div><small>{{ formatDateTime(workProduct.assessment_summary.created_at) }}</small></div>
+                    <p class="assessment-emotion">{{ workProduct.assessment_summary.emotion_summary }}</p>
+                    <div class="assessment-domain-grid">
+                      <article v-for="domain in workProduct.assessment_summary.domains" :key="domain.id"><span>{{ domain.label }}</span><strong>{{ domain.level }}</strong><p>{{ domain.observation }}</p></article>
+                    </div>
+                    <ul><li v-for="need in workProduct.assessment_summary.support_needs" :key="need">{{ need }}</li></ul>
+                    <small>这是待专业人员审核的支持决策草案，不是经验证量表或医学诊断；“需要专业支持”须由校内心理教师或正规医疗机构进一步评估。</small>
+                  </section>
                   <section class="agent-conflict" v-if="workProduct.conflicts?.length">
                     <span class="section-kicker">明确分歧</span>
                     <div v-for="item in workProduct.conflicts" :key="item.topic"><strong>{{ item.topic }}</strong><p>{{ item.views.join(' / ') }}</p><em>裁决：{{ item.resolution }}</em><span class="evidence-links"><button v-for="id in item.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></span></div>
@@ -1055,6 +1064,11 @@ textarea { min-height: 96px; resize: vertical; }
 .agent-pipeline article small { color: #4d625a; }
 .agent-pipeline article em { color: #3d765f; font-style: normal; font-size: 12px; font-weight: 700; }
 .work-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.assessment-brief { margin-top: 12px; padding: 16px; border: 1px solid rgba(104,82,64,.16); border-radius: 16px; background: rgba(255,250,242,.72); }
+.assessment-emotion { color: #5e4b3f; font-weight: 700; }
+.assessment-domain-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.assessment-domain-grid article { padding: 11px; border-radius: 12px; background: rgba(255,255,255,.68); }
+.assessment-domain-grid span,.assessment-domain-grid strong { display: block; }.assessment-domain-grid span { color: #7f6e61; font-size: 12px; }.assessment-domain-grid p { margin: 5px 0 0; color: #6d5d52; font-size: 12px; line-height: 1.45; }
 .evidence-brief, .decision-brief, .agent-conflict, .task-board { padding: 16px; border: 1px solid #dfe9e4; border-radius: 16px; background: #fff; }
 .evidence-brief h4, .decision-brief h4 { margin: 5px 0 8px; color: #27483d; font-size: 17px; }
 .evidence-brief p, .decision-brief p, .agent-conflict p { color: #52675f; line-height: 1.65; }
@@ -1101,7 +1115,7 @@ textarea { min-height: 96px; resize: vertical; }
 .approval-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 12px; background: #f8e7e3; color: #783c34; }
 .teacher-page button:focus-visible, .teacher-page a:focus-visible, .teacher-page textarea:focus-visible, .teacher-page input:focus-visible, .original-list:focus-visible { outline: 3px solid #245f82; outline-offset: 3px; }
 .teacher-page .danger-btn { color: #813b32; background: #fae8e4; }
-@media (max-width: 1000px) { .case-layout { grid-template-columns: 1fr; } .agent-brief, .work-product-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .case-layout { grid-template-columns: 1fr; } .agent-brief, .work-product-grid { grid-template-columns: 1fr; } .assessment-domain-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 900px) { .teacher-page { padding: 14px; } .teacher-hero, .panel-title { flex-direction: column; } .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .split-layout, .lesson-layout, .emotion-sections { grid-template-columns: 1fr; } .teacher-tabs { overflow-x: auto; } }
 @media (max-width: 620px) { .case-stage-head, .original-list-head, .handoff-card { flex-direction: column; } .role-badge { align-self: stretch; text-align: center; } }
 @media (max-width: 560px) { .overview-grid, .detail-stats { grid-template-columns: 1fr; } .teacher-tabs button { white-space: nowrap; } .account-row { align-items: flex-start; } .agent-conflict div, .task-row { grid-template-columns: 1fr; } .task-row > span { display: none; } }

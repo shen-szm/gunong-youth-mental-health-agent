@@ -42,8 +42,10 @@ test('leisure games use deterministic local state and explicit student feedback'
     readFile(islandUrl, 'utf8'), readFile(gardenUrl, 'utf8'), readFile(fishingUrl, 'utf8'),
     readFile(happinessUrl, 'utf8'), readFile(activityStateUrl, 'utf8'),
   ])
-  assert.match(garden, /向左合并/)
-  assert.match(garden, /收获成熟作物/)
+  assert.match(garden, /岛民委托/)
+  assert.match(garden, /请咕团帮忙浇水/)
+  assert.doesNotMatch(garden, /向左合并|2048/)
+  assert.match(garden, /翻地、播种、浇水，再把收成交给岛民/)
   assert.match(fishing, /鱼类图鉴/)
   assert.match(fishing, /round-complete/)
   assert.match(happiness, /isOfflineCompanionUrgent\(note\)/)

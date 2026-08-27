@@ -10,10 +10,10 @@ export const ISLAND_PHASES = Object.freeze([
 
 export const ISLAND_PLACES = Object.freeze([
   { id: 'home', label: '咕团家园', x: 500, y: 390, hint: '陪咕团喂食、梳毛，或者安静坐一会儿。' },
-  { id: 'garden', label: '云顶暖房', x: 580, y: 174, hint: '照料一株正在生长的小植物。' },
-  { id: 'dock', label: '月光钓鱼湾', x: 793, y: 340, hint: '听着水声慢慢抛竿，不设置输赢。' },
+  { id: 'garden', label: '云顶暖房', x: 580, y: 174, hint: '照料一小片花园，看植物慢慢生长。' },
+  { id: 'dock', label: '潮汐沙滩', x: 793, y: 340, hint: '退潮时在沙滩走走，发现小生物，或者只是坐下来看海。' },
   { id: 'exchange', label: '幸福交换树', x: 244, y: 370, hint: '交换一件令你幸福的小事。' },
-  { id: 'rest', label: '星灯休息台', x: 704, y: 168, hint: '坐下来看看海，跟着星灯放慢呼吸。' },
+  { id: 'rest', label: '星灯休息台', x: 704, y: 168, hint: '坐下来跟着星灯慢慢呼吸，不用勉强。' },
 ])
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))

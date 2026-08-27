@@ -2,13 +2,14 @@
   <section class="fishing-game" aria-labelledby="island-fishing-title" @keydown="handleKeydown" @keyup="handleKeyup">
     <header class="activity-copy">
       <div>
-        <small>月光钓鱼湾 · 张力垂钓</small>
-        <h3 id="island-fishing-title">等到咬钩，再稳稳跟住</h3>
-        <p>抛竿后观察水面。咬钩时按住空格或“收线”，让浮标跟在金色区域里；线太紧时松开。</p>
+        <small>月光钓鱼湾 · 技巧垂钓</small>
+        <h3 id="island-fishing-title">控落点、抢提竿、稳住鱼线</h3>
+        <p>先锁定远投落点，看到咬钩涟漪后及时提竿；收线时按住让浮标跟住金色鱼影，线太紧就松开。</p>
       </div>
       <dl>
-        <div><dt>遇见鱼类</dt><dd>{{ discoveredCount }}/3</dd></div>
+        <div><dt>遇见鱼类</dt><dd>{{ discoveredCount }}/6</dd></div>
         <div><dt>本岛相遇</dt><dd>{{ fishing.catches }}</dd></div>
+        <div><dt>最佳落点</dt><dd>{{ fishing.bestPrecision || 0 }}%</dd></div>
       </dl>
     </header>
 
@@ -59,7 +60,7 @@ const message = ref('准备好时再抛竿。这里没有连胜和失败惩罚�
 const progress = ref(0)
 const tension = ref(0.3)
 const discoveredCount = computed(() => FISH_TYPES.filter(fish => props.fishing.fishBook[fish.id]).length)
-const actionLabel = computed(() => state.value === 'hooked' ? '按住收线' : state.value === 'waiting' ? '等待咬钩' : '抛竿')
+const actionLabel = computed(() => ({ idle: '开始抛竿', casting: '锁定落点', waiting: '等待咬钩', bite: '现在提竿', hooked: '按住收线', result: '再抛一竿' }[state.value] || '开始抛竿'))
 let controller = null
 let cancelled = false
 
@@ -89,7 +90,7 @@ function handleGameEvent(event) {
   if (event.type === 'state') {
     state.value = event.state
     message.value = event.message
-    if (event.state === 'hooked') nextTick(() => actionButton.value?.focus({ preventScroll: true }))
+    if (event.state === 'bite' || event.state === 'hooked') nextTick(() => actionButton.value?.focus({ preventScroll: true }))
     if (event.state === 'result') emit('played', { activity: 'fishing', action: 'round-complete' })
   }
   if (event.type === 'meter') {
@@ -100,7 +101,13 @@ function handleGameEvent(event) {
     state.value = 'result'
     const fish = FISH_TYPES[event.fishIndex] || FISH_TYPES[0]
     const nextBook = { ...props.fishing.fishBook, [fish.id]: (props.fishing.fishBook[fish.id] || 0) + 1 }
-    emit('update:fishing', { catches: props.fishing.catches + 1, fishBook: nextBook })
+    emit('update:fishing', {
+      ...props.fishing,
+      catches: props.fishing.catches + 1,
+      coins: (props.fishing.coins || 0) + (fish.rarity === '稀有' ? 8 : fish.rarity === '少见' ? 5 : 3),
+      bestPrecision: Math.max(props.fishing.bestPrecision || 0, event.precision || 0),
+      fishBook: nextBook,
+    })
     emit('played', { activity: 'fishing', action: 'catch' })
     message.value = `遇见了${fish.label}，已经收进图鉴。可以继续，也可以到这里结束。`
   }
@@ -109,9 +116,7 @@ function handleGameEvent(event) {
 function cast() {
   controller?.command({ type: 'cast' })
 }
-function handleAction() {
-  if (state.value === 'idle' || state.value === 'result') cast()
-}
+function handleAction() { if (['idle', 'result', 'casting', 'bite'].includes(state.value)) cast() }
 function setReeling(active) { controller?.command({ type: 'reel', active }) }
 function startReeling(event) {
   if (state.value !== 'hooked') return

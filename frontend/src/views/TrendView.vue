@@ -19,20 +19,14 @@
       </button>
     </div>
 
+    <StudentWellbeingAssessment />
+
     <!-- 统计卡片 -->
     <div class="stats-row">
       <div class="stat-card main-stat">
-        <div class="main-score" :style="{color: scoreColor}">{{ stats.avg_score || '--' }}</div>
-        <div class="main-label">平均情绪分</div>
-        <div class="main-hint" :style="{color: scoreColor}">{{ scoreHint }}</div>
-        <!-- 情绪分圆形进度 -->
-        <svg class="score-ring" viewBox="0 0 80 80">
-          <circle cx="40" cy="40" r="34" fill="none" stroke="#F0ECE8" stroke-width="6"/>
-          <circle cx="40" cy="40" r="34" fill="none" :stroke="scoreColor" stroke-width="6"
-            stroke-linecap="round" stroke-dasharray="213.6"
-            :stroke-dashoffset="213.6 - 213.6 * ((stats.avg_score || 0) / 10)"
-            transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s ease"/>
-        </svg>
+        <div class="main-score">{{ topMoodEmoji }}</div>
+        <div class="main-label">较常记录的情绪</div>
+        <div class="main-hint">只描述主动留下的记录</div>
       </div>
       <div class="side-stats">
         <div class="stat-card side-card">
@@ -40,36 +34,17 @@
           <div class="side-label">记录次数</div>
         </div>
         <div class="stat-card side-card">
-          <div class="side-val">{{ topMoodEmoji }}</div>
-          <div class="side-label">主要情绪</div>
+          <div class="side-val">{{ stats.recorded_days || 0 }}</div>
+          <div class="side-label">有记录的天数</div>
         </div>
       </div>
     </div>
 
-    <!-- 折线图 / 情绪趋势 -->
+    <!-- 主动记录时间线 -->
     <div class="card chart-card" v-if="stats.trend?.length">
-      <div class="card-title">📈 情绪走势</div>
-      <div class="line-chart-wrap">
-        <svg class="line-chart" viewBox="0 0 300 100" preserveAspectRatio="none">
-          <!-- 网格线 -->
-          <line v-for="y in [20,50,80]" :key="y" x1="0" :y1="y" x2="300" :y2="y" stroke="#F0ECE8" stroke-width="1"/>
-          <!-- 渐变填充 -->
-          <defs>
-            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" :stop-color="scoreColor" stop-opacity="0.25"/>
-              <stop offset="100%" :stop-color="scoreColor" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          <polygon v-if="polyPoints" :points="polyPoints + ` ${lastX},95 ${firstX},95`" :fill="'url(#lineGrad)'"/>
-          <!-- 折线 -->
-          <polyline v-if="linePoints" :points="linePoints" fill="none" :stroke="scoreColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-          <!-- 数据点 -->
-          <circle v-for="(p, i) in chartPoints" :key="i" :cx="p.x" :cy="p.y" r="3.5" fill="white" :stroke="scoreColor" stroke-width="2"/>
-        </svg>
-        <!-- X轴日期 -->
-        <div class="x-labels">
-          <span v-for="(d, i) in xLabels" :key="i">{{ d }}</span>
-        </div>
+      <div class="card-title">近期主动记录</div>
+      <div class="record-timeline">
+        <article v-for="day in stats.trend" :key="day.date"><time>{{ day.date }}</time><div><span v-for="label in day.labels" :key="label">{{ label }}</span></div><small>{{ day.count }}条</small></article>
       </div>
     </div>
 
@@ -118,6 +93,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { getMoodStats, getMoodInsight } from '../api/mood'
+import StudentWellbeingAssessment from '../components/StudentWellbeingAssessment.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -126,23 +102,6 @@ const tabs = [{ key: 7, label: '近7天' }, { key: 30, label: '近30天' }, { ke
 const stats = ref({})
 const insight = ref('正在分析你的情绪数据...')
 const insightLoading = ref(false)
-
-const scoreColor = computed(() => {
-  const s = stats.value.avg_score || 5
-  if (s >= 7) return '#6DB58B'
-  if (s >= 5) return '#7FB3A6'
-  if (s >= 3) return '#E8C468'
-  return '#D4776A'
-})
-
-const scoreHint = computed(() => {
-  const s = stats.value.avg_score || 0
-  if (s >= 8) return '状态很好 ☺'
-  if (s >= 6) return '整体不错'
-  if (s >= 4) return '需要关注'
-  if (s > 0) return '建议多倾诉'
-  return '--'
-})
 
 const topMood = computed(() => {
   const dist = stats.value.distribution || {}
@@ -158,30 +117,6 @@ const topMoodEmoji = computed(() => {
 const sortedDist = computed(() => {
   const dist = stats.value.distribution || {}
   return Object.fromEntries(Object.entries(dist).sort((a, b) => b[1] - a[1]))
-})
-
-// 折线图计算
-const chartPoints = computed(() => {
-  const trend = stats.value.trend || []
-  if (!trend.length) return []
-  const n = trend.length
-  return trend.map((d, i) => ({
-    x: n === 1 ? 150 : 15 + (i / (n - 1)) * 270,
-    y: 95 - (d.avg / 10) * 80
-  }))
-})
-
-const linePoints = computed(() => chartPoints.value.map(p => `${p.x},${p.y}`).join(' '))
-const polyPoints = computed(() => linePoints.value)
-const firstX = computed(() => chartPoints.value[0]?.x)
-const lastX = computed(() => chartPoints.value[chartPoints.value.length - 1]?.x)
-
-const xLabels = computed(() => {
-  const trend = stats.value.trend || []
-  if (!trend.length) return []
-  if (trend.length <= 5) return trend.map(d => d.date.slice(5))
-  const step = Math.ceil(trend.length / 5)
-  return trend.filter((_, i) => i % step === 0 || i === trend.length - 1).map(d => d.date.slice(5))
 })
 
 function getEmoji(label) {
@@ -268,13 +203,13 @@ watch(activeTab, loadData)
   position: absolute; width: 80px; height: 80px; opacity: 0.5;
 }
 .main-score { font-size: 32px; font-weight: 700; position: relative; z-index: 1; }
-.main-label { font-size: 11px; color: #8A847E; margin-top: 2px; position: relative; z-index: 1; }
-.main-hint { font-size: 12px; margin-top: 4px; font-weight: 500; position: relative; z-index: 1; }
+.main-label { font-size: 11px; color: #D4CCC2; margin-top: 2px; position: relative; z-index: 1; }
+.main-hint { color:#C2B9AF; font-size: 12px; margin-top: 4px; font-weight: 500; position: relative; z-index: 1; }
 
 .side-stats { display: flex; flex-direction: column; gap: 10px; flex: 0 0 90px; }
 .side-card { padding: 12px; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .side-val { font-size: 22px; font-weight: 700; color: #8EA89A; }
-.side-label { font-size: 11px; color: #8A847E; margin-top: 3px; }
+.side-label { font-size: 11px; color: #D4CCC2; margin-top: 3px; }
 
 /* 通用卡片 */
 .card { background: rgba(40,40,48,0.7); border-radius: 16px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); margin: 10px 16px; padding: 16px; }
@@ -288,6 +223,11 @@ watch(activeTab, loadData)
   display: flex; justify-content: space-between;
   font-size: 10px; color: #8A847E; margin-top: 4px; padding: 0 10px;
 }
+.record-timeline { display:grid; gap:9px; }
+.record-timeline article { display:grid; grid-template-columns:64px 1fr auto; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(92,70,52,.1); }
+.record-timeline time,.record-timeline small { color:#8a786b; font-size:12px; }
+.record-timeline article div { display:flex; flex-wrap:wrap; gap:6px; }
+.record-timeline article div span { padding:5px 9px; border-radius:999px; background:#f1e7dc; color:#665247; font-size:12px; font-weight:700; }
 
 /* 情绪分布 */
 .dist-list { display: flex; flex-direction: column; gap: 10px; }
@@ -334,14 +274,18 @@ watch(activeTab, loadData)
 /* ═══════════ 电脑端适配 ═══════════ */
 @media (min-width: 768px) {
   .trend-page {
-    display: flex; flex-direction: column; align-items: center;
+    width: min(960px, calc(100% - 48px));
+    margin: 0 auto;
+    padding-bottom: 100px;
   }
   .page-header, .tab-bar, .stats-row, .card, .empty-state {
-    width: 560px;
+    width: 100%;
     margin-left: auto; margin-right: auto;
   }
   .stats-row { padding: 10px 0; }
   .card { margin: 10px auto; }
-  .side-stats { flex: 0 0 110px; }
+  .side-stats { flex: 0 0 220px; flex-direction: row; }
+  .side-card { min-width: 0; }
+  .wellbeing-card { width: 100%; }
 }
 </style>

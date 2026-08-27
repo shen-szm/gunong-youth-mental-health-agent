@@ -27,6 +27,10 @@ export async function createFishingGame({ parent, onEvent = () => {}, reducedMot
       this.progress = 0
       this.tension = 0.3
       this.elapsed = 0
+      this.castPower = 0.08
+      this.castDirection = 1
+      this.precision = 0
+      this.fishIndex = 0
     }
 
     create() {
@@ -77,7 +81,11 @@ export async function createFishingGame({ parent, onEvent = () => {}, reducedMot
       const height = 22
       this.gauge.clear()
       this.gauge.fillStyle(0x3c2a2b, 0.78).fillRoundedRect(x, y, width, height, 8)
-      if (this.state === 'hooked') {
+      if (this.state === 'casting') {
+        this.gauge.fillStyle(0xffd083, 0.22).fillRoundedRect(x + width * .68, y + 3, width * .18, height - 6, 6)
+        this.gauge.fillStyle(0xfff0bd, 1).fillCircle(x + this.castPower * width, y + height / 2, 8)
+        this.gauge.lineStyle(2, 0xffe2b2, 0.5).strokeRoundedRect(x, y, width, height, 8)
+      } else if (this.state === 'hooked') {
         const targetX = x + this.target * width
         this.gauge.fillStyle(0xffd083, 0.28).fillRoundedRect(targetX - 45, y + 3, 90, height - 6, 6)
         this.gauge.fillStyle(this.tension > 0.84 ? 0xe17363 : 0xfff0bd, 1).fillCircle(x + this.marker * width, y + height / 2, 8)
@@ -87,25 +95,53 @@ export async function createFishingGame({ parent, onEvent = () => {}, reducedMot
     }
 
     handleCommand(command) {
-      if (command?.type === 'cast') this.cast()
+      if (command?.type === 'cast') {
+        if (['idle', 'result'].includes(this.state)) this.startCast()
+        else if (this.state === 'casting') this.releaseCast()
+        else if (this.state === 'bite') this.hook()
+      }
       if (command?.type === 'reel') this.reeling = !!command.active
     }
 
-    cast() {
+    startCast() {
       if (!['idle', 'result'].includes(this.state)) return
+      this.state = 'casting'
+      this.castPower = 0.08
+      this.castDirection = 1
+      this.progressText.setText('看准金色远投区，再按一次锁定落点')
+      onEvent({ type: 'state', state: 'casting', message: '力度条正在移动，再按一次锁定抛竿距离。' })
+    }
+
+    releaseCast() {
+      if (this.state !== 'casting') return
       this.state = 'waiting'
       this.progress = 0
       this.tension = 0.3
       this.marker = 0.42
       this.elapsed = 0
-      this.progressText.setText('水面很安静，留意浮标的动静')
-      onEvent({ type: 'state', state: 'waiting', message: '已经抛竿，留意水面涟漪。' })
+      this.precision = 1 - Math.min(1, Math.abs(this.castPower - .77) / .77)
+      this.float.setX(WIDTH * (.22 + this.castPower * .62))
+      this.ripple.setPosition(this.float.x, this.float.y)
+      this.fishIndex = this.precision > .9 ? 5 : this.castPower > .72 ? 2 + Math.floor(Math.random() * 3) : Math.floor(Math.random() * 2)
+      this.progressText.setText('水面很安静，看到涟漪时及时提竿')
+      onEvent({ type: 'state', state: 'waiting', message: `落点精度 ${Math.round(this.precision * 100)}%。留意咬钩涟漪。` })
       this.biteTimer?.remove(false)
-      this.biteTimer = this.time.delayedCall(1100 + Math.random() * 1300, () => this.startHook())
+      this.biteTimer = this.time.delayedCall(900 + Math.random() * 1600, () => this.startBite())
     }
 
-    startHook() {
+    startBite() {
       if (this.state !== 'waiting') return
+      this.state = 'bite'
+      this.ripple.setStrokeStyle(3, 0xffe0aa, 1)
+      this.progressText.setText('咬钩了！现在提竿')
+      onEvent({ type: 'state', state: 'bite', message: '出现咬钩涟漪，点击“提竿”进入收线。' })
+      this.hookTimer?.remove(false)
+      this.hookTimer = this.time.delayedCall(1700, () => this.finish('escaped'))
+    }
+
+    hook() {
+      if (this.state !== 'bite') return
+      this.hookTimer?.remove(false)
       this.state = 'hooked'
       this.ripple.setStrokeStyle(2, 0xffe0aa, 0.82)
       this.progressText.setText('按住空格或收线，让浮标跟住金色区域')
@@ -118,7 +154,7 @@ export async function createFishingGame({ parent, onEvent = () => {}, reducedMot
       this.ripple.setStrokeStyle(2, 0xffe0aa, 0)
       if (result === 'caught') {
         this.progressText.setText('收线成功，新朋友已记入图鉴')
-        onEvent({ type: 'caught', fishIndex: Math.floor(Math.random() * 3) })
+        onEvent({ type: 'caught', fishIndex: this.fishIndex, precision: Math.round(this.precision * 100) })
       } else if (result === 'tension') {
         this.progressText.setText('鱼线太紧了，松手慢一点就好')
         onEvent({ type: 'state', state: 'result', message: '鱼游走了。这里没有损失，下一竿可以少按一会。' })
@@ -129,15 +165,25 @@ export async function createFishingGame({ parent, onEvent = () => {}, reducedMot
     }
 
     update(_, delta) {
+      if (this.state === 'casting') {
+        const seconds = Math.min(.05, delta / 1000)
+        this.castPower += this.castDirection * seconds * .72
+        if (this.castPower >= .98 || this.castPower <= .04) this.castDirection *= -1
+        this.castPower = Phaser.Math.Clamp(this.castPower, .04, .98)
+        this.renderGauge()
+        onEvent({ type: 'cast-meter', power: this.castPower })
+        return
+      }
       if (this.state !== 'hooked') return
       const seconds = Math.min(0.05, delta / 1000)
       this.elapsed += seconds
       this.target = 0.5 + Math.sin(this.elapsed * 1.7) * 0.27 + Math.sin(this.elapsed * 3.9) * 0.07
-      const pull = this.reeling ? 0.31 : -0.2
+      const behavior = 1 + this.fishIndex * .07
+      const pull = this.reeling ? 0.34 : -0.21
       this.marker = Phaser.Math.Clamp(this.marker + pull * seconds, 0.03, 0.97)
       this.tension = Phaser.Math.Clamp(this.tension + (this.reeling ? 0.25 : -0.34) * seconds, 0.05, 1)
-      const aligned = Math.abs(this.marker - this.target) < 0.12
-      this.progress = Phaser.Math.Clamp(this.progress + (aligned ? 0.24 : -0.09) * seconds, 0, 1)
+      const aligned = Math.abs(this.marker - this.target) < Math.max(.085, .135 - this.fishIndex * .007)
+      this.progress = Phaser.Math.Clamp(this.progress + (aligned ? 0.27 : -0.08 * behavior) * seconds, 0, 1)
       this.float.setX(WIDTH * (0.26 + this.target * 0.55))
       this.ripple.setPosition(this.float.x, this.float.y)
       this.renderGauge()

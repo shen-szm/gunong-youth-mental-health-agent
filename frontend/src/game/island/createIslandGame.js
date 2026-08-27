@@ -129,6 +129,10 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
           this.path = findIslandPath(this.player, place)
           this.target = this.path.shift() || null
           bridge.emit('agent', { phase: 'moving', text: `已经找到合适路线：前往${place.label}`, targetLabel: place.label })
+          // Clicking the place the player is already standing beside produces
+          // an empty route. Treat that as arrival instead of leaving the Agent
+          // rail forever in “moving”.
+          if (!this.target) this.interact()
         }
       }
       if (command?.type === 'interact') this.interact()

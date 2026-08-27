@@ -1,136 +1,345 @@
 <template>
-  <section class="garden-game" aria-labelledby="island-garden-title" @keydown="handleKeydown">
-    <header class="activity-copy">
+  <section class="garden-simple" aria-labelledby="island-garden-title">
+    <header class="garden-header">
       <div>
-        <small>云顶暖房 · 合并种植</small>
-        <h3 id="island-garden-title">把相同作物推到一起</h3>
-        <p>方向键移动整片田地，相同生长阶段会合成。培育出暖阳花后，可以随时收获。</p>
+        <small>云顶暖房 · 一小片花园</small>
+        <h3 id="island-garden-title">慢慢种，慢慢长</h3>
+        <p>翻地、播种、浇水，再把收成交给岛民。不用赶时间，植物会按自己的节奏生长。</p>
       </div>
-      <dl>
-        <div><dt>照料步数</dt><dd>{{ garden.moves }}</dd></div>
-        <div><dt>已收获</dt><dd>{{ garden.harvests }}</dd></div>
-      </dl>
     </header>
 
-    <div class="garden-playfield">
-      <div ref="grid" class="merge-grid" role="grid" aria-label="四乘四合并种植区" tabindex="0">
-        <div
-          v-for="(tier, index) in garden.board"
-          :key="index"
-          :class="['merge-cell', tier ? `is-tier-${tier}` : 'is-empty']"
-          role="gridcell"
-          :aria-label="cellLabel(tier, index)"
+    <div class="garden-body">
+      <!-- 工具选择 -->
+      <div class="garden-tools" role="toolbar" aria-label="花园操作">
+        <button
+          v-for="tool in tools"
+          :key="tool.id"
+          type="button"
+          :class="{ active: selectedTool === tool.id }"
+          @click="selectedTool = tool.id"
         >
-          <span v-if="tier" class="crop-pixel" aria-hidden="true">{{ cropFor(tier).mark }}</span>
-          <small v-if="tier">{{ cropFor(tier).label }}</small>
-        </div>
+          <span class="tool-icon">{{ tool.icon }}</span>
+          <span>{{ tool.label }}</span>
+        </button>
       </div>
 
-      <div class="garden-tools" aria-label="田园操作">
-        <div class="direction-pad">
-          <button type="button" aria-label="向上合并" @click="move('up')">↑</button>
-          <button type="button" aria-label="向左合并" @click="move('left')">←</button>
-          <button type="button" aria-label="向下合并" @click="move('down')">↓</button>
-          <button type="button" aria-label="向右合并" @click="move('right')">→</button>
-        </div>
-        <button type="button" class="tool-button" :disabled="!garden.previous" @click="undo">撤销一步</button>
-        <button type="button" class="harvest-button" :disabled="highestTier < 5" @click="harvest">收获成熟作物</button>
+      <!-- 种子选择（播种工具时显示） -->
+      <div v-if="selectedTool === 'seed'" class="seed-selector">
+        <span>选一种种子：</span>
+        <button
+          v-for="crop in crops"
+          :key="crop.id"
+          type="button"
+          :class="{ active: selectedSeed === crop.id }"
+          @click="selectedSeed = crop.id"
+        >
+          <i :style="{ background: crop.color }"></i>
+          {{ crop.label }}
+        </button>
       </div>
+
+      <!-- 花园网格 -->
+      <div class="garden-plots">
+        <button
+          v-for="(plot, index) in plots"
+          :key="index"
+          type="button"
+          class="plot"
+          :class="[`soil-${plot.soil}`, { watered: plot.watered, mature: isMature(plot) }]"
+          @click="actOnPlot(index)"
+        >
+          <span v-if="plot.crop" class="plant" :style="plantStyle(plot)">
+            <span class="stem"></span>
+            <span class="leaves"></span>
+            <span v-if="isMature(plot)" class="flower" :style="{ background: cropColor(plot.crop) }"></span>
+          </span>
+          <span v-if="plot.watered" class="water-drop">💧</span>
+          <small>{{ plotStatus(plot) }}</small>
+        </button>
+      </div>
+
+      <!-- 状态提示 -->
+      <p class="garden-message" role="status" aria-live="polite">{{ message }}</p>
+
+      <!-- 咕团帮忙 -->
+      <button type="button" class="pet-help-btn" :disabled="!petHelpReady" @click="petHelp">
+        {{ petHelpReady ? '请咕团帮忙浇水' : '咕团今天已经帮忙过了' }}
+      </button>
+      <p class="garden-message"><strong>岛民委托：</strong>照料任意一块田并完成一次收获。委托只记录玩法进度，不用于判断情绪。</p>
     </div>
-
-    <p class="activity-status" role="status" aria-live="polite">{{ message }}</p>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
-import { canMoveGarden, GARDEN_CROPS, harvestGarden, moveGarden } from '../../game/island/gardenMergeEngine.js'
+import { computed, reactive, ref } from 'vue'
+import { logIslandBehavior } from '../../api/island.js'
 
-const props = defineProps({ garden: { type: Object, required: true } })
 const emit = defineEmits(['update:garden', 'played'])
-const grid = ref(null)
-const message = ref('先用方向键试着合并两株嫩芽。没有倒计时，也没有失败惩罚。')
-const highestTier = computed(() => Math.max(0, ...props.garden.board))
 
-function cropFor(tier) { return GARDEN_CROPS[Math.max(0, tier - 1)] || GARDEN_CROPS[0] }
-function cellLabel(tier, index) { return `第${index + 1}格，${tier ? cropFor(tier).label : '空地'}` }
+// 作物定义
+const crops = [
+  { id: 'sunflower', label: '暖阳花', color: '#FFD700', stages: 3, growTime: 2 },
+  { id: 'mint', label: '海风薄荷', color: '#98D8C8', stages: 2, growTime: 1 },
+  { id: 'berry', label: '星莓', color: '#E74C3C', stages: 3, growTime: 2 },
+  { id: 'carrot', label: '脆甜萝卜', color: '#FF8C00', stages: 2, growTime: 1 },
+]
 
-function move(direction) {
-  const result = moveGarden(props.garden.board, direction)
-  if (!result.moved) {
-    message.value = canMoveGarden(props.garden.board) ? '这个方向暂时没有变化，换一个方向试试。' : '田地已经铺满。可以收获成熟作物，或撤销上一步。'
-    return
+const tools = [
+  { id: 'hoe', icon: '⛏️', label: '翻土' },
+  { id: 'seed', icon: '🌱', label: '播种' },
+  { id: 'water', icon: '💧', label: '浇水' },
+  { id: 'harvest', icon: '🧺', label: '收获' },
+]
+
+// 6块地（简化，原来9块）
+const plots = reactive(
+  Array.from({ length: 6 }, () => ({
+    soil: 'grass', // grass / tilled
+    crop: null,
+    stage: 0,
+    watered: false,
+    growProgress: 0,
+  }))
+)
+
+const selectedTool = ref('hoe')
+const selectedSeed = ref('sunflower')
+const message = ref('先翻翻土，再选种子播种。不用急，植物会慢慢长。')
+const petHelpReady = ref(true)
+
+const cropFor = id => crops.find(c => c.id === id)
+const cropColor = id => cropFor(id)?.color || '#888'
+const isMature = plot => !!plot.crop && plot.stage >= cropFor(plot.crop).stages
+
+function plantStyle(plot) {
+  const crop = cropFor(plot.crop)
+  if (!crop) return {}
+  const growth = Math.max(20, ((plot.stage + 1) / (crop.stages + 1)) * 100)
+  return {
+    '--growth': `${growth}%`,
+    '--crop-color': crop.color,
+    height: `${Math.min(60, 20 + growth * 0.5)}px`,
   }
-  emit('update:garden', {
-    ...props.garden,
-    previous: props.garden.board.slice(),
-    board: result.board,
-    score: props.garden.score + result.gained,
-    moves: props.garden.moves + 1,
+}
+
+function plotStatus(plot) {
+  if (!plot.crop) {
+    return plot.soil === 'tilled' ? '空田 · 可播种' : '草地 · 可翻土'
+  }
+  if (isMature(plot)) return `${cropFor(plot.crop).label} · 成熟啦`
+  return `${cropFor(plot.crop).label} · ${plot.watered ? '浇过水了' : `生长中 ${plot.stage}/${cropFor(plot.crop).stages}`}`
+}
+
+function actOnPlot(index) {
+  const plot = plots[index]
+  const tool = selectedTool.value
+
+  if (tool === 'hoe') {
+    if (plot.soil === 'grass' && !plot.crop) {
+      plot.soil = 'tilled'
+      message.value = '土翻好了，松松软软的。'
+      logAction('hoe')
+    } else if (plot.crop) {
+      message.value = '这里已经种了东西，不要翻掉哦。'
+    } else {
+      message.value = '已经翻过了，可以播种了。'
+    }
+  }
+
+  else if (tool === 'seed') {
+    if (plot.soil === 'tilled' && !plot.crop) {
+      plot.crop = selectedSeed.value
+      plot.stage = 0
+      plot.watered = false
+      message.value = `种下了${cropFor(selectedSeed.value).label}，浇点水它就会开始长。`
+      logAction('seed', selectedSeed.value)
+    } else if (plot.crop) {
+      message.value = '这里已经种了东西了。'
+    } else {
+      message.value = '先翻翻土再播种。'
+    }
+  }
+
+  else if (tool === 'water') {
+    if (plot.crop && !plot.watered) {
+      plot.watered = true
+      // 浇水后生长
+      const crop = cropFor(plot.crop)
+      if (plot.stage < crop.stages) {
+        plot.stage += 1
+      }
+      message.value = isMature(plot)
+        ? `${crop.label}成熟了！可以收获了。`
+        : `浇了水，${crop.label}又长大了一点。`
+      logAction('water')
+    } else if (plot.watered) {
+      message.value = '已经浇过水了，等它吸收一下。'
+    } else {
+      message.value = '这里还没种东西呢。'
+    }
+  }
+
+  else if (tool === 'harvest') {
+    if (isMature(plot)) {
+      const cropName = cropFor(plot.crop).label
+      plot.crop = null
+      plot.stage = 0
+      plot.watered = false
+      plot.soil = 'grass'
+      message.value = `收获了${cropName}！可以再翻土种新的。`
+      logAction('harvest', cropName)
+      emit('played', { action: 'harvest', crop: cropName })
+    } else if (plot.crop) {
+      message.value = '还没成熟，再等等，浇浇水。'
+    } else {
+      message.value = '这里还没种东西。'
+    }
+  }
+}
+
+function petHelp() {
+  if (!petHelpReady.value) return
+  // 咕团帮所有种了的地浇水
+  let watered = 0
+  plots.forEach(plot => {
+    if (plot.crop && !plot.watered) {
+      plot.watered = true
+      const crop = cropFor(plot.crop)
+      if (plot.stage < crop.stages) plot.stage += 1
+      watered++
+    }
   })
-  message.value = result.merges ? `合成了 ${result.merges} 组作物，新的嫩芽也落进田里。` : '作物已经移动，新的嫩芽落进田里。'
-  emit('played', { activity: 'garden', action: 'move' })
+  petHelpReady.value = false
+  message.value = watered > 0
+    ? `咕团帮你浇了${watered}块地，开心地摇了摇尾巴。`
+    : '咕团看了看，没有需要浇水的植物，就坐下来陪你了。'
+  logAction('pet_help')
+  emit('played', { action: 'pet_help' })
 }
 
-function undo() {
-  if (!props.garden.previous) return
-  emit('update:garden', { ...props.garden, board: props.garden.previous.slice(), previous: null })
-  message.value = '已经回到上一步。'
-  emit('played', { activity: 'garden', action: 'undo' })
-  nextTick(() => grid.value?.focus({ preventScroll: true }))
-}
-
-function harvest() {
-  const result = harvestGarden(props.garden.board)
-  if (!result.harvested) return
-  emit('update:garden', { ...props.garden, board: result.board, previous: null, harvests: props.garden.harvests + 1 })
-  message.value = `收获了一株${cropFor(result.tier).label}，田地留出了新的空间。`
-  emit('played', { activity: 'garden', action: 'harvest' })
-}
-
-function handleKeydown(event) {
-  const direction = { ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down', ArrowLeft: 'left' }[event.key]
-  if (!direction) return
-  event.preventDefault()
-  move(direction)
+function logAction(action, detail = '') {
+  logIslandBehavior('activity_finish', 'garden', action, { detail }).catch(() => {})
 }
 </script>
 
 <style scoped>
-.garden-game { display: grid; gap: 16px; color: #fff4df; }
-.activity-copy { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.activity-copy small { color: #ffd083; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
-.activity-copy h3 { margin: 4px 0 0; font-size: 24px; line-height: 1.2; }
-.activity-copy p { max-width: 58ch; margin: 7px 0 0; color: #f5d9bd; font-size: 14px; line-height: 1.55; }
-.activity-copy dl { display: flex; gap: 8px; margin: 0; }
-.activity-copy dl div { min-width: 88px; padding: 9px 12px; border: 1px solid rgba(255,224,187,.2); border-radius: 12px; background: #743f31; }
-.activity-copy dt { color: #f0c7a6; font-size: 11px; }
-.activity-copy dd { margin: 3px 0 0; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.garden-playfield { display: grid; grid-template-columns: minmax(340px, 520px) 180px; gap: 18px; align-items: center; }
-.merge-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px; border: 1px solid #b66f4e; border-radius: 18px; background: #683c2f; box-shadow: inset 0 0 0 1px rgba(255,224,187,.08), 0 18px 42px rgba(55,25,25,.25); }
-.merge-cell { aspect-ratio: 1; display: grid; align-content: center; justify-items: center; gap: 3px; min-width: 0; border: 1px solid rgba(255,233,198,.16); border-radius: 13px; color: #3b2b24; background: #91583f; transition: transform 180ms cubic-bezier(.25,1,.5,1), background 180ms ease; }
-.merge-cell.is-empty { background: #764735; box-shadow: inset 0 4px 0 rgba(57,31,26,.2); }
-.merge-cell:not(.is-empty) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 7px 12px rgba(42,23,18,.2); }
-.merge-cell.is-tier-1 { background: #c6c47a; }
-.merge-cell.is-tier-2 { background: #94ad67; }
-.merge-cell.is-tier-3 { background: #f0c276; }
-.merge-cell.is-tier-4 { background: #ef9b58; }
-.merge-cell.is-tier-5 { background: #ffd36d; }
-.merge-cell.is-tier-6 { background: #ffe6a4; }
-.crop-pixel { display: grid; width: 38px; height: 38px; place-items: center; border: 2px solid currentColor; border-radius: 10px 4px 10px 4px; font-size: 17px; font-weight: 900; image-rendering: pixelated; }
-.merge-cell small { font-size: 10px; font-weight: 800; }
-.garden-tools { display: grid; gap: 10px; }
-.direction-pad { display: grid; grid-template-columns: repeat(3, 48px); justify-content: center; gap: 6px; }
-.direction-pad button { width: 48px; height: 48px; border: 1px solid #d58f67; border-radius: 12px; color: #fff4df; background: #7e4938; font: inherit; font-size: 19px; cursor: pointer; }
-.direction-pad button:first-child { grid-column: 2; }
-.direction-pad button:nth-child(2) { grid-column: 1; grid-row: 2; }
-.direction-pad button:nth-child(3) { grid-column: 2; grid-row: 2; }
-.direction-pad button:nth-child(4) { grid-column: 3; grid-row: 2; }
-.tool-button, .harvest-button { min-height: 44px; padding: 0 12px; border: 1px solid #d58f67; border-radius: 12px; color: #fff4df; background: #7e4938; font: inherit; font-weight: 800; cursor: pointer; }
-.harvest-button { color: #4a2b22; background: #ffd083; }
-button:disabled { opacity: .48; cursor: not-allowed; }
-.activity-status { min-height: 24px; margin: 0; color: #f5d9bd; font-size: 13px; line-height: 1.5; }
-button:focus-visible, .merge-grid:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
-@media (max-width: 900px) { .garden-playfield { grid-template-columns: 1fr; } .garden-tools { grid-template-columns: auto 1fr 1fr; } .activity-copy dl { display: none; } }
-@media (prefers-reduced-motion: reduce) { .merge-cell { transition: none; } }
+.garden-simple {
+  color: #fff4df;
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+.garden-header { margin-bottom: 16px; }
+.garden-header small { color: #ffd083; font-size: 11px; font-weight: 800; }
+.garden-header h3 { margin: 4px 0 0; font-size: 20px; }
+.garden-header p { margin: 6px 0 0; color: #f5d9bd; font-size: 12px; line-height: 1.6; max-width: 50ch; }
+
+.garden-body { display: grid; gap: 12px; }
+
+.garden-tools {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.garden-tools button {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px;
+  border: 1px solid rgba(255,224,187,.2);
+  border-radius: 10px;
+  color: #f8dfc4; background: #643d34;
+  font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.garden-tools button:hover { background: #754a3f; }
+.garden-tools button.active { border-color: #ffd083; background: #85543f; }
+.tool-icon { font-size: 16px; }
+
+.seed-selector {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px; border-radius: 10px;
+  background: rgba(92,57,50,.6);
+}
+.seed-selector > span { font-size: 11px; color: #efc5a8; }
+.seed-selector button {
+  display: flex; align-items: center; gap: 5px;
+  min-height: 32px; padding: 0 10px;
+  border: 1px solid transparent; border-radius: 8px;
+  color: #f8dfc4; background: #765044;
+  font: inherit; font-size: 11px; cursor: pointer;
+}
+.seed-selector button.active { border-color: #ffd083; }
+.seed-selector i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.garden-plots {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.plot {
+  position: relative;
+  min-height: 100px;
+  border: 2px solid #5a3829;
+  border-radius: 10px;
+  background: #806044;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all .2s;
+  padding: 0;
+}
+.plot:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.plot.soil-grass { background: linear-gradient(#718d54 0 35%, #77563d 35%); }
+.plot.soil-tilled { background: linear-gradient(#6B4423 0 35%, #5a3829 35%); }
+.plot.watered { box-shadow: inset 0 0 0 3px #77a8b1; }
+.plot.mature { border-color: #e9bc64; }
+
+.plant {
+  position: absolute; left: 50%; bottom: 28px;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+}
+.stem {
+  width: 4px; background: #6f9c63;
+  height: var(--growth);
+  min-height: 10px;
+}
+.leaves {
+  width: 20px; height: 14px;
+  background: var(--crop-color);
+  border-radius: 50% 50% 0 0;
+  margin-top: -2px;
+  box-shadow: -8px 4px 0 #6f9c63, 8px 4px 0 #6f9c63;
+}
+.flower {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  margin-top: -8px;
+  box-shadow: 0 0 8px currentColor;
+}
+.water-drop {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 14px;
+}
+.plot > small {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 5px;
+  background: rgba(45,28,20,.76);
+  font-size: 9px; font-weight: 700;
+  color: #fff1db;
+}
+
+.garden-message {
+  margin: 0; padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.08);
+  color: #f5d9bd; font-size: 12px; line-height: 1.5;
+}
+
+.pet-help-btn {
+  justify-self: start;
+  min-height: 38px; padding: 0 18px;
+  border: 0; border-radius: 10px;
+  background: #acd2ad; color: #2d4a2d;
+  font: inherit; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.pet-help-btn:hover:not(:disabled) { background: #b8ddb9; }
+.pet-help-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .garden-plots { grid-template-columns: repeat(2, 1fr); }
+}
 </style>

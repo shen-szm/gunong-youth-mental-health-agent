@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
+  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'trend-full': route.path === '/trend', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
     <router-view class="page-content" />
     <div class="build-badge" :title="buildTitle">v{{ appVersion }}</div>
     <!-- 房间主页和管理后台不显示底部导航 -->
@@ -30,10 +30,9 @@ import { useRoute, useRouter } from "vue-router";
 const route = useRoute();
 const router = useRouter();
 const appVersion = import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || "local";
-const buildTime = import.meta.env.VITE_BUILD_TIME || "dev";
-const buildTitle = `咕哝 build ${appVersion} / ${buildTime}`;
-
-console.info('[咕哝] build', { version: appVersion, time: buildTime });
+const buildTime = import.meta.env.VITE_BUILD_TIME || "";
+const buildTitle = `咕哝 ${appVersion}`;
+console.info('[咕哝] build', { version: appVersion, buildTime });
 </script>
 
 <style scoped>
@@ -80,6 +79,10 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   padding-bottom: 0;
   box-shadow: none !important;
   background: #f3f6f4;
+}
+.trend-full {
+  max-width: 100% !important;
+  box-shadow: none !important;
 }
 .guardian-full .page-content {
   padding: 0;
@@ -170,6 +173,7 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 .room-full .build-badge {
   bottom: 8px;
 }
+.trend-full .bottom-nav { max-width: 960px; left: 50%; transform: translateX(-50%); }
 @media (max-width: 760px) {
   .room-full .build-badge {
     right: 8px;

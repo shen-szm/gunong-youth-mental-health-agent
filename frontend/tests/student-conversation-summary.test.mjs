@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const room = fs.readFileSync(new URL('../src/views/RoomHomeView.vue', import.meta.url), 'utf8')
 const api = fs.readFileSync(new URL('../src/api/chat.js', import.meta.url), 'utf8')
+const moodApi = fs.readFileSync(new URL('../src/api/mood.js', import.meta.url), 'utf8')
 const backend = fs.readFileSync(new URL('../../backend/api/chat.py', import.meta.url), 'utf8')
 
 test('ordinary student messages never directly open the summary drawer', () => {
@@ -41,4 +42,17 @@ test('backend uses whole-session strict non-clinical summary workflow', () => {
   assert.match(backend, /extra="forbid"/)
   assert.match(backend, /不是心理诊断或量表结果/)
   assert.match(backend, /SUMMARY_TTL_DAYS = 30/)
+})
+
+test('student emotion report combines constrained conversation signals and explicit activity feedback', () => {
+  assert.match(room, /externalAiConsent/)
+  assert.match(room, /student-ai-v1/)
+  assert.match(room, /emotion_intensity/)
+  assert.match(room, /emotion_basis/)
+  assert.match(room, /getEmotionReport\(30\)/)
+  assert.match(room, /reportData\.sources/)
+  assert.match(room, /latest_conversation\.trajectory/)
+  assert.match(moodApi, /baseURL: "\/api\/mood"/)
+  assert.match(moodApi, /post\('\/activity-reflection'/)
+  assert.match(moodApi, /get\('\/report'/)
 })

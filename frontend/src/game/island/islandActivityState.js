@@ -1,11 +1,14 @@
-import { createGardenBoard, normalizeGardenBoard } from './gardenMergeEngine.js'
+import { createGardenLifeState, normalizeGardenLifeState } from './gardenLifeEngine.js'
 
 export const HAPPINESS_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export const FISH_TYPES = Object.freeze([
-  { id: 'silver', label: '银尾小鱼', rarity: '常见' },
-  { id: 'square', label: '方鳍鱼', rarity: '少见' },
-  { id: 'moon', label: '月光鱼', rarity: '稀有' },
+  { id: 'silver', label: '银尾小鱼', rarity: '常见', habitat: '近岸' },
+  { id: 'sun', label: '暖阳鱼', rarity: '常见', habitat: '白天' },
+  { id: 'square', label: '方鳍鱼', rarity: '少见', habitat: '深水' },
+  { id: 'cloud', label: '云斑鱼', rarity: '少见', habitat: '傍晚' },
+  { id: 'moon', label: '月光鱼', rarity: '稀有', habitat: '夜晚' },
+  { id: 'star', label: '星愿鱼', rarity: '稀有', habitat: '完美抛竿' },
 ])
 
 export const HAPPINESS_CARDS = Object.freeze([
@@ -24,8 +27,8 @@ export function activityStorageKey(scope) {
 
 export function createActivityState() {
   return {
-    garden: { board: createGardenBoard(), previous: null, score: 0, harvests: 0, moves: 0 },
-    fishing: { catches: 0, fishBook: Object.fromEntries(FISH_TYPES.map(fish => [fish.id, 0])) },
+    garden: createGardenLifeState(),
+    fishing: { catches: 0, coins: 0, bait: 'bread', bestPrecision: 0, fishBook: Object.fromEntries(FISH_TYPES.map(fish => [fish.id, 0])) },
     happiness: { exchanges: 0, notes: [], cardIndex: 0 },
     reflection: '',
   }
@@ -43,15 +46,12 @@ export function normalizeActivityState(saved = {}, now = Date.now()) {
     return cleaned ? [{ text: cleaned, createdAt }] : []
   }).slice(-12)
   return {
-    garden: {
-      board: normalizeGardenBoard(saved.garden?.board),
-      previous: Array.isArray(saved.garden?.previous) ? normalizeGardenBoard(saved.garden.previous) : null,
-      score: Math.max(0, Number(saved.garden?.score) || 0),
-      harvests: Math.max(0, Number(saved.garden?.harvests) || 0),
-      moves: Math.max(0, Number(saved.garden?.moves) || 0),
-    },
+    garden: normalizeGardenLifeState(saved.garden),
     fishing: {
       catches: Math.max(0, Number(saved.fishing?.catches) || 0),
+      coins: Math.max(0, Number(saved.fishing?.coins) || 0),
+      bait: ['bread', 'berry', 'glow'].includes(saved.fishing?.bait) ? saved.fishing.bait : 'bread',
+      bestPrecision: Math.max(0, Math.min(100, Number(saved.fishing?.bestPrecision) || 0)),
       fishBook: Object.fromEntries(FISH_TYPES.map(fish => [fish.id, Math.max(0, Number(saved.fishing?.fishBook?.[fish.id]) || 0)])),
     },
     happiness: {
@@ -59,7 +59,7 @@ export function normalizeActivityState(saved = {}, now = Date.now()) {
       notes: currentNotes,
       cardIndex: Math.max(0, Number(saved.happiness?.cardIndex) || 0) % HAPPINESS_CARDS.length,
     },
-    reflection: ['lighter', 'same', 'switch'].includes(saved.reflection) ? saved.reflection : '',
+    reflection: ['lighter', 'same', 'energized', 'more_tense'].includes(saved.reflection) ? saved.reflection : '',
   }
 }
 

@@ -1068,6 +1068,30 @@
             </button>
           </div>
 
+          <div v-if="reportLoading" class="trend-agent-report report-loading" role="status">
+            <div class="loading-orb"></div><p>Agent 正在整理对话线索与主动反馈…</p>
+          </div>
+          <section v-else-if="reportData" class="trend-agent-report" aria-labelledby="trend-agent-report-title">
+            <div class="trend-agent-report-head">
+              <div><small>30天描述性整理</small><h3 id="trend-agent-report-title">Agent 情绪报告</h3></div>
+              <button type="button" @click="generateReport">重新整理</button>
+            </div>
+            <p class="report-summary">{{ reportData.overview }}</p>
+            <div class="report-source-grid">
+              <div><strong>{{ reportData.sources?.self_records || 0 }}</strong><small>主动记录/反馈</small></div>
+              <div><strong>{{ reportData.sources?.conversation_signals || 0 }}</strong><small>倾诉情绪线索</small></div>
+              <div><strong>{{ reportData.sources?.conversation_summary ? '已纳入' : '未生成' }}</strong><small>完整倾诉小结</small></div>
+            </div>
+            <ol v-if="reportData.timeline?.length" class="emotion-timeline" aria-label="近期情绪线索">
+              <li v-for="(item, i) in reportData.timeline.slice(0, 6)" :key="`${item.time}-${i}`"><span>{{ item.emotion }}</span><small>{{ item.source }} · {{ formatReportTime(item.time) }}</small></li>
+            </ol>
+            <ol v-if="reportData.latest_conversation?.trajectory?.length" class="conversation-trajectory" aria-label="最近一次倾诉的情绪变化">
+              <li v-for="point in reportData.latest_conversation.trajectory" :key="point.phase"><strong>{{ point.phase }} · {{ point.emotion }}</strong><p>{{ point.observation }}</p></li>
+            </ol>
+            <div class="trend-agent-next"><strong>当前可能更需要</strong><p>{{ reportData.support_focus }}</p><ul><li v-for="(step, i) in reportData.next_steps" :key="i">{{ step }}</li></ul></div>
+            <p class="report-boundary">{{ reportData.boundary }}</p>
+          </section>
+
           <!-- 空状态 -->
           <div class="empty-state" v-if="!trendStats.trend?.length && !Object.keys(trendStats.distribution||{}).length">
             <div class="empty-icon">🌿</div>
@@ -1216,13 +1240,17 @@
                 <p>今天怎么样？有什么想聊的，我都在这里。</p>
               </div>
             </div>
+            <label v-if="chatMessages.length === 0" class="chat-ai-consent">
+              <input v-model="externalAiConsent" type="checkbox" @change="updateChatAiConsent">
+              <span><strong>使用讯飞模型理解本次倾诉</strong><small>仅在本次会话内发送经过脱敏的最近对话；危机判断仍由后端安全规则优先处理，可不勾选继续聊天。</small></span>
+            </label>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
               <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
               <div class="bubble-wrap">
-                <div v-if="m.emotion" class="emotion-tag">
+                <div v-if="m.role === 'user' && m.emotion" class="emotion-tag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
                   <span>{{ getEmotionEmoji(m.emotion) }}</span>
-                  <span>{{ m.emotion }}</span>
+                  <span>{{ m.emotion }}{{ m.emotion_intensity && m.emotion_intensity !== '不确定' ? ` · ${m.emotion_intensity}` : '' }}</span>
                 </div>
                 <div class="bubble">
                   <span>{{ m.content }}</span>
@@ -1481,7 +1509,7 @@
           </div>
 
           <!-- 生成报告入口 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length > 0" class="report-intro">
+          <div v-if="!reportData && !reportLoading" class="report-intro">
             <div class="report-intro-quote">
               <span class="rq-mark">"</span>
               <p>每一段心情都值得被记录</p>
@@ -1523,25 +1551,37 @@
           <div v-if="reportData" class="report-content">
             <div class="report-section">
               <h3>🎯 情绪总览</h3>
-              <p class="report-summary">{{ reportData.summary }}</p>
+              <p class="report-summary">{{ reportData.overview }}</p>
             </div>
-            <div class="report-section" v-if="reportData.suggestions?.length">
-              <h3>💡 建议与关怀</h3>
+            <div class="report-section report-source-grid">
+              <h3>本次报告采用的线索</h3>
+              <div><strong>{{ reportData.sources?.self_records || 0 }}</strong><small>主动记录与活动后反馈</small></div>
+              <div><strong>{{ reportData.sources?.conversation_signals || 0 }}</strong><small>倾诉对话情绪线索</small></div>
+              <div><strong>{{ reportData.sources?.conversation_summary ? '已纳入' : '未生成' }}</strong><small>完整倾诉小结</small></div>
+            </div>
+            <div class="report-section" v-if="reportData.timeline?.length">
+              <h3>情绪变化线</h3>
+              <ol class="emotion-timeline"><li v-for="(item, i) in reportData.timeline" :key="`${item.time}-${i}`"><span>{{ item.emotion }}</span><small>{{ item.source }} · {{ formatReportTime(item.time) }}</small></li></ol>
+            </div>
+            <div class="report-section" v-if="reportData.latest_conversation?.trajectory?.length">
+              <h3>最近一次倾诉中的变化</h3>
+              <ol class="conversation-trajectory"><li v-for="point in reportData.latest_conversation.trajectory" :key="point.phase"><strong>{{ point.phase }} · {{ point.emotion }}</strong><p>{{ point.observation }}</p></li></ol>
+            </div>
+            <div class="report-section"><h3>当前可能更需要</h3><p class="report-summary">{{ reportData.support_focus }}</p></div>
+            <div class="report-section" v-if="reportData.next_steps?.length">
+              <h3>下一步</h3>
               <ul class="report-suggestions">
-                <li v-for="(s, i) in reportData.suggestions" :key="i">{{ s }}</li>
+                <li v-for="(s, i) in reportData.next_steps" :key="i">{{ s }}</li>
               </ul>
             </div>
-            <div class="report-section" v-if="reportData.positive_affirmation">
-              <h3>🌈 每日寄语</h3>
-              <p class="report-affirmation">「{{ reportData.positive_affirmation }}」</p>
-            </div>
+            <p class="report-boundary">{{ reportData.boundary }}</p>
             <button class="report-back-btn" @click="reportData = null">
               <span>←</span> 返回重新生成
             </button>
           </div>
 
           <!-- 空状态 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length === 0" class="report-empty">
+          <div v-if="false" class="report-empty">
             <div class="report-empty-art">
               <div class="re-seed">🌱</div>
               <div class="re-soil"></div>
@@ -1586,7 +1626,7 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
-import { getMoodStats, getMoodInsight } from '../api/mood'
+import { getMoodStats, getMoodInsight, getEmotionReport } from '../api/mood'
 import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
 import { isOfflineCompanionUrgent } from '../utils/companionSafety'
 import {
@@ -1740,6 +1780,10 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
   workspaceTrigger = trigger?.focus ? trigger : workspaceTrigger
   activeWorkspaceKey = key
   panel.value = true
+  if (key === 'report' || key === 'trend') {
+    reportData.value = null
+    generateReport()
+  }
   nextTick(() => {
     const focusTarget = document.querySelector(`[data-workspace="${key}"] .panel-close, [data-workspace="${key}"] .pet-panel-close`)
     focusWithoutScroll(focusTarget)
@@ -2437,47 +2481,23 @@ const reportLoading = ref(false)
 async function generateReport() {
   reportLoading.value = true
   try {
-    // 使用已有的情绪数据生成报告
-    const res = await getMoodStats({ period: 30 })
-    const distribution = res.distribution || {}
-    const count = res.count || 0
-
-    const topMood = Object.entries(distribution).sort((a, b) => b[1] - a[1])[0]
-    const topMoodLabel = topMood ? topMood[0] : '暂无'
-    const topMoodCount = topMood ? topMood[1] : 0
-
-    const suggestions = ['从最近一条记录开始，补充当时发生了什么和你希望获得的支持']
-    if (topMoodLabel === '焦虑' || topMoodLabel === '紧张') {
-      suggestions.push('如果你愿意，可以试试治愈空间的短时呼吸练习，留意它是否适合此刻的你')
-    }
-    if (topMoodLabel === '悲伤' || topMoodLabel === '低落') {
-      suggestions.push('可以继续倾诉，或告诉一位你信任的人现在更希望被怎样陪伴')
-    }
-
-    const affirmations = [
-      '你已经做得很好了，不必对自己太苛刻',
-      '每一天都是新的开始，你值得被温柔以待',
-      '感到疲惫也没关系，休息也是前进的一种方式',
-      '你的存在本身就有意义',
-      '慢慢来，比较快'
-    ]
-
-    reportData.value = {
-      summary: count
-        ? `近30天保存了 ${count} 次学生主动记录，出现较多的自报或系统归纳标签是「${topMoodLabel}」（${topMoodCount} 次）。这只是对已有记录的描述性整理，不是心理测评，也不能代表整体心理状态。`
-        : '近30天暂时没有可整理的主动记录。这不代表任何心理状态，也不是心理测评结果。',
-      suggestions,
-      positive_affirmation: affirmations[Math.floor(Math.random() * affirmations.length)]
-    }
+    const res = await getEmotionReport(30)
+    reportData.value = res.data
   } catch (e) {
     console.error('生成报告失败:', e)
     reportData.value = {
-      summary: '暂无足够的情绪数据来生成报告，请先多倾诉几次吧。',
-      suggestions: ['去和咕哝聊聊天，记录你的情绪'],
-      positive_affirmation: '每一步都算数，你正在路上。'
+      overview: '报告暂时没有生成成功，现有记录没有丢失。',
+      sources: {}, timeline: [], next_steps: ['稍后重试，或先继续倾诉和主动记录'],
+      support_focus: '先保留你的原始感受，不根据本次失败做任何判断。',
+      boundary: '这不是心理测评或医学结论。'
     }
   }
   reportLoading.value = false
+}
+
+function formatReportTime(value) {
+  const date = new Date(value)
+  return !value || Number.isNaN(date.getTime()) ? '时间未知' : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 // ═══ 出去看看 — 交通工具 & 城市 ═══
@@ -3669,6 +3689,7 @@ function goProfile() { openProfile() }
 
 // ═══ 聊天面板 ═══
 const chatInput = ref('')
+const externalAiConsent = ref(false)
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const chatInputPlaceholder = computed(() => isFirstRunChatPending.value ? '把今天最想说的一句话丢给我' : '说说你的感受...')
@@ -3730,7 +3751,10 @@ function onQuickMouseUp() {
 }
 
 function getEmotionEmoji(emotion) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴' }
+  const map = {
+    '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴',
+    '孤独': '🌙', '委屈': '💧', '害怕': '🫧', '复杂': '🌀', '不确定': '…',
+  }
   return map[emotion] || '🙂'
 }
 
@@ -3740,6 +3764,7 @@ async function sendChatMsg(text) {
   chatInput.value = ''
   showEndConfirmation.value = false
   chatMessages.value.push({ role: 'user', content: msg })
+  const userMessageIndex = chatMessages.value.length - 1
   studentAgentState.status = 'running'
   studentAgentState.phase = 'chat'
   studentAgentState.verifiedSteps = []
@@ -3750,13 +3775,18 @@ async function sendChatMsg(text) {
   chatLoading.value = true
   try {
     if (!chatSessionId.value) {
-      const session = await startChatSession(false)
+      const session = await startChatSession(false, null, externalAiConsent.value ? 'student-ai-v1' : null)
       chatSessionId.value = session.data.session_id
     }
     const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value)
     await nextTick()
     if (res.data?.reply) {
-      chatMessages.value.push({ role: 'assistant', content: res.data.reply, emotion: res.data.emotion })
+      chatMessages.value[userMessageIndex] = {
+        ...chatMessages.value[userMessageIndex], emotion: res.data.emotion,
+        emotion_intensity: res.data.emotion_intensity, emotion_basis: res.data.emotion_basis,
+        analysis_source: res.data.analysis_source,
+      }
+      chatMessages.value.push({ role: 'assistant', content: res.data.reply })
       chatSessionId.value = res.data.session_id || chatSessionId.value
       completeFirstRunAfterChat(msg, res.data)
       showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
@@ -4146,6 +4176,7 @@ async function openChatPanel() {
   try {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
     applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     if (res.data?.length) chatMessages.value = res.data
@@ -4155,6 +4186,17 @@ async function openChatPanel() {
   if (leisureSafetyHandoffFailed.value) {
     applyChatSessionStatus('urgent')
     safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
+  }
+}
+
+async function updateChatAiConsent() {
+  if (!externalAiConsent.value || chatMessages.value.some(item => item.role === 'user')) return
+  try {
+    const session = await startChatSession(false, null, 'student-ai-v1')
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+  } catch {
+    externalAiConsent.value = false
   }
 }
 
@@ -5005,6 +5047,30 @@ onUnmounted(() => {
 .report-suggestions li::before {
   content: '•'; position: absolute; left: 0; color: #7FB3A6;
 }
+.report-source-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.report-source-grid h3 { grid-column: 1 / -1; }
+.report-source-grid > div { padding: 10px; border-radius: 10px; background: rgba(127,179,166,.08); }
+.report-source-grid strong,.report-source-grid small { display: block; }
+.report-source-grid strong { color: #E8C468; font-size: 15px; }
+.report-source-grid small { margin-top: 3px; color: rgba(232,226,216,.62); font-size: 10px; line-height: 1.45; }
+.emotion-timeline,.conversation-trajectory { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.emotion-timeline li { display: grid; grid-template-columns: 78px 1fr; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.035); }
+.emotion-timeline span { color: #B8D8CA; font-size: 12px; font-weight: 800; }
+.emotion-timeline small { color: rgba(232,226,216,.62); font-size: 10px; }
+.conversation-trajectory { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.conversation-trajectory li { padding: 10px; border-left: 3px solid #7FB3A6; border-radius: 8px; background: rgba(127,179,166,.07); }
+.conversation-trajectory strong { color: #E8E2D8; font-size: 11px; }
+.conversation-trajectory p { margin: 4px 0 0; color: rgba(232,226,216,.64); font-size: 10px; line-height: 1.5; }
+.report-boundary { margin: 0; color: rgba(232,226,216,.5); font-size: 10px; line-height: 1.6; }
+.trend-agent-report { display: grid; gap: 12px; margin: 14px 0 18px; padding: 15px; border: 1px solid rgba(184,216,202,.2); border-radius: 16px; background: linear-gradient(145deg,rgba(127,179,166,.12),rgba(95,79,112,.1)); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+.trend-agent-report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.trend-agent-report-head small { color: #9dcabb; font-size: 10px; }
+.trend-agent-report-head h3 { margin: 3px 0 0; color: #f1ece4; font-size: 16px; }
+.trend-agent-report-head button { min-height: 34px; padding: 0 11px; border: 1px solid rgba(184,216,202,.25); border-radius: 9px; color: #d8eee5; background: rgba(127,179,166,.12); cursor: pointer; }
+.trend-agent-next { padding: 11px; border-radius: 11px; background: rgba(255,255,255,.035); }
+.trend-agent-next strong { color: #e8e2d8; font-size: 12px; }
+.trend-agent-next p,.trend-agent-next li { color: rgba(232,226,216,.68); font-size: 11px; line-height: 1.6; }
+.trend-agent-next p { margin: 5px 0; }.trend-agent-next ul { margin: 0; padding-left: 18px; }
 .report-affirmation {
   font-size: 14px; color: #E8C468; font-style: italic;
   text-align: center; line-height: 1.8;
@@ -6050,6 +6116,11 @@ onUnmounted(() => {
 }
 .chat-panel .welcome-bubble p { margin: 0; font-size: 14px; line-height: 1.6; color: #E0D8CE; }
 .chat-panel .welcome-bubble p + p { margin-top: 6px; }
+.chat-ai-consent { display: flex; align-items: flex-start; gap: 10px; margin: -8px 42px 18px; padding: 11px 12px; border: 1px solid rgba(188,217,202,.18); border-radius: 12px; color: rgba(232,226,216,.78); background: rgba(143,185,166,.07); cursor: pointer; }
+.chat-ai-consent input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; accent-color: #8fb9a6; }
+.chat-ai-consent strong,.chat-ai-consent small { display: block; }
+.chat-ai-consent strong { color: #dce9e1; font-size: 11px; }
+.chat-ai-consent small { margin-top: 3px; font-size: 9px; line-height: 1.5; }
 
 /* 消息行 */
 .chat-panel .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 16px; }

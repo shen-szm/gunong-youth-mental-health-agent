@@ -2,14 +2,8 @@
 
 This project uses the following open-source runtime components in the student Heart Island workspace. The island map, player graphic, markers and interface artwork remain project-specific; no Phaser example assets, telemetry scripts or third-party game artwork were copied.
 
-## 2048 garden rule adaptation
-
-- Project: <https://github.com/gabrielecirulli/2048>
-- License: MIT
-- Use: the direction traversal and single-merge-per-move model was selectively adapted in `frontend/src/game/island/gardenMergeEngine.js`; the crop tiers, harvest loop, state format, UI and tests are Heart Island-specific.
-- Copyright: Copyright (c) 2014 Gabriele Cirulli
-
-The original MIT license is reproduced in `licenses/2048-LICENSE.txt` and is available at <https://github.com/gabrielecirulli/2048/blob/master/LICENSE.txt>.
+The current island farming loop is original project code. The earlier 2048-derived
+garden is no longer imported or presented in the product as of 5.1.0-alpha.13.
 
 ## Swiper 12.2.0
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { canMoveGarden, createGardenBoard, harvestGarden, moveGarden } from '../src/game/island/gardenMergeEngine.js'
+import { actOnGardenPlot, createGardenLifeState, fulfillGardenOrder, usePetGardenHelp } from '../src/game/island/gardenLifeEngine.js'
 import { activityStorageKey, loadActivityState, normalizeActivityState, saveActivityState } from '../src/game/island/islandActivityState.js'
 
 const workspaceUrl = new URL('../src/components/island/StudentIslandWorkspace.vue', import.meta.url)
@@ -11,19 +11,31 @@ const happinessUrl = new URL('../src/components/island/IslandHappinessExchange.v
 const fishingGameUrl = new URL('../src/game/island/createFishingGame.js', import.meta.url)
 const packageUrl = new URL('../package.json', import.meta.url)
 
-test('2048-adapted garden engine merges once per move and supports harvesting', () => {
-  const board = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  const result = moveGarden(board, 'left', () => 0)
-  assert.deepEqual(result.board.slice(0, 4), [2, 2, 1, 0])
-  assert.equal(result.merges, 2)
-  assert.equal(result.moved, true)
-  assert.equal(canMoveGarden(result.board), true)
-  const mature = [6, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  const harvested = harvestGarden(mature)
-  assert.equal(harvested.harvested, true)
-  assert.equal(harvested.tier, 6)
-  assert.equal(harvested.board.includes(6), false)
-  assert.equal(createGardenBoard(() => 0).filter(Boolean).length >= 1, true)
+test('garden life engine supports tilling planting growth harvesting orders and pet help', () => {
+  let state = createGardenLifeState()
+  state = actOnGardenPlot(state, 0, 'hoe').state
+  state = actOnGardenPlot(state, 0, 'seed', 'sunflower').state
+  state = actOnGardenPlot(state, 0, 'water').state
+  assert.equal(state.plots[0].crop, 'sunflower')
+  assert.equal(state.plots[0].watered, true)
+  const helped = usePetGardenHelp(state)
+  assert.equal(helped.changed, true)
+  state = helped.state
+  for (let index = 1; index < 8; index += 1) state = actOnGardenPlot(state, index, 'hoe').state
+  state.plots[0].stage = 3
+  state = actOnGardenPlot(state, 0, 'harvest').state
+  assert.equal(state.harvests, 1)
+  state.produce.sunflower = 2
+  assert.equal(fulfillGardenOrder(state).changed, true)
+})
+
+test('garden actions accept Vue-style proxy state without mutating the source', () => {
+  const source = createGardenLifeState()
+  const reactiveLikeState = new Proxy(source, {})
+  const result = actOnGardenPlot(reactiveLikeState, 0, 'hoe')
+  assert.equal(result.changed, true)
+  assert.equal(result.state.plots[0].soil, 'tilled')
+  assert.equal(source.plots[0].soil, 'grass')
 })
 
 test('activity saves are student-scoped and expire happiness text after 30 days', () => {
@@ -57,14 +69,20 @@ test('heart island embeds three full game workflows and audited open-source runt
   assert.match(workspace, /IslandGardenGame/)
   assert.match(workspace, /IslandFishingGame/)
   assert.match(workspace, /IslandHappinessExchange/)
-  assert.match(garden, /向上合并/)
-  assert.match(garden, /撤销一步/)
+  assert.match(garden, /岛民委托/)
+  assert.match(garden, /请咕团帮忙浇水/)
+  assert.doesNotMatch(garden, /合并种植|向上合并|2048/)
   assert.match(fishingGame, /Phaser\.Scene/)
   assert.match(fishingGame, /this\.time\.delayedCall/)
-  assert.match(fishing, /按住收线/)
+  assert.match(fishing, /控落点、抢提竿、稳住鱼线/)
   assert.match(happiness, /from 'swiper\/vue'/)
   assert.match(happiness, /place-self: center/)
   assert.match(happiness, /isOfflineCompanionUrgent/)
   assert.match(happiness, /卡片由系统预写，不是其他学生的实时分享/)
   assert.doesNotMatch(workspace, /经典休闲角<\/button>/)
+})
+
+test('clicking the current island destination immediately opens its arrival interaction', async () => {
+  const islandGame = await readFile(new URL('../src/game/island/createIslandGame.js', import.meta.url), 'utf8')
+  assert.match(islandGame, /if \(!this\.target\) this\.interact\(\)/)
 })

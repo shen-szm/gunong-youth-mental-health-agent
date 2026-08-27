@@ -20,7 +20,7 @@ from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
 
 
@@ -170,6 +170,33 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="view_student_support_profile", actor_user_id=self.admin_id).count(), 1)
         finally:
             db.close()
+
+    def test_urgent_student_assessment_enters_minimum_safety_path(self):
+        db = self.Session()
+        try:
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-URGENT-TEST",
+                user_id=self.student_id,
+                answers_json="{}",
+                result_json='{"risk_label":"需要立即协助","emotion_summary":"学生主动安全回答需要立即支持","domains":[],"support_needs":[]}',
+                risk_level="urgent",
+                review_status="needs_professional_review",
+                expires_at=datetime.now() + timedelta(days=30),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        warning = self.teacher_client.get("/api/teacher/warning-list")
+        item = next(row for row in warning.json()["warnings"] if row["student_id"] == self.student_id)
+        self.assertTrue(item["urgent"])
+        self.assertIn("危机", item["reason"])
+        detail = self.teacher_client.get(f"/api/teacher/warning/{self.student_id}/detail")
+        self.assertTrue(detail.json()["urgent"])
+        direct = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(direct.status_code, 200)
+        self.assertEqual(direct.json()["risk"], "urgent")
+        self.assertTrue(any(item.startswith("assessment-") for item in direct.json()["observation"]["trigger_evidence_ids"]))
 
     def test_warning_followup_persists_until_a_new_student_record(self):
         initial = self.teacher_client.get("/api/teacher/warning-list")

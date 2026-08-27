@@ -16,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 import api.chat as chat_api
 from api.chat import NON_DIAGNOSTIC_BOUNDARY, _detect_emotion, _detect_end_candidate, _unsafe_generated_chat_reply, router as chat_router
+from api.mood import router as mood_router
 from api.user import router as user_router
 from config import Settings, settings
 from database import Base, get_db
@@ -37,6 +38,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(user_router)
         self.app.include_router(chat_router)
+        self.app.include_router(mood_router)
 
         def override_db():
             db = self.Session()
@@ -199,6 +201,61 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         }).json()
         self.assertEqual(response["risk_level"], "watch")
         self.assertIn('"risk_level": "watch"', str(mock.await_args_list[0]))
+
+    def test_constrained_xunfei_emotion_and_activity_reflection_reach_report(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        chat_api.ask_spark = AsyncMock(return_value=json.dumps({
+            "emotion": "委屈",
+            "intensity": "明显",
+            "evidence": ["好像没人愿意听我说"],
+            "support_need": "被倾听",
+            "reply": "被忽略的感觉很难受。我会先听你说；你愿意从今天最委屈的一件事开始吗？",
+        }, ensure_ascii=False))
+        session_id = self.client_one.post("/api/chat/sessions", json={
+            "force_new": True, "external_ai_consent_version": "student-ai-v1"
+        }).json()["session_id"]
+        response = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_one_id, "session_id": session_id,
+            "message": "今天在小组里好像没人愿意听我说"
+        }).json()
+        self.assertEqual(response["emotion"], "委屈")
+        self.assertEqual(response["emotion_intensity"], "不确定")
+        self.assertEqual(response["analysis_source"], "xunfei_constrained")
+        self.assertEqual(response["emotion_basis"], ["好像没人愿意听我说"])
+
+        reflection = self.client_one.post("/api/mood/activity-reflection", json={
+            "activity": "garden", "feeling": "lighter", "note": "照料完一小块地"
+        })
+        self.assertEqual(reflection.status_code, 200)
+        report = self.client_one.get("/api/mood/report?days=30").json()
+        self.assertEqual(report["sources"]["conversation_signals"], 1)
+        self.assertEqual(report["sources"]["self_records"], 1)
+        self.assertTrue(any(item["emotion"] == "委屈" for item in report["timeline"]))
+        self.assertTrue(any(item["source"] == "活动后主动反馈" for item in report["timeline"]))
+        self.assertIn("非诊断性", report["boundary"])
+
+    def test_model_emotion_needs_semantically_matching_evidence(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        chat_api.ask_spark = AsyncMock(return_value=json.dumps({
+            "emotion": "害怕", "intensity": "强烈", "evidence": ["今天完成了作业"],
+            "support_need": "被倾听", "reply": "我会听你说。",
+        }, ensure_ascii=False))
+        session_id = self.client_one.post("/api/chat/sessions", json={
+            "force_new": True, "external_ai_consent_version": "student-ai-v1",
+        }).json()["session_id"]
+        response = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_one_id, "session_id": session_id,
+            "message": "今天完成了作业",
+        }).json()
+        self.assertNotEqual(response["emotion"], "害怕")
+        self.assertEqual(response["emotion_intensity"], "不确定")
+        self.assertEqual(response["analysis_source"], "deterministic")
 
     def test_production_settings_reject_insecure_demo_cookie_defaults(self):
         with self.assertRaises(ValueError):

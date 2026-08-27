@@ -1,6 +1,7 @@
 """教师工作台 API：最小支持摘要、个案查看申请、审批与原文审计访问。"""
 
 from datetime import datetime, timedelta
+import json
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from auth import require_admin_teacher, require_teacher
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
 
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
@@ -162,7 +163,14 @@ def _has_urgent_signal(db: Session, student_id: int, since: datetime | None = No
         ChatMessage.role == "user",
         ChatMessage.created_at >= since,
     ).all()
-    return any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
+    urgent_assessment = db.query(StudentWellbeingAssessment.id).filter(
+        StudentWellbeingAssessment.user_id == student_id,
+        StudentWellbeingAssessment.created_at >= since,
+        StudentWellbeingAssessment.risk_level == "urgent",
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > datetime.now(),
+    ).first()
+    return bool(urgent_assessment) or any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
 
 
 def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tuple[str, datetime | None]:
@@ -172,7 +180,12 @@ def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tupl
         ChatMessage.user_id == student_id,
         ChatMessage.role == "user",
     ).order_by(ChatMessage.created_at.desc()).first()
-    signal_times = [item.created_at for item in (latest_mood, latest_chat) if item and item.created_at]
+    latest_assessment = db.query(StudentWellbeingAssessment).filter(
+        StudentWellbeingAssessment.user_id == student_id,
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > datetime.now(),
+    ).order_by(StudentWellbeingAssessment.created_at.desc()).first()
+    signal_times = [item.created_at for item in (latest_mood, latest_chat, latest_assessment) if item and item.created_at]
     latest_signal_at = max(signal_times) if signal_times else None
     latest_followup = db.query(SensitiveAccessLog).filter(
         SensitiveAccessLog.actor_user_id == teacher.id,
@@ -188,14 +201,22 @@ def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tupl
 def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
     since = datetime.now() - timedelta(days=30)
     moods = db.query(MoodRecord).filter(MoodRecord.user_id == student_id, MoodRecord.created_at >= since).all()
+    latest_assessment = db.query(StudentWellbeingAssessment).filter(
+        StudentWellbeingAssessment.user_id == student_id,
+        StudentWellbeingAssessment.created_at >= since,
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > datetime.now(),
+    ).order_by(StudentWellbeingAssessment.created_at.desc()).first()
+    if latest_assessment and latest_assessment.risk_level in {"urgent", "professional"}:
+        return "high", 0.0, len(moods)
+    if latest_assessment and latest_assessment.risk_level == "watch":
+        return "middle", 0.0, len(moods)
     if _has_urgent_signal(db, student_id, since):
-        avg = round(sum(item.mood_score for item in moods) / len(moods), 1) if moods else 0.0
-        return "high", avg, len(moods)
+        return "high", 0.0, len(moods)
     if not moods:
         return "low", 0.0, 0
-    avg = round(sum(item.mood_score for item in moods) / len(moods), 1)
     negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in moods)
-    return ("high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"), avg, len(moods)
+    return ("high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"), 0.0, len(moods)
 
 
 @router.get("/class-overview")
@@ -452,7 +473,14 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
                 ChatMessage.created_at > existing_direct_snapshot.content_cutoff,
                 ChatMessage.created_at <= incremental_cutoff,
             ).all()
-            has_new_urgent_signal = any(_context_has_urgent_meaning(item.content or "") for item in [*new_moods, *new_chats])
+            new_urgent_assessment = db.query(StudentWellbeingAssessment.id).filter(
+                StudentWellbeingAssessment.user_id == student_id,
+                StudentWellbeingAssessment.created_at > existing_direct_snapshot.content_cutoff,
+                StudentWellbeingAssessment.created_at <= incremental_cutoff,
+                StudentWellbeingAssessment.risk_level == "urgent",
+                StudentWellbeingAssessment.deleted_at.is_(None),
+            ).first()
+            has_new_urgent_signal = bool(new_urgent_assessment) or any(_context_has_urgent_meaning(item.content or "") for item in [*new_moods, *new_chats])
             cutoff = incremental_cutoff if has_new_urgent_signal else existing_direct_snapshot.content_cutoff
     elif approved is not None:
         safety_check_at = datetime.now()
@@ -467,7 +495,15 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
             ChatMessage.created_at > cutoff,
             ChatMessage.created_at <= safety_check_at,
         ).all()
+        post_approval_assessments = db.query(StudentWellbeingAssessment).filter(
+            StudentWellbeingAssessment.user_id == student_id,
+            StudentWellbeingAssessment.created_at > cutoff,
+            StudentWellbeingAssessment.created_at <= safety_check_at,
+            StudentWellbeingAssessment.risk_level == "urgent",
+            StudentWellbeingAssessment.deleted_at.is_(None),
+        ).all()
         urgent_after_approval = [item for item in [*post_approval_moods, *post_approval_chats] if _context_has_urgent_meaning(item.content or "")]
+        urgent_after_approval.extend(post_approval_assessments)
         if urgent_after_approval:
             latest_urgent_at = max(item.created_at for item in urgent_after_approval if item.created_at)
             safety_id = f"safety-{latest_urgent_at.strftime('%Y%m%d%H%M%S%f')}"
@@ -496,6 +532,27 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
         ChatMessage.created_at >= scoped_since,
         ChatMessage.created_at <= scoped_cutoff,
     ).all()
+    assessments = db.query(StudentWellbeingAssessment).filter(
+        StudentWellbeingAssessment.user_id == student_id,
+        StudentWellbeingAssessment.created_at >= scoped_since,
+        StudentWellbeingAssessment.created_at <= scoped_cutoff,
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > datetime.now(),
+    ).order_by(StudentWellbeingAssessment.created_at.desc()).all()
+    assessment_records = []
+    for row in assessments:
+        payload = json.loads(row.result_json or "{}")
+        domain_text = "、".join(
+            f"{item.get('label')}：{item.get('level')}" for item in payload.get("domains", [])
+        )
+        assessment_records.append({
+            "id": f"assessment-{row.id}",
+            "source": "支持需求自评",
+            "content": f"{payload.get('risk_label', '支持需求观察')}；{domain_text or '领域信息不足'}",
+            "emotion": payload.get("emotion_summary", ""),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+    records.extend(assessment_records)
     urgent_records = [
         *[{"id": f"mood-{row.id}", "source": "情绪记录", "content": row.content or f"选择了“{row.mood_label}”", "emotion": row.mood_label, "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_moods if _context_has_urgent_meaning(row.content or "")],
         *[{"id": f"chat-{row.id}", "source": "倾诉原文", "content": row.content, "emotion": row.emotion or "", "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_chats if _context_has_urgent_meaning(row.content or "")],
@@ -503,15 +560,22 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
     known_ids = {item["id"] for item in records}
     records.extend(item for item in urgent_records if item["id"] not in known_ids)
     records.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    assessment_trigger_ids = [f"assessment-{row.id}" for row in assessments if row.risk_level == "urgent"]
     trigger_evidence_ids = [redacted_safety_revision["id"]] if redacted_safety_revision else []
+    trigger_evidence_ids.extend(assessment_trigger_ids)
     trigger_evidence_ids.extend(item["id"] for item in records if _context_has_urgent_meaning(str(item.get("content") or "")))
     trigger_evidence_ids = list(dict.fromkeys(trigger_evidence_ids))
     urgent = bool(trigger_evidence_ids)
     mood_records = [item for item in records if item["source"] == "情绪记录"]
     chat_records = [item for item in records if item["source"] == "倾诉原文"]
     evidence_ids = list(dict.fromkeys([*trigger_evidence_ids, *[item["id"] for item in records[:8]]]))
+    assessment_risks = [row.risk_level for row in assessments]
     negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in all_moods)
     baseline_risk = "high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"
+    if any(level in {"urgent", "professional"} for level in assessment_risks):
+        baseline_risk = "high"
+    elif "watch" in assessment_risks and baseline_risk == "low":
+        baseline_risk = "middle"
     if urgent:
         decision = "立即启动校内安全流程：确认学生当下安全、不让其独处并远离危险物，联系家庭之外的可信成年人或教师并拨打12356；存在迫切危险时立即拨打110或120。"
         next_tasks = [
@@ -571,7 +635,7 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
         "records": records,
         "pipeline": [
             {"name": "安全分流", "status": "completed", "result": "发现明确紧急信号" if urgent else "未发现明确紧急信号"},
-            {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录"},
+            {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录、{len(assessment_records)}次主动评估"},
             {"name": "证据定位", "status": "completed", "result": f"{len(evidence_ids)}条结论可回到原文"},
             {"name": "支持草案", "status": "completed", "result": "已生成，等待教师确认"},
         ],
@@ -582,6 +646,14 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
             "evidence_ids": evidence_ids,
             "trigger_evidence_ids": trigger_evidence_ids,
         },
+        "assessment_summary": ({
+            "risk_label": json.loads(assessments[0].result_json).get("risk_label"),
+            "emotion_summary": json.loads(assessments[0].result_json).get("emotion_summary"),
+            "domains": json.loads(assessments[0].result_json).get("domains", []),
+            "support_needs": json.loads(assessments[0].result_json).get("support_needs", []),
+            "review_status": assessments[0].review_status,
+            "created_at": assessments[0].created_at.isoformat() if assessments[0].created_at else None,
+        } if assessments else None),
         "conflicts": [{"topic": "行动强度", "views": ["尽快介入", "先保持低压力接触"], "resolution": "安全规则优先" if urgent else "由教师结合线下观察确认", "evidence_ids": evidence_ids}],
         "decision": decision,
         "decision_evidence_ids": trigger_evidence_ids or evidence_ids,
