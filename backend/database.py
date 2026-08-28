@@ -11,6 +11,44 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
+def _migrate_legacy_sensitive_access_logs(target_engine):
+    """将早期教师访问日志无损转换为统一审计结构。"""
+    inspector = inspect(target_engine)
+    if "sensitive_access_logs" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("sensitive_access_logs")}
+    required = {"actor_user_id", "action", "resource_type", "resource_id", "result", "created_at"}
+    if required.issubset(columns):
+        return
+    legacy = {"teacher_id", "student_id", "reason", "accessed_at"}
+    if not legacy.issubset(columns):
+        raise RuntimeError("sensitive_access_logs schema is unsupported; refusing destructive migration")
+
+    with target_engine.begin() as connection:
+        connection.execute(text("ALTER TABLE sensitive_access_logs RENAME TO sensitive_access_logs_legacy_alpha21"))
+        connection.execute(text("""
+            CREATE TABLE sensitive_access_logs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                actor_user_id INTEGER NOT NULL,
+                action VARCHAR(64) NOT NULL,
+                resource_type VARCHAR(40) NOT NULL,
+                resource_id VARCHAR(64) NOT NULL,
+                result VARCHAR(24) NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(actor_user_id) REFERENCES users (id)
+            )
+        """))
+        connection.execute(text("""
+            INSERT INTO sensitive_access_logs
+                (id, actor_user_id, action, resource_type, resource_id, result, created_at)
+            SELECT id, teacher_id, 'legacy_teacher_access', 'student', CAST(student_id AS TEXT),
+                   'legacy_imported', COALESCE(accessed_at, CURRENT_TIMESTAMP)
+            FROM sensitive_access_logs_legacy_alpha21
+        """))
+        connection.execute(text("CREATE INDEX ix_sensitive_access_logs_actor_user_id ON sensitive_access_logs (actor_user_id)"))
+        connection.execute(text("DROP TABLE sensitive_access_logs_legacy_alpha21"))
+
 def get_db():
     db = SessionLocal()
     try:
@@ -23,6 +61,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     # alpha 本地库轻量前向迁移；只新增列，不触碰既有数据或生产备份。
     if DATABASE_URL.startswith("sqlite"):
+        _migrate_legacy_sensitive_access_logs(engine)
         inspector = inspect(engine)
         columns = {item["name"] for item in inspector.get_columns("student_case_access_requests")}
         if "expires_at" not in columns:
