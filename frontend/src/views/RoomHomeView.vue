@@ -47,6 +47,7 @@
       :steps="studentAgentSteps"
       @toggle="toggleAgentRail"
       @close="showAgentRail = false"
+      @delete-run="deleteCurrentStudentAgentRun"
     />
     <aside v-if="!showSplash && showFirstRunGuide" class="room-onboarding-cue" aria-live="polite">
       <span class="room-onboarding-step">{{ guideStage === 'mood-card' ? '完成' : guideStage === 'confession' ? '2/2' : '1/2' }}</span>
@@ -1204,7 +1205,7 @@
           class="profile-panel chat-panel"
           data-workspace="chat"
           role="dialog"
-          aria-modal="true"
+          aria-modal="false"
           aria-labelledby="student-chat-title"
           @click.stop
           @keydown="handleChatPanelKeydown"
@@ -1634,6 +1635,7 @@ import { updateProfile, changePassword } from '../api/user'
 import { getMoodStats, getMoodInsight, getEmotionReport } from '../api/mood'
 import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
 import { isOfflineCompanionUrgent } from '../utils/companionSafety'
+import { deleteStudentAgentRun, getLatestStudentAgentRun } from '../api/studentAgent'
 import {
   completeChatSession,
   createChatSafetyHandoff,
@@ -1695,6 +1697,11 @@ const studentAgentState = reactive({
   riskLevel: 'unassessed',
   signal: 'continue',
   emotion: '',
+  runCode: '',
+  intentSummary: '',
+  tools: [],
+  events: [],
+  modelName: '',
   verifiedSteps: [],
   messageCount: 0,
   lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
@@ -1723,6 +1730,57 @@ function toggleAgentRail() {
     clearRoomFeature()
   }
   showAgentRail.value = next
+}
+
+async function deleteCurrentStudentAgentRun() {
+  if (!studentAgentState.runCode || studentAgentState.status === 'running') return
+  if (!window.confirm('删除后将无法恢复本次 Agent 轨迹，聊天原文不会因此删除。确定继续吗？')) return
+  try {
+    await deleteStudentAgentRun(studentAgentState.runCode)
+    Object.assign(studentAgentState, {
+      status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed',
+      signal: 'continue', emotion: '', runCode: '', intentSummary: '', tools: [], events: [],
+      modelName: '', verifiedSteps: [], messageCount: 0, lastEvent: '本次 Agent 轨迹已删除',
+    })
+    showAgentRail.value = false
+  } catch {
+    studentAgentState.lastEvent = '删除未完成，请稍后重试'
+  }
+}
+
+function applyVerifiedAgentRun(run) {
+  if (!run) return
+  studentAgentState.runCode = run.run_code || ''
+  studentAgentState.intentSummary = run.intent_summary || ''
+  studentAgentState.tools = Array.isArray(run.tools) ? run.tools : []
+  studentAgentState.events = Array.isArray(run.events) ? run.events : []
+  studentAgentState.modelName = run.model_name || ''
+  studentAgentState.messageCount = Number(run.context_message_count || 0)
+}
+
+async function restoreLatestStudentAgentRun() {
+  try {
+    const response = await getLatestStudentAgentRun()
+    const run = response.data
+    if (!run) return
+    applyVerifiedAgentRun(run)
+    studentAgentState.status = run.status === 'attention' && run.risk_level === 'urgent' ? 'urgent'
+      : run.status === 'failed' ? 'error' : run.status === 'running' ? 'running' : 'ready'
+    studentAgentState.phase = run.status === 'running' ? 'chat'
+      : run.status === 'failed' ? 'chat_error'
+        : run.risk_level === 'urgent' ? 'urgent' : 'responded'
+    studentAgentState.signal = run.deliverable?.conversation_signal || 'continue'
+    studentAgentState.emotion = run.deliverable?.emotion === '不确定' ? '' : (run.deliverable?.emotion || '')
+    studentAgentState.riskLevel = run.risk_level || 'unassessed'
+    studentAgentState.source = run.status === 'running' ? 'pending'
+      : run.status === 'failed' ? 'unavailable'
+        : run.model_name === 'xunfei-constrained' ? 'xunfei_constrained'
+          : run.model_name === 'safety-override' ? 'safety_override'
+            : run.degraded && Object.keys(run.deliverable || {}).length ? 'degraded' : 'deterministic'
+    studentAgentState.lastEvent = run.events?.at(-1)?.summary || '已恢复最近一次智能体任务'
+  } catch {
+    // 学生端主体功能不因轨迹恢复失败而中断。
+  }
 }
 const summaryOrbLabel = computed(() => {
   if (summaryStatus.value === 'processing') return '正在整理本次倾诉'
@@ -1887,19 +1945,6 @@ function handleChatPanelKeydown(event) {
     event.stopPropagation()
     closeWorkspacePanel('chat')
     return
-  }
-  if (event.key !== 'Tab' || !chatPanelRoot.value) return
-  const focusable = [...chatPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-    .filter(element => element.getClientRects().length > 0)
-  if (!focusable.length) return
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
   }
 }
 
@@ -3870,7 +3915,12 @@ async function sendChatMsg(text) {
   studentAgentState.phase = 'chat'
   studentAgentState.source = 'pending'
   studentAgentState.verifiedSteps = []
-  studentAgentState.messageCount = chatMessages.value.filter(item => item.role === 'user').length
+  studentAgentState.runCode = ''
+  studentAgentState.intentSummary = ''
+  studentAgentState.tools = []
+  studentAgentState.events = []
+  studentAgentState.modelName = ''
+  studentAgentState.messageCount = 0
   studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
   if (isDesktopAgentViewport()) showAgentRail.value = true
   await nextTick()
@@ -3883,7 +3933,8 @@ async function sendChatMsg(text) {
     if (!chatSessionId.value) {
       chatSessionId.value = session.data.session_id
     }
-    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value)
+    const requestKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
     await nextTick()
     if (res.data?.reply) {
       chatMessages.value[userMessageIndex] = {
@@ -3904,6 +3955,7 @@ async function sendChatMsg(text) {
       studentAgentState.emotion = res.data.emotion || ''
       studentAgentState.riskLevel = res.data.risk_level || 'routine'
       studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
+      applyVerifiedAgentRun(res.data.agent_run)
       if (studentAgentState.signal === 'urgent') {
         chatUrgentLocked.value = true
         safetyCurrentSafe.value = false
@@ -4103,6 +4155,7 @@ function resetStudentAgentState() {
     status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed', signal: 'continue', emotion: '',
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
+    runCode: '', intentSummary: '', tools: [], events: [], modelName: '',
   })
 }
 
@@ -4330,29 +4383,11 @@ async function openChatPanel() {
 async function loadLatestConversationSummary() {
   try {
     const res = await getLatestChatSummary()
-    if (applySummaryResponse(res.data, false)) {
-      studentAgentState.status = 'ready'
-      studentAgentState.phase = 'complete'
-      studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
-      studentAgentState.source = res.data.metadata?.degraded
-        ? 'degraded'
-        : res.data.metadata?.model_name === 'xunfei-constrained'
-          ? 'xunfei_constrained'
-          : 'deterministic'
-      studentAgentState.emotion = res.data.summary?.dominant_emotion || ''
-      studentAgentState.messageCount = res.data.metadata?.message_count || 0
-      studentAgentState.verifiedSteps = [
-        { id: 'observation', status: 'completed', summary: '已整合完整会话中的事件与表达' },
-        { id: 'safety', status: 'completed', summary: '已完成整段会话安全复核' },
-        { id: 'emotion', status: 'completed', summary: '已完成完整会话情绪线索归纳' },
-        { id: 'response', status: 'completed', summary: '已生成并复核支持方案' },
-      ]
-      studentAgentState.lastEvent = '最近一次倾诉小结可再次查看'
-    }
+    applySummaryResponse(res.data, false)
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadLatestConversationSummary() })
+onMounted(async () => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); await loadLatestConversationSummary(); await restoreLatestStudentAgentRun() })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (petVisualTimer) clearTimeout(petVisualTimer)

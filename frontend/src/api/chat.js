@@ -8,8 +8,8 @@ export function startChatSession(forceNew = false, continueFromSessionId = null)
     continue_from_session_id: continueFromSessionId,
   });
 }
-export function sendMessage(userId, content, inputType = "text", sessionId = null) {
-  return instance.post("/send", { user_id: userId, session_id: sessionId, message: content, input_type: inputType });
+export function sendMessage(userId, content, inputType = "text", sessionId = null, idempotencyKey = null) {
+  return instance.post("/send", { user_id: userId, session_id: sessionId, message: content, input_type: inputType, idempotency_key: idempotencyKey });
 }
 export function getChatHistory(userId, sessionId = null) {
   return instance.get("/history", { params: { user_id: userId, session_id: sessionId, limit: 50 } });

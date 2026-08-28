@@ -1,6 +1,8 @@
 """
 咕哝Web应用 - FastAPI 主入口
 """
+import asyncio
+import logging
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +12,7 @@ import models  # 确保模型被加载
 from validation import sanitized_validation_exception_handler
 
 # 导入路由
-from api import chat, companion, user, mood, admin, music, guardian, teacher, island, assessment
+from api import chat, companion, user, mood, admin, music, guardian, teacher, island, assessment, student_agent
 
 app = FastAPI(title="咕哝 API", description="AI心理健康教育与守护者支持工具", version=settings.RELEASE_VERSION)
 app.add_exception_handler(RequestValidationError, sanitized_validation_exception_handler)
@@ -35,6 +37,26 @@ app.include_router(guardian.router)
 app.include_router(teacher.router)
 app.include_router(island.router)
 app.include_router(assessment.router)
+app.include_router(student_agent.router)
+support_cleanup_task = None
+logger = logging.getLogger(__name__)
+
+
+async def periodic_support_cleanup():
+    """Enforce retention even when a student never returns."""
+    from database import SessionLocal
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                student_agent.cleanup_expired_support_runs(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("student support retention cleanup failed; will retry on next interval")
+        await asyncio.sleep(6 * 60 * 60)
 
 @app.get("/")
 async def root():
@@ -59,6 +81,7 @@ async def health():
 # 启动时初始化数据库和管理员账号
 @app.on_event("startup")
 async def startup():
+    global support_cleanup_task
     print("正在初始化数据库...")
     init_db()
     from database import SessionLocal
@@ -70,7 +93,19 @@ async def startup():
         db.close()
     from init_admin import create_default_admin
     create_default_admin()
+    support_cleanup_task = asyncio.create_task(periodic_support_cleanup())
     print("数据库初始化完成！")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    global support_cleanup_task
+    if support_cleanup_task:
+        support_cleanup_task.cancel()
+        try:
+            await support_cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 if __name__ == "__main__":
     import uvicorn

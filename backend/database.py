@@ -49,6 +49,32 @@ def _migrate_legacy_sensitive_access_logs(target_engine):
         connection.execute(text("CREATE INDEX ix_sensitive_access_logs_actor_user_id ON sensitive_access_logs (actor_user_id)"))
         connection.execute(text("DROP TABLE sensitive_access_logs_legacy_alpha21"))
 
+
+def _migrate_student_support_runs(target_engine):
+    """Forward-only compatibility for alpha.23 databases created during review iterations."""
+    inspector = inspect(target_engine)
+    if "student_support_runs" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("student_support_runs")}
+    additions = {
+        "request_fingerprint": "VARCHAR(64) NOT NULL DEFAULT ''",
+        "input_message_id": "INTEGER",
+        "output_message_id": "INTEGER",
+        "context_message_count": "INTEGER NOT NULL DEFAULT 0",
+        "emotion_basis_json": "TEXT NOT NULL DEFAULT '[]'",
+        "expires_at": "DATETIME",
+    }
+    with target_engine.begin() as connection:
+        for column_name, column_type in additions.items():
+            if column_name not in columns:
+                connection.execute(text(f"ALTER TABLE student_support_runs ADD COLUMN {column_name} {column_type}"))
+        connection.execute(text(
+            "UPDATE student_support_runs SET expires_at = datetime(COALESCE(started_at, CURRENT_TIMESTAMP), '+30 days') "
+            "WHERE expires_at IS NULL"
+        ))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_student_support_runs_input_message_id ON student_support_runs (input_message_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_student_support_runs_expires_at ON student_support_runs (expires_at)"))
+
 def get_db():
     db = SessionLocal()
     try:
@@ -62,6 +88,7 @@ def init_db():
     # alpha 本地库轻量前向迁移；只新增列，不触碰既有数据或生产备份。
     if DATABASE_URL.startswith("sqlite"):
         _migrate_legacy_sensitive_access_logs(engine)
+        _migrate_student_support_runs(engine)
         inspector = inspect(engine)
         columns = {item["name"] for item in inspector.get_columns("student_case_access_requests")}
         if "expires_at" not in columns:

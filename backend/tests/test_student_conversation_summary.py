@@ -224,7 +224,10 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
         self._authorize(self.user_one_id)
-        mock = AsyncMock(return_value="我听到了。请留意这种感受的变化，也可以告诉一位可信成年人。")
+        mock = AsyncMock(return_value=json.dumps({
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "support_need": "寻求成人支持",
+        }, ensure_ascii=False))
         chat_api.ask_spark = mock
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
@@ -264,7 +267,10 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
         settings.STUDENT_AI_ACCESS_MODE = "platform_direct"
         settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = True
-        mock = AsyncMock(return_value="我在听。我们可以从现在最困扰你的一件小事慢慢说起。")
+        mock = AsyncMock(return_value=json.dumps({
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "support_need": "整理任务",
+        }, ensure_ascii=False))
         chat_api.ask_spark = mock
         started = self.client_one.post("/api/chat/sessions", json={"force_new": True})
         self.assertTrue(started.json()["external_ai_enabled"])
@@ -300,7 +306,6 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             "intensity": "明显",
             "evidence": ["未被倾听"],
             "support_need": "被倾听",
-            "reply": "被忽略的感觉很难受。我会先听你说；你愿意从今天最委屈的一件事开始吗？",
         }, ensure_ascii=False))
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
@@ -331,7 +336,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self._authorize(self.user_one_id)
         chat_api.ask_spark = AsyncMock(return_value=json.dumps({
             "emotion": "害怕", "intensity": "强烈", "evidence": ["今天完成了作业"],
-            "support_need": "被倾听", "reply": "我会听你说。",
+            "support_need": "被倾听",
         }, ensure_ascii=False))
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={

@@ -130,6 +130,58 @@ class StudentAssessmentAgentRun(Base):
     __table_args__ = (Index("idx_assessment_agent_run", "assessment_id", "agent_type"),)
 
 
+class StudentSupportRun(Base):
+    """学生端统一智能体任务；只保存结构化派生结果，不保存新的聊天原文副本。"""
+
+    __tablename__ = "student_support_runs"
+
+    id = Column(Integer, primary_key=True)
+    run_code = Column(String(48), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=True, index=True)
+    task_type = Column(String(32), nullable=False, default="chat_turn", index=True)
+    trigger_source = Column(String(32), nullable=False, default="student_chat")
+    idempotency_key = Column(String(80), nullable=False, unique=True, index=True)
+    request_fingerprint = Column(String(64), nullable=False, default="")
+    input_message_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=True, index=True)
+    output_message_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=True)
+    status = Column(String(24), nullable=False, default="running", index=True)
+    risk_level = Column(String(16), nullable=False, default="routine", index=True)
+    intent_summary = Column(String(160), nullable=False, default="")
+    context_message_count = Column(Integer, nullable=False, default=0)
+    plan_json = Column(Text, nullable=False, default="[]")
+    tools_json = Column(Text, nullable=False, default="[]")
+    deliverable_json = Column(Text, nullable=False, default="{}")
+    emotion_basis_json = Column(Text, nullable=False, default="[]")
+    model_name = Column(String(80), nullable=False, default="pending")
+    prompt_version = Column(String(40), nullable=False, default="student-support-orchestrator-v1")
+    degraded = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (Index("idx_student_support_user_time", "user_id", "started_at"),)
+
+
+class StudentSupportEvent(Base):
+    """可公开核验的任务事件；summary 是结果摘要而不是模型思维链。"""
+
+    __tablename__ = "student_support_events"
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("student_support_runs.id"), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    agent_type = Column(String(40), nullable=False)
+    tool_name = Column(String(48), nullable=True)
+    status = Column(String(24), nullable=False)
+    summary = Column(String(200), nullable=False)
+    source = Column(String(32), nullable=False, default="deterministic")
+    evidence_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (Index("idx_student_support_event_order", "run_id", "sequence", unique=True),)
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
 

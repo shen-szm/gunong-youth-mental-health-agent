@@ -19,3 +19,4 @@ Thumbs.db
 /tmp/
 /data/reports/
 /backend/data/reports/
+.codex-alpha*-backend.tar.gz

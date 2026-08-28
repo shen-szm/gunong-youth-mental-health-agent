@@ -37,7 +37,7 @@
           {{ state.lastEvent }}
         </p>
 
-        <div class="agent-role-row" aria-label="当前协作角色">
+        <div v-if="activeRoles.length" class="agent-role-row" aria-label="已核验协作角色">
           <span v-for="role in activeRoles" :key="role">{{ role }}</span>
         </div>
         <div class="student-agent-source" aria-label="当前 Agent 生成来源">
@@ -45,8 +45,16 @@
           <small>{{ sourceDetail }}</small>
         </div>
 
+        <section v-if="state.runCode" class="agent-task-brief" aria-label="本次智能体任务理解">
+          <div><strong>任务理解</strong><code>{{ state.runCode }}</code></div>
+          <p>{{ state.intentSummary || '等待服务端返回结构化任务摘要' }}</p>
+          <div v-if="state.tools?.length" class="agent-tool-row" aria-label="实际调用工具">
+            <span v-for="tool in state.tools" :key="tool">{{ toolLabel(tool) }}</span>
+          </div>
+        </section>
+
         <ol class="agent-step-list">
-          <li v-for="step in steps" :key="step.id" :class="`is-${step.status}`">
+          <li v-for="step in displaySteps" :key="step.id" :class="`is-${step.status}`">
             <span class="agent-step-icon" aria-hidden="true">{{ statusIcon(step.status) }}</span>
             <div>
               <strong>{{ step.label }}</strong>
@@ -57,9 +65,10 @@
         </ol>
 
         <footer class="agent-rail-footer">
-          <span>已处理 {{ state.messageCount }} 条学生表达</span>
+          <span>本轮安全检查上下文 {{ state.messageCount }} 条表达</span>
           <span>{{ riskLabel }}</span>
         </footer>
+        <button v-if="state.runCode && state.status !== 'running'" class="agent-delete-run" type="button" @click="$emit('delete-run')">删除本次 Agent 轨迹</button>
         <p class="agent-boundary">只展示可核验的工作步骤与结果摘要，不展示模型私有思维过程；情绪整理不等于心理诊断。</p>
       </aside>
     </Transition>
@@ -81,7 +90,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['toggle', 'close'])
+const emit = defineEmits(['toggle', 'close', 'delete-run'])
 const toggleButton = ref(null)
 const closeButton = ref(null)
 
@@ -108,9 +117,22 @@ const taskEyebrow = computed(() => ({
 })[props.state.phase] || '当前任务 · 学生支持')
 
 const activeRoles = computed(() => {
-  if (props.state.status === 'urgent') return ['SafetyGate', 'SafetyCoordinator']
-  if (props.state.phase === 'summary' || props.state.phase === 'complete') return ['Observer', 'SafetyGate', 'Synthesizer', 'Planner', 'Reviewer']
-  return ['Observer', 'SafetyGate', 'EmotionAgent', 'ResponseAgent']
+  const verifiedRoles = [...new Set((props.state.events || []).map(event => event.agent).filter(Boolean))]
+  if (verifiedRoles.length) return verifiedRoles
+  return []
+})
+
+const displaySteps = computed(() => {
+  if (props.state.status === 'running' && !props.state.events?.length) {
+    return [{ id: 'request-pending', label: '请求已发送', summary: '等待服务端返回可核验的执行事件', status: 'running' }]
+  }
+  if (!props.state.events?.length) return props.steps
+  return props.state.events.map(event => ({
+    id: `${event.sequence}-${event.agent}`,
+    label: event.agent,
+    summary: event.summary,
+    status: event.status === 'failed' ? 'error' : event.status,
+  }))
 })
 
 const riskLabel = computed(() => {
@@ -134,7 +156,7 @@ const sourceLabel = computed(() => ({
 })[props.state.source] || '来源未确认')
 
 const sourceDetail = computed(() => props.state.source === 'xunfei_constrained'
-  ? '模型负责受约束语言生成，风险与禁止诊断规则由后端强制执行'
+  ? '模型只输出受约束结构化情绪与支持需要；回应由后端安全模板渲染并校验'
   : props.state.source === 'safety_override'
     ? '普通生成已停止，当前只执行确定性安全路径'
     : props.state.source === 'degraded'
@@ -153,10 +175,23 @@ function statusLabel(status) {
   return ({ completed: '完成', running: '进行中', attention: '需确认', blocked: '已停止', waiting: '等待', error: '需重试' })[status] || '等待'
 }
 
+function toolLabel(tool) {
+  return ({
+    derived_feature_extractor: '结构特征提炼',
+    deterministic_safety_rules: '安全规则',
+    emotion_feature_synthesizer: '情绪综合',
+    local_support_resource_registry: '本地审计资源库',
+    xunfei_structured_synthesizer: '讯飞结构化综合',
+    deterministic_response_template: '本地回应模板',
+    generated_content_validator: '输出安全校验',
+    student_delivery_formatter: '结果交付',
+    urgent_support_router: '真人安全路径',
+  })[tool] || tool
+}
+
 watch(() => props.open, async (value, previous) => {
   await nextTick()
-  if (value) closeButton.value?.focus({ preventScroll: true })
-  else if (previous) toggleButton.value?.focus({ preventScroll: true })
+  if (!value && previous) toggleButton.value?.focus({ preventScroll: true })
 })
 </script>
 
@@ -251,6 +286,13 @@ watch(() => props.open, async (value, previous) => {
 .agent-role-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
 .agent-role-row span { padding: 4px 7px; border: 1px solid rgba(185,217,201,.2); border-radius: 7px; color: rgba(213,235,224,.84); background: rgba(185,217,201,.065); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .student-agent-source { display: none; }
+.agent-task-brief { margin: 0 0 10px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08); }
+.agent-task-brief > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.agent-task-brief strong { color: #cfe7db; font-size: 11px; }
+.agent-task-brief code { color: rgba(247,244,237,.55); font-size: 9px; }
+.agent-task-brief p { margin: 6px 0 8px; color: rgba(247,244,237,.82); font-size: 11px; line-height: 1.5; }
+.agent-tool-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.agent-tool-row span { padding: 4px 6px; border-radius: 6px; color: #d6e9df; background: rgba(185,217,201,.09); font-size: 9px; }
 .agent-step-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-step-list li {
   display: grid;
@@ -284,6 +326,8 @@ watch(() => props.open, async (value, previous) => {
 .agent-step-list em { color: var(--agent-muted); font-size: 10px; font-style: normal; white-space: nowrap; }
 .agent-rail-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: var(--agent-accent); font-size: 10px; }
 .agent-boundary { margin: 10px 0 0; color: rgba(247, 244, 237, .7); font-size: 12px; line-height: 1.55; }
+.agent-delete-run { width:100%; margin-top:10px; padding:8px 10px; border:1px solid rgba(247,244,237,.24); border-radius:9px; color:var(--agent-muted); background:transparent; cursor:pointer; }
+.agent-delete-run:hover { color:var(--agent-ink); border-color:rgba(247,244,237,.42); }
 .student-agent-toggle:focus-visible,
 .student-agent-rail button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
 .agent-rail-enter-active,
