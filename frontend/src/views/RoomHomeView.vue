@@ -73,58 +73,63 @@
     <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="closeWorkspacePanel('pet')">
       <section ref="petPanelRoot" class="pet-panel-card pet-playground-card" data-workspace="pet" role="dialog" aria-modal="true" aria-labelledby="guguan-panel-title" @keydown="handlePetPanelKeydown">
         <button type="button" class="pet-panel-close" aria-label="关闭宠物互动" @click="closeWorkspacePanel('pet')">×</button>
-        <div class="pet-panel-head">
-          <div class="pet-panel-avatar" :class="[`is-${petMoodStatus}`, `is-${petVisualState}`]">
-            <img class="pet-panel-frame" :src="selectedPetFrame" alt="咕团当前状态" />
+        <header class="pet-home-header">
+          <div class="pet-home-title">
+            <div class="pet-panel-avatar" :class="[`is-${petMoodStatus}`, `is-${petVisualState}`]"><img class="pet-panel-frame" :src="selectedPetFrame" alt="咕团当前状态" /></div>
+            <div><span>咕团的小屋</span><h2 id="guguan-panel-title" tabindex="-1">今天想和它做什么？</h2><p>{{ petCompanionMessage }}</p></div>
           </div>
-          <div>
-            <span class="pet-panel-kicker">原创陪伴 IP · 咕团</span>
-            <h2 id="guguan-panel-title" tabindex="-1">{{ petGrowthStage.name }}</h2>
-            <p>{{ petCompanionMessage }}</p>
-          </div>
-        </div>
-        <div class="pet-growth-summary" aria-label="咕团成长状态">
-          <div>
-            <span>默契成长</span>
-            <strong>{{ petCompanionState.bond }} / {{ petGrowthStage.nextAt }}</strong>
-          </div>
-          <div class="pet-growth-track" role="progressbar" aria-label="默契成长" :aria-valuenow="petGrowthProgress" aria-valuemin="0" aria-valuemax="100">
-            <span :style="{ width: `${petGrowthProgress}%` }"></span>
-          </div>
-          <small>{{ petGrowthStage.copy }} 不连续登录也不会倒退。</small>
-        </div>
-        <div class="pet-care-layout">
-          <div class="pet-playground-stage" aria-live="polite">
-            <div class="pet-stage-hint">{{ petCurrentNeed }}</div>
-            <img class="pet-stage-frame" :class="`is-${petVisualState}`" :src="selectedPetFrame" alt="咕团" />
-            <div class="pet-stage-bubble">{{ petCompanionMessage }}</div>
-          </div>
-          <div class="pet-care-console">
-            <div class="pet-care-meters">
-              <div v-for="meter in petCareMeters" :key="meter.key" class="pet-care-meter">
-                <span>{{ meter.label }}</span>
-                <div role="progressbar" :aria-label="meter.label" :aria-valuenow="meter.value" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${meter.value}%` }"></i></div>
-                <strong>{{ meter.state }}</strong>
+          <div v-if="petCompanionMode !== 'urgent'" class="pet-bond-chip"><span>{{ petGrowthStage.name }}</span><strong>默契 {{ petCompanionState.bond }}</strong></div>
+        </header>
+        <div :class="['pet-home-layout', { 'is-urgent': petCompanionMode === 'urgent' }]">
+          <section class="pet-home-scene" :style="{ backgroundImage: `linear-gradient(180deg, rgba(26,19,15,.02), rgba(27,18,14,.26)), url(${petHomeScene})` }" aria-label="咕团小屋互动场景">
+            <section v-if="petCompanionMode === 'urgent'" ref="petUrgentHandoff" class="pet-urgent-handoff pet-scene-urgent" role="alert" aria-label="立即安全支持" tabindex="-1">
+              <span>普通陪伴已停止</span>
+              <strong>现在先连接一位可信任的成年人</strong>
+              <p>{{ petCompanionError || '如果你正处于危险中，不要独自承担。请尽快联系可信教师、家人或紧急服务。' }}</p>
+              <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+              <button type="button" @click="goToChatFromPet">打开安全倾诉入口</button>
+            </section>
+            <template v-else>
+              <div class="pet-scene-message" role="status" aria-live="polite"><small>{{ petCurrentNeed }}</small><strong>{{ petCompanionMessage }}</strong></div>
+              <button type="button" class="pet-scene-hotspot is-nest" title="和咕团一起休息" @click.stop="restWithPet"><span>小窝</span></button>
+              <button type="button" class="pet-scene-hotspot is-brush" title="给咕团梳梳毛" @click.stop="groomPet"><span>梳毛</span></button>
+              <button type="button" class="pet-scene-hotspot is-snack" title="喂一块种子饼" @click.stop="feedPetSnack"><span>点心</span></button>
+              <button type="button" class="pet-scene-hotspot is-ball" :title="petCanPlay ? '和咕团玩星星球' : '咕团需要先休息'" :disabled="!petCanPlay" @click.stop="playBallWithPet"><span>{{ petCanPlay ? '星星球' : '先休息' }}</span></button>
+              <button type="button" :class="['pet-scene-character', `is-${petVisualState}`, { 'is-hiding': petHideAndSeekActive }]" aria-label="摸摸咕团" @click.stop="petPetting">
+                <span v-if="petCompanionState.accessory === 'star'" class="pet-star-accessory" aria-label="戴着星星发卡">✦</span>
+                <img class="pet-stage-frame" :src="selectedPetFrame" alt="咕团" />
+                <span class="pet-scene-character-label">摸摸咕团</span>
+              </button>
+              <div v-if="petHideAndSeekActive" class="pet-hide-game" role="group" aria-label="猜猜咕团躲在哪里">
+                <strong>咕团藏好了，猜猜它在哪里？</strong>
+                <div><button v-for="spot in petHideSpots" :key="spot" ref="petHideGuessButtons" type="button" @click.stop="guessPetHidingSpot(spot)">{{ spot }}</button></div>
+                <button type="button" class="pet-hide-cancel" @click.stop="cancelPetHideAndSeek">先不玩了</button>
               </div>
-            </div>
-            <div class="pet-panel-actions" aria-label="照顾咕团">
-              <button type="button" @click.stop="petPetting"><span aria-hidden="true">◇</span> 摸摸它</button>
-              <button type="button" @click.stop="feedPetSnack"><span aria-hidden="true">◆</span> 喂种子饼</button>
-              <button type="button" @click.stop="restWithPet"><span aria-hidden="true">☾</span> 一起休息</button>
-              <button v-if="petCompanionMode === 'urgent'" type="button" class="is-primary" @click.stop="focusPetUrgentSupport"><span aria-hidden="true">!</span> 查看安全支持</button>
-              <button v-else type="button" class="is-primary" @click.stop="talkWithPet"><span aria-hidden="true">▣</span> 和它说话</button>
-            </div>
-            <p class="pet-care-boundary">照护值只反馈当下互动，不设断签惩罚，也不用于判断你的情绪。</p>
-          </div>
+              <nav class="pet-scene-dock" aria-label="和咕团互动">
+                <button type="button" @click.stop="petPetting"><span>摸</span>摸摸</button>
+                <button type="button" @click.stop="feedPetSnack"><span>饼</span>喂食</button>
+                <button type="button" @click.stop="groomPet"><span>梳</span>梳毛</button>
+                <button type="button" :disabled="!petCanPlay" @click.stop="playBallWithPet"><span>球</span>{{ petCanPlay ? '玩球' : '先休息' }}</button>
+                <button ref="petHideTrigger" type="button" @click.stop="startPetHideAndSeek"><span>藏</span>捉迷藏</button>
+                <button type="button" @click.stop="togglePetAccessory"><span>星</span>{{ petCompanionState.accessory === 'star' ? '摘发卡' : '戴发卡' }}</button>
+                <button type="button" class="is-primary" @click.stop="talkWithPet"><span>聊</span>说说话</button>
+              </nav>
+            </template>
+          </section>
+          <aside v-if="petCompanionMode !== 'urgent'" class="pet-home-sidebar" aria-label="咕团相处角">
+            <section class="pet-home-today">
+              <div><span>此刻的咕团</span><strong>{{ petCurrentNeed }}</strong></div>
+              <div class="pet-need-row"><span v-for="meter in petCareMeters" :key="meter.key"><i :style="{ '--pet-need': `${meter.value}%` }"></i><small>{{ meter.label }}</small><strong>{{ meter.state }}</strong></span></div>
+              <p>{{ petGrowthStage.copy }} 不连续登录也不会倒退。</p>
+            </section>
+            <section class="pet-home-moments">
+              <div class="pet-section-title"><span>最近一起做过</span><small>不保存聊天原文</small></div>
+              <ul><li v-for="memory in petRecentMemories" :key="memory.id"><time>{{ memory.time }}</time><span>{{ memory.copy }}</span></li></ul>
+            </section>
+            <div class="pet-home-journey"><button type="button" @click.stop="walkPetToIsland"><span>去心岛散步</span><small>带咕团去花田、海边和小田园</small></button></div>
+          </aside>
         </div>
-        <div class="pet-memory-strip">
-          <div class="pet-section-title">
-            <span>相处小记</span>
-            <small>只记录照护动作，不保存聊天原文</small>
-          </div>
-          <ul><li v-for="memory in petRecentMemories" :key="memory.id"><time>{{ memory.time }}</time><span>{{ memory.copy }}</span></li></ul>
-        </div>
-        <div class="pet-companion-restored">
+        <div v-if="petCompanionMode !== 'urgent'" class="pet-companion-restored">
           <div class="pet-companion-chat" v-if="petCompanionActive">
             <div class="pet-chat-head">
               <img :src="selectedPetFrame" alt="咕团" />
@@ -162,6 +167,7 @@
           </div>
           <button v-else type="button" class="pet-chat-entry" @click.stop="talkWithPet">坐到咕团旁边，说一句现在的感受</button>
         </div>
+        <p class="pet-care-boundary">这些互动只用于陪伴和游戏反馈，不用于判断你的情绪，也没有连续打卡要求。</p>
       </section>
     </div>
     <!-- 交互热区 — 电脑（倾诉） -->
@@ -1643,6 +1649,9 @@ import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
 import StudentIslandWorkspace from '../components/island/StudentIslandWorkspace.vue'
+import petHomeDay from '../assets/island/home-day.png'
+import petHomeDusk from '../assets/island/home-dusk.png'
+import petHomeNight from '../assets/island/home-night.png'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -1850,6 +1859,10 @@ function handlePetPanelKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
+    if (petHideAndSeekActive.value) {
+      cancelPetHideAndSeek()
+      return
+    }
     closeWorkspacePanel('pet')
     return
   }
@@ -1957,6 +1970,12 @@ const GUGUAN_ASSETS = Object.freeze({
   sleeping: '/images/guguan/guguan-sleeping.png',
 })
 const petVisualState = ref('idle')
+const petHideAndSeekActive = ref(false)
+const petHideSpots = Object.freeze(['花丛后', '小窝里', '树影下'])
+const petHiddenSpot = ref('')
+const petHideGuesses = ref(0)
+const petHideTrigger = ref(null)
+const petHideGuessButtons = ref([])
 let petVisualTimer = null
 const selectedPetFrame = computed(() => GUGUAN_ASSETS[petVisualState.value] || GUGUAN_ASSETS.idle)
 
@@ -2162,7 +2181,7 @@ function loadPetCompanionState() {
     const saved = JSON.parse(safeStudentStorageGet(PET_COMPANION_STATE_KEY) || 'null')
     if (saved && typeof saved === 'object') {
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         bond: clampPetValue(saved.bond ?? (Number(saved.affinity || 1) * 2), 1, 40),
         comfort: clampPetValue(saved.comfort, 0, 100, 72),
         fullness: clampPetValue(saved.fullness, 0, 100, 68),
@@ -2172,16 +2191,20 @@ function loadPetCompanionState() {
         pettedDate: saved.pettedDate || '',
         fedDate: saved.fedDate || '',
         restedDate: saved.restedDate || '',
+        groomedDate: saved.groomedDate || '',
+        playedDate: saved.playedDate || '',
+        hideDate: saved.hideDate || '',
         talkDate: saved.talkDate || '',
         taskDate: saved.taskDate || '',
         mood: saved.mood || '',
         status: saved.status || 'okay',
+        accessory: saved.accessory === 'star' ? 'star' : '',
         message: saved.message || '咕。想靠近时就来坐坐，我不会催你。',
         memories: Array.isArray(saved.memories) ? saved.memories.slice(0, 6) : [],
       }
     }
   } catch {}
-  return { schemaVersion: 1, bond: 2, comfort: 72, fullness: 68, energy: 76, totalCare: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', restedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '咕。想靠近时就来坐坐，我不会催你。', memories: [] }
+  return { schemaVersion: 2, bond: 2, comfort: 72, fullness: 68, energy: 76, totalCare: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', restedDate: '', groomedDate: '', playedDate: '', hideDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', accessory: '', message: '咕。想靠近时就来坐坐，我不会催你。', memories: [] }
 }
 function clampPetValue(value, min, max, fallback = min) {
   const number = Number(value)
@@ -2212,6 +2235,7 @@ const petCareMeters = computed(() => [
   { key: 'fullness', label: '饱足', value: petCompanionState.fullness, state: petCompanionState.fullness >= 80 ? '吃饱了' : petCompanionState.fullness >= 55 ? '刚刚好' : '想吃点心' },
   { key: 'energy', label: '精神', value: petCompanionState.energy, state: petCompanionState.energy >= 80 ? '有活力' : petCompanionState.energy >= 55 ? '从容' : '想休息' },
 ])
+const petCanPlay = computed(() => petCompanionState.energy >= 10)
 const petCurrentNeed = computed(() => {
   const lowest = petCareMeters.value.reduce((current, meter) => meter.value < current.value ? meter : current)
   return lowest.key === 'comfort' ? '此刻想被摸摸' : lowest.key === 'fullness' ? '此刻想吃一块种子饼' : '此刻想和你安静休息'
@@ -2350,6 +2374,81 @@ function restWithPet() {
   rememberPetCare('你和咕团安静休息了一会儿。')
   showPetVisual('sleeping', 2600)
   setPetStatus('sleepy', '不用做什么，和咕团一起把呼吸放慢一点。')
+}
+function groomPet() {
+  bumpPetAffinityOnce('groomedDate')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 10, 0, 100)
+  rememberPetCare('你顺着绒毛轻轻梳了几下，咕团舒服得眯起眼睛。')
+  showPetVisual('happy')
+  setPetStatus('happy', '咕——梳到耳朵旁边时，它开心地抖了抖叶芽。')
+}
+function playBallWithPet() {
+  if (!petCanPlay.value) {
+    setPetStatus('sleepy', '咕团抱着星星球打了个哈欠。先去小窝休息一会儿吧。')
+    return
+  }
+  bumpPetAffinityOnce('playedDate')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 8, 0, 100)
+  petCompanionState.energy = clampPetValue(petCompanionState.energy - 5, 0, 100)
+  rememberPetCare('你把星星球滚了出去，咕团扑了个满怀。')
+  showPetVisual('happy', 2200)
+  setPetStatus('happy', '接到了！咕团抱住星星球，还想再来一次。')
+}
+async function startPetHideAndSeek() {
+  const seed = new Date().getMinutes() + petCompanionState.totalCare
+  petHiddenSpot.value = petHideSpots[seed % petHideSpots.length]
+  petHideGuesses.value = 0
+  petHideAndSeekActive.value = true
+  setPetStatus('okay', '咕团悄悄藏起来了。听，好像有叶芽晃动的声音。')
+  await nextTick()
+  petHideGuessButtons.value?.[0]?.focus()
+}
+function finishPetHideAndSeek() {
+  petHideAndSeekActive.value = false
+  petHideGuesses.value = 0
+  nextTick(() => petHideTrigger.value?.focus())
+}
+function cancelPetHideAndSeek() {
+  finishPetHideAndSeek()
+  showPetVisual('idle')
+  setPetStatus('okay', '这局先停在这里。咕团从藏身处回来，继续陪你待着。')
+}
+function guessPetHidingSpot(spot) {
+  const found = spot === petHiddenSpot.value
+  if (found) {
+    finishPetHideAndSeek()
+    bumpPetAffinityOnce('hideDate', 2)
+    petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 9, 0, 100)
+    rememberPetCare(`你在${spot}找到了咕团，它笑得叶芽都在发亮。`)
+    showPetVisual('happy', 2400)
+    setPetStatus('happy', `找到啦！咕团从${spot}跳出来，星尾巴亮成了一小圈。`)
+  } else {
+    petHideGuesses.value += 1
+    if (petHideGuesses.value >= 2) {
+      finishPetHideAndSeek()
+      bumpPetAffinityOnce('hideDate', 2)
+      petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 6, 0, 100)
+      rememberPetCare(`咕团从${petHiddenSpot.value}探出头，和你结束了这局捉迷藏。`)
+      showPetVisual('happy', 2200)
+      setPetStatus('happy', `原来在${petHiddenSpot.value}。咕团自己探出了头，这局也一起玩完啦。`)
+    } else {
+      showPetVisual('idle')
+      setPetStatus('okay', `这里没有。咕团还躲在原来的地方，再猜最后一次吧。`)
+    }
+  }
+}
+function togglePetAccessory() {
+  petCompanionState.accessory = petCompanionState.accessory === 'star' ? '' : 'star'
+  rememberPetCare(petCompanionState.accessory ? '你帮咕团戴上了星星发卡。' : '你替咕团收好了星星发卡。')
+  showPetVisual('happy')
+  setPetStatus('happy', petCompanionState.accessory ? '星星发卡戴好啦。咕团转了一小圈给你看。' : '发卡收进小盒子里，下次还可以再戴。')
+}
+async function walkPetToIsland() {
+  rememberPetCare('你和咕团约好去心岛散一会儿步。')
+  savePetCompanionState()
+  closeWorkspacePanel('pet')
+  await nextTick()
+  openWorkspacePanel('leisure', islandNavButton.value, 'island')
 }
 async function talkWithPet() {
   showPetCompanionPanel.value = true
@@ -3621,6 +3720,7 @@ const timeOfDay = computed(() => {
   if (h >= 17 && h < 20) return 'evening'
   return 'night'
 })
+const petHomeScene = computed(() => timeOfDay.value === 'day' ? petHomeDay : timeOfDay.value === 'evening' ? petHomeDusk : petHomeNight)
 
 // ─── 屏幕尺寸检测 ───
 const isDesktop = ref(window.innerWidth >= 768)
@@ -7575,6 +7675,108 @@ onUnmounted(() => {
 .pet-urgent-handoff button { display: grid; min-height: 44px; place-items: center; border: 0; border-radius: 9px; color: #291511; background: #ffd0c9; font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; cursor: pointer; }
 .pet-urgent-handoff button { width: 100%; background: rgba(255,255,255,.12); color: #fff4f1; }
 
+/* v5.1.0-alpha.18：场景化咕团小屋，桌面优先。 */
+.pet-panel-card.pet-playground-card {
+  width: min(1120px, calc(100vw - 48px));
+  max-height: min(92vh, 900px);
+  padding: 18px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(27, 24, 30, .97);
+  box-shadow: 0 18px 56px rgba(3, 6, 10, .46);
+}
+.pet-home-header { display: flex; min-height: 68px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 54px 14px 2px; }
+.pet-home-title { display: flex; min-width: 0; align-items: center; gap: 13px; }
+.pet-home-title .pet-panel-avatar { width: 58px; height: 58px; flex: 0 0 auto; border: 0; background: rgba(243, 204, 130, .12); }
+.pet-home-title .pet-panel-frame { width: 62px; height: 62px; }
+.pet-home-title > div:last-child { min-width: 0; }
+.pet-home-title > div:last-child > span { color: #f1cb83; font-size: 12px; font-weight: 800; }
+.pet-home-title h2 { margin: 1px 0 2px; font-size: 19px; letter-spacing: -.02em; }
+.pet-home-title p { max-width: 66ch; margin: 0; overflow: hidden; color: rgba(255, 247, 235, .72); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pet-bond-chip { display: grid; min-width: 118px; gap: 2px; padding: 9px 12px; border-radius: 10px; color: #302419; background: #edcc8b; }
+.pet-bond-chip span { font-size: 11px; opacity: .72; }
+.pet-bond-chip strong { font-size: 12px; }
+.pet-home-layout { display: grid; grid-template-columns: minmax(0, 1fr) 286px; gap: 14px; }
+.pet-home-layout.is-urgent { grid-template-columns: 1fr; }
+.pet-home-scene {
+  position: relative;
+  min-height: 548px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: #655035;
+  background-position: center;
+  background-size: cover;
+  box-shadow: inset 0 -72px 70px rgba(31, 19, 13, .18);
+  isolation: isolate;
+}
+.pet-home-scene::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, rgba(28,18,13,.1), transparent 28%, transparent 70%, rgba(28,18,13,.08)); content: ''; pointer-events: none; }
+.pet-scene-message { position: absolute; z-index: 4; top: 16px; left: 16px; display: grid; max-width: 310px; gap: 3px; padding: 10px 12px; border-radius: 10px; color: #fff9ed; background: rgba(37, 28, 24, .76); backdrop-filter: blur(12px); }
+.pet-scene-message small { color: #f2d18b; font-size: 11px; }
+.pet-scene-message strong { font-size: 12px; line-height: 1.45; }
+.pet-scene-character { position: absolute; z-index: 3; left: 51%; bottom: 86px; width: 205px; height: 205px; padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateX(-50%); transition: filter .18s ease, transform .18s ease, opacity .18s ease; }
+.pet-scene-character:hover { filter: brightness(1.08); transform: translateX(-50%) translateY(-4px); }
+.pet-scene-character:focus-visible { outline: 4px solid #fff2b9; outline-offset: 5px; border-radius: 12px; }
+.pet-scene-character.is-hiding { opacity: 0; pointer-events: none; transform: translateX(-50%) scale(.72); }
+.pet-scene-character .pet-stage-frame { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 8px rgba(50, 28, 18, .26)); }
+.pet-scene-character-label { position: absolute; right: 50%; bottom: 0; padding: 5px 8px; border-radius: 7px; color: #342719; background: #f2d58e; font-size: 11px; font-weight: 800; opacity: 0; transform: translateX(50%) translateY(4px); transition: opacity .16s ease, transform .16s ease; white-space: nowrap; }
+.pet-scene-character:hover .pet-scene-character-label,
+.pet-scene-character:focus-visible .pet-scene-character-label { opacity: 1; transform: translateX(50%); }
+.pet-star-accessory { position: absolute; z-index: 4; top: 17px; right: 37px; color: #ffd260; font-size: 30px; filter: drop-shadow(0 2px 0 #8f6633); transform: rotate(9deg); }
+.pet-scene-hotspot { position: absolute; z-index: 2; min-width: 54px; min-height: 42px; padding: 0; border: 0; color: #fff8e8; background: transparent; font: inherit; cursor: pointer; }
+.pet-scene-hotspot::before { position: absolute; inset: 50% auto auto 50%; width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 231, 160, .28); box-shadow: 0 0 0 7px rgba(255, 231, 160, .1); content: ''; transform: translate(-50%, -50%); transition: transform .18s ease, background .18s ease; }
+.pet-scene-hotspot span { position: absolute; top: calc(100% + 2px); left: 50%; padding: 4px 7px; border-radius: 6px; background: rgba(38,27,22,.76); font-size: 11px; font-weight: 700; opacity: 0; transform: translateX(-50%); white-space: nowrap; }
+.pet-scene-hotspot:hover::before,
+.pet-scene-hotspot:focus-visible::before { background: rgba(255, 235, 174, .54); transform: translate(-50%, -50%) scale(1.12); }
+.pet-scene-hotspot:hover span,
+.pet-scene-hotspot:focus-visible span { opacity: 1; }
+.pet-scene-hotspot:focus-visible { outline: 3px solid #fff1b9; outline-offset: 4px; border-radius: 9px; }
+.pet-scene-hotspot.is-nest { top: 43%; left: 21%; }
+.pet-scene-hotspot.is-brush { right: 15%; bottom: 31%; }
+.pet-scene-hotspot.is-snack { right: 7%; bottom: 18%; }
+.pet-scene-hotspot.is-ball { left: 34%; bottom: 23%; }
+.pet-hide-game { position: absolute; z-index: 6; top: 50%; left: 50%; display: grid; width: min(360px, calc(100% - 36px)); gap: 10px; padding: 16px; border-radius: 12px; color: #fff8e8; background: rgba(43, 31, 27, .92); transform: translate(-50%, -50%); backdrop-filter: blur(14px); }
+.pet-hide-game strong { text-align: center; font-size: 12px; }
+.pet-hide-game div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.pet-hide-game button { min-height: 38px; border: 0; border-radius: 8px; color: #3b2a1c; background: #f0d393; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.pet-hide-game .pet-hide-cancel { color: #fff3df; background: rgba(255,255,255,.1); }
+.pet-scene-urgent { position: absolute; z-index: 7; top: 50%; left: 50%; width: min(620px, calc(100% - 64px)); padding: 24px; border-width: 2px; background: rgba(70, 29, 27, .94); transform: translate(-50%, -50%); backdrop-filter: blur(16px); }
+.pet-scene-urgent > span { color: #ffd0c9; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.pet-scene-urgent strong { font-size: 19px; }
+.pet-scene-urgent p { font-size: 12px; }
+.pet-scene-dock { position: absolute; z-index: 5; right: 12px; bottom: 12px; left: 12px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 7px; border-radius: 12px; background: rgba(39, 29, 25, .8); backdrop-filter: blur(14px); }
+.pet-scene-dock button { display: grid; min-width: 0; min-height: 52px; place-items: center; align-content: center; gap: 2px; border: 0; border-radius: 8px; color: rgba(255,248,235,.86); background: transparent; font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, color .16s ease; }
+.pet-scene-dock button span { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 7px; color: #3c2b1e; background: #eed49a; font-size: 11px; font-weight: 900; }
+.pet-scene-dock button:hover { color: #fff; background: rgba(255,255,255,.1); }
+.pet-scene-dock button:disabled { color: rgba(255,248,235,.5); cursor: not-allowed; }
+.pet-scene-hotspot:disabled { cursor: not-allowed; opacity: .55; }
+.pet-scene-dock button.is-primary { color: #203329; background: #b8d7c4; font-weight: 800; }
+.pet-scene-dock button:focus-visible,
+.pet-home-journey button:focus-visible { outline: 3px solid #fff1b9; outline-offset: 2px; }
+.pet-home-sidebar { display: flex; min-height: 548px; flex-direction: column; gap: 15px; padding: 14px; border-radius: 14px; color: #3d3026; background: #efe0c2; }
+.pet-home-today > div:first-child { display: grid; gap: 3px; }
+.pet-home-today > div:first-child span { color: #796555; font-size: 11px; }
+.pet-home-today > div:first-child strong { color: #3a2a1e; font-size: 15px; }
+.pet-home-today > p { margin: 10px 0 0; color: #6d5948; font-size: 11px; line-height: 1.55; }
+.pet-need-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 13px; }
+.pet-need-row > span { display: grid; min-width: 0; gap: 3px; padding: 8px 6px; border-radius: 9px; background: rgba(88, 66, 47, .08); }
+.pet-need-row i { display: block; width: var(--pet-need); max-width: 100%; height: 4px; border-radius: 3px; background: #79a98e; }
+.pet-need-row small { color: #7a6655; font-size: 10px; }
+.pet-need-row strong { overflow: hidden; color: #46382c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.pet-home-moments { padding-top: 13px; border-top: 1px solid rgba(79, 58, 42, .18); }
+.pet-home-moments .pet-section-title span { color: #3d3026; }
+.pet-home-moments .pet-section-title small { color: #7c6959; }
+.pet-home-moments ul { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; }
+.pet-home-moments li { display: grid; grid-template-columns: 34px 1fr; gap: 7px; padding: 8px 0; border-bottom: 1px solid rgba(79,58,42,.12); }
+.pet-home-moments time { color: #8a725e; font-size: 10px; }
+.pet-home-moments li span { color: #564536; font-size: 11px; line-height: 1.45; }
+.pet-home-journey { margin-top: auto; }
+.pet-home-journey button { display: grid; width: 100%; gap: 2px; padding: 11px 12px; border: 0; border-radius: 10px; color: #fdf5e8; background: #735a43; font: inherit; text-align: left; cursor: pointer; }
+.pet-home-journey button span { font-size: 12px; font-weight: 800; }
+.pet-home-journey button small { color: rgba(255,248,236,.72); font-size: 10px; }
+.pet-companion-restored { margin-top: 12px; }
+.pet-companion-chat { max-height: 310px; overflow-y: auto; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.045); }
+.pet-care-boundary { margin: 10px 2px 0; color: rgba(248,246,239,.64); font-size: 11px; line-height: 1.5; text-align: center; }
+
 @media (max-width: 680px) {
   .pet-panel-overlay { align-items: flex-end; padding: 0; }
   .pet-panel-card.pet-playground-card { width: 100%; max-height: min(91dvh, 860px); padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 16px 16px 0 0; }
@@ -7599,6 +7801,10 @@ onUnmounted(() => {
   .pet-stage-frame.is-eating,
   .pet-stage-frame.is-sleeping { animation: none; }
   .pet-growth-track span,
-  .pet-panel-actions button { transition: none; }
+  .pet-panel-actions button,
+  .pet-scene-character,
+  .pet-scene-character-label,
+  .pet-scene-hotspot::before,
+  .pet-scene-dock button { transition: none; }
 }
 </style>
