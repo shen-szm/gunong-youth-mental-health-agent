@@ -45,3 +45,17 @@ def init_db():
             if column_name not in session_columns:
                 with engine.begin() as connection:
                     connection.execute(text(f"ALTER TABLE student_chat_sessions ADD COLUMN {column_name} {column_type}"))
+        if "teacher_review_reports" in inspector.get_table_names():
+            report_columns = {item["name"] for item in inspector.get_columns("teacher_review_reports")}
+            report_additions = {
+                "content_hash": "VARCHAR(64) NOT NULL DEFAULT ''",
+                "scope_key": "VARCHAR(64) NOT NULL DEFAULT 'direct'",
+                "revision_number": "INTEGER NOT NULL DEFAULT 1",
+                "parent_report_id": "VARCHAR(120)",
+            }
+            for column_name, column_type in report_additions.items():
+                if column_name not in report_columns:
+                    with engine.begin() as connection:
+                        connection.execute(text(f"ALTER TABLE teacher_review_reports ADD COLUMN {column_name} {column_type}"))
+            with engine.begin() as connection:
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_teacher_review_revision ON teacher_review_reports (source_product_id, generated_by_user_id, scope_key, version, revision_number)"))

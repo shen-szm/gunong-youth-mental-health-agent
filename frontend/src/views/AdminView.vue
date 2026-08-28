@@ -156,7 +156,7 @@
                       <button type="button" :disabled="taskDecisionLoading === index" :class="{ confirmed: confirmedTasks.includes(index) }" @click="toggleTask(index)">{{ taskDecisionLoading === index ? '记录中…' : confirmedTasks.includes(index) ? '已确认并审计' : '确认任务' }}</button>
                     </article>
                   </section>
-                    <div class="original-list" tabindex="0" aria-label="经授权的学生证据列表，可上下滚动">
+                  <div class="original-list" tabindex="0" aria-label="经授权的学生证据列表，可上下滚动">
                       <div class="original-list-head"><h4>经授权的证据 · 可回溯</h4><small>{{ workProduct.records?.length || 0 }} 条 · 每次打开均已审计</small></div>
                     <article v-for="record in workProduct.records" :id="`evidence-${record.id}`" :key="record.id" class="original-record" tabindex="-1">
                       <div><span>{{ record.source }}</span><time :datetime="record.created_at">{{ formatDateTime(record.created_at) }}</time></div>
@@ -164,6 +164,14 @@
                     </article>
                     <p v-if="!workProduct.records?.length" class="empty-state">近30天暂无可展示原文。</p>
                   </div>
+                  <TeacherReviewReport
+                    :report="reviewReport"
+                    :loading="reviewReportLoading"
+                    :decision-loading="reviewDecisionLoading"
+                    @generate="generateReviewReport"
+                    @decision="submitReviewDecision"
+                    @download="downloadReviewReport"
+                  />
                 </template>
               </div>
               <p v-if="caseMessage" class="case-message" role="status">{{ caseMessage }}</p>
@@ -385,6 +393,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import axios from 'axios'
 import TeacherTodayDashboard from '../components/TeacherTodayDashboard.vue'
+import TeacherReviewReport from '../components/TeacherReviewReport.vue'
 import pkg from '../../package.json'
 import {
   getTeacherOverview,
@@ -402,6 +411,10 @@ import {
   decideCaseAccessRequest,
   getStudentWorkProduct,
   decideStudentWorkProductTask,
+  generateStudentReviewReport,
+  getLatestStudentReviewReport,
+  decideStudentReviewReport,
+  studentReviewReportPdfUrl,
   setTeacherStudentAssignment,
   setStudentExternalAiAuthorization,
 } from '../api/teacher'
@@ -438,6 +451,9 @@ const accessReason = ref('')
 const accessSubmitting = ref(false)
 const contextLoading = ref(false)
 const workProduct = ref(null)
+const reviewReport = ref(null)
+const reviewReportLoading = ref(false)
+const reviewDecisionLoading = ref(false)
 const caseResultHeading = ref(null)
 const confirmedTasks = ref([])
 const taskDecisionLoading = ref(null)
@@ -637,6 +653,7 @@ function chooseCaseStudent(student) {
   caseStudent.value = student
   accessReason.value = ''
   workProduct.value = null
+  reviewReport.value = null
   confirmedTasks.value = []
   caseMessage.value = ''
   aiAuthorityConfirmed.value = false
@@ -680,8 +697,14 @@ async function loadCaseContext() {
   try {
     const productResponse = await getStudentWorkProduct(caseStudent.value.id, caseStudent.value.access?.request_id)
     workProduct.value = productResponse.data
+    try {
+      reviewReport.value = (await getLatestStudentReviewReport(caseStudent.value.id, caseStudent.value.access?.request_id)).data
+    } catch (reportError) {
+      reviewReport.value = null
+      if (reportError.response?.status !== 404) caseMessage.value = '支持工单已读取，但历史评审报告暂时不可用；仍可继续查看证据或重新生成报告。'
+    }
     confirmedTasks.value = Array.isArray(productResponse.data.confirmed_task_indices) ? productResponse.data.confirmed_task_indices : []
-    caseMessage.value = `支持工单已生成：${teacherGenerationLabel.value}`
+    if (!caseMessage.value) caseMessage.value = `支持工单已生成：${teacherGenerationLabel.value}`
     await nextTick()
     caseResultHeading.value?.focus({ preventScroll: true })
   } catch (e) {
@@ -690,6 +713,46 @@ async function loadCaseContext() {
   } finally {
     contextLoading.value = false
   }
+}
+
+async function generateReviewReport() {
+  if (!caseStudent.value || reviewReportLoading.value) return
+  reviewReportLoading.value = true
+  caseMessage.value = ''
+  try {
+    reviewReport.value = (await generateStudentReviewReport(caseStudent.value.id, caseStudent.value.access?.request_id)).data
+    caseMessage.value = '最终评审报告已生成，等待教师核对并签署。'
+  } catch (e) {
+    caseMessage.value = e.response?.data?.detail || '最终评审报告生成失败，请重试。'
+  } finally {
+    reviewReportLoading.value = false
+  }
+}
+
+async function submitReviewDecision({ decision, checklistConfirmed, note }) {
+  if (!caseStudent.value || !reviewReport.value || reviewDecisionLoading.value) return
+  reviewDecisionLoading.value = true
+  caseMessage.value = ''
+  try {
+    reviewReport.value = (await decideStudentReviewReport(
+      caseStudent.value.id,
+      reviewReport.value.report_id,
+      decision,
+      checklistConfirmed,
+      note,
+      caseStudent.value.access?.request_id,
+    )).data
+    caseMessage.value = decision === 'reviewed' ? '教师复核已签署并记录审计。' : '报告已退回修订并记录原因。'
+  } catch (e) {
+    caseMessage.value = e.response?.data?.detail || '审核状态记录失败，请重试。'
+  } finally {
+    reviewDecisionLoading.value = false
+  }
+}
+
+function downloadReviewReport() {
+  if (!caseStudent.value || !reviewReport.value) return
+  window.open(studentReviewReportPdfUrl(caseStudent.value.id, reviewReport.value.report_id, caseStudent.value.access?.request_id), '_blank', 'noopener,noreferrer')
 }
 
 async function toggleTask(index) {

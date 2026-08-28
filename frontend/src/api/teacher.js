@@ -74,6 +74,27 @@ export function decideStudentWorkProductTask(studentId, productId, taskIndex, de
   }, { params: requestId ? { request_id: requestId } : {} })
 }
 
+export function generateStudentReviewReport(studentId, requestId = null) {
+  return instance.post(`/students/${studentId}/review-reports`, null, { params: requestId ? { request_id: requestId } : {} })
+}
+
+export function getLatestStudentReviewReport(studentId, requestId = null) {
+  return instance.get(`/students/${studentId}/review-reports/latest`, { params: requestId ? { request_id: requestId } : {} })
+}
+
+export function decideStudentReviewReport(studentId, reportId, decision, checklistConfirmed, note = '', requestId = null) {
+  return instance.post(`/students/${studentId}/review-reports/${reportId}/decision`, {
+    decision,
+    checklist_confirmed: checklistConfirmed,
+    note,
+  }, { params: requestId ? { request_id: requestId } : {} })
+}
+
+export function studentReviewReportPdfUrl(studentId, reportId, requestId = null) {
+  const query = requestId ? `?request_id=${encodeURIComponent(requestId)}` : ''
+  return `/api/teacher/students/${studentId}/review-reports/${encodeURIComponent(reportId)}.pdf${query}`
+}
+
 export function setStudentExternalAiAuthorization(studentId, active, authorityConfirmed = false, expiresDays = 30) {
   return instance.post(`/students/${studentId}/external-ai-authorization`, {
     active,

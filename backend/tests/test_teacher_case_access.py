@@ -1,5 +1,6 @@
 import sys
 import unittest
+from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
@@ -20,7 +21,7 @@ from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
 
 
@@ -553,6 +554,152 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.assertNotIn("support", routine.json())
         finally:
             student_client.close()
+
+    def test_admin_generates_reviews_signs_and_downloads_final_report(self):
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["status"], "draft")
+        self.assertEqual(report["report_version"], "teacher-review-report-v1")
+        self.assertEqual(len(report["agent_review"]["workflow"]), 7)
+        self.assertFalse(report["data_scope"]["original_text_external_transfer"])
+        self.assertIn("不是医学诊断", report["boundary"])
+        self.assertTrue(report["review_checklist"])
+
+        blocked = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": False, "note": "已线下核对"},
+        )
+        self.assertEqual(blocked.status_code, 400)
+        signed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": True, "note": "已线下核对并明确责任人"},
+        )
+        self.assertEqual(signed.status_code, 200, signed.text)
+        self.assertEqual(signed.json()["status"], "reviewed")
+        terminal = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": "尝试修改已签署报告"},
+        )
+        self.assertEqual(terminal.status_code, 409)
+        reused = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(reused.json()["report_id"], report["report_id"])
+
+        pdf = self.admin_client.get(f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}.pdf")
+        self.assertEqual(pdf.status_code, 200, pdf.text)
+        self.assertEqual(pdf.headers["content-type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        db = self.Session()
+        try:
+            self.assertEqual(db.query(TeacherReviewReport).filter_by(report_id=report["report_id"]).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="generate_teacher_review_report", actor_user_id=self.admin_id).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="download_teacher_review_report", actor_user_id=self.admin_id).count(), 1)
+        finally:
+            db.close()
+
+    def test_regular_teacher_report_requires_approved_request_scope(self):
+        denied = self.teacher_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(denied.status_code, 403)
+        submitted = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/access-requests",
+            json={"reason": "需要结合授权记录形成可审签的支持报告", "scope": "recent_30_days"},
+        )
+        request_id = submitted.json()["request_id"]
+        approved = self.admin_client.post(
+            f"/api/teacher/access-requests/{request_id}/decision",
+            json={"decision": "approved", "note": "同意最小必要范围"},
+        )
+        self.assertEqual(approved.status_code, 200)
+        generated = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report_id = generated.json()["report_id"]
+        self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/review-reports/latest").json()["report_id"], report_id)
+        self.assertEqual(self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/review-reports/latest",
+            params={"request_id": request_id + 9999},
+        ).status_code, 403)
+        self.assertEqual(self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/review-reports/latest",
+            params={"request_id": request_id},
+        ).json()["report_id"], report_id)
+        revision_without_note = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": ""},
+        )
+        self.assertEqual(revision_without_note.status_code, 400)
+        revision = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": "需要补充学生愿意接受的支持方式"},
+        )
+        self.assertEqual(revision.status_code, 200)
+        blocked_sign = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "reviewed", "checklist_confirmed": True, "note": "直接签署"},
+        )
+        self.assertEqual(blocked_sign.status_code, 409)
+        revised = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(revised.status_code, 200)
+        self.assertEqual(revised.json()["revision_number"], 2)
+        self.assertEqual(revised.json()["parent_report_id"], report_id)
+
+    def test_report_model_only_receives_deidentified_structured_fields(self):
+        model_payload = '{"executive_summary":"授权范围内记录显示需要继续核对功能影响，并安排支持与回访。","conversation_opening":"我想听听你愿意分享的部分，也可以选择暂时不回答。"}'
+        mocked = AsyncMock(return_value=model_payload)
+        with patch("api.teacher.student_external_ai_allowed", return_value=True), patch("teacher_review_engine.is_spark_available", return_value=True), patch("teacher_review_engine.ask_spark", mocked):
+            generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["generation"]["source"], "xunfei_constrained")
+        self.assertTrue(report["generation"]["external_transfer"])
+        prompt = str(mocked.await_args.args[0])
+        self.assertNotIn("最近早上不太想去学校", prompt)
+        self.assertNotIn("我和同学相处得有点累", prompt)
+        self.assertIn("source_counts", prompt)
+
+    def test_failed_external_report_attempt_is_audited_and_dangerous_words_degrade(self):
+        unsafe_payload = '{"executive_summary":"请继续核对。","conversation_opening":"不要告诉任何人，我保证绝对保密，你必须全部说出来。"}'
+        mocked = AsyncMock(return_value=unsafe_payload)
+        with patch("api.teacher.student_external_ai_allowed", return_value=True), patch("teacher_review_engine.is_spark_available", return_value=True), patch("teacher_review_engine.ask_spark", mocked):
+            generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        generation = generated.json()["generation"]
+        self.assertTrue(generation["external_transfer_attempted"])
+        self.assertFalse(generation["external_transfer_succeeded"])
+        self.assertEqual(generation["external_transfer_failure"], "invalid_or_unsafe_output")
+        self.assertTrue(generation["transferred_fields"])
+        self.assertNotIn("绝对保密", generated.json()["support_plan"]["conversation_opening"])
+        db = self.Session()
+        try:
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="external_ai_transfer_attempt", actor_user_id=self.admin_id, result="failed_safe_degrade").count(), 1)
+        finally:
+            db.close()
+
+    def test_urgent_report_stops_ordinary_plan_and_uses_safety_specific_evidence(self):
+        db = self.Session()
+        try:
+            db.add(ChatMessage(user_id=self.student_id, role="user", content="我想死，不想再继续了", emotion="需要立即协助", created_at=datetime.now()))
+            db.commit()
+        finally:
+            db.close()
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["overall_decision"]["risk_level"], "urgent")
+        self.assertTrue(report["safety_review"]["ordinary_plan_stopped"])
+        self.assertGreaterEqual(len(report["safety_review"]["immediate_actions"]), 3)
+        self.assertEqual(report["support_plan"]["tasks"], [])
+        self.assertEqual(report["support_plan"]["questions"], [])
+        self.assertEqual(report["support_plan"]["conversation_opening"], "")
+        self.assertEqual({item["code"] for item in report["evidence_sources"]}, {"NICE-NG225", "WHO-SHS-2021"})
 
 
 if __name__ == "__main__":

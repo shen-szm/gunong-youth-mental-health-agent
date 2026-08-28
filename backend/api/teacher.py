@@ -1,18 +1,22 @@
 """教师工作台 API：最小支持摘要、个案查看申请、审批与原文审计访问。"""
 
 from datetime import datetime, timedelta
+import hashlib
 import json
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth import require_admin_teacher, require_teacher
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
-from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload, student_external_ai_allowed
+from teacher_review_engine import build_teacher_review_report
+from teacher_review_pdf import generate_teacher_review_pdf
 
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
@@ -66,6 +70,13 @@ class StudentAiAuthorizationInput(BaseModel):
     active: bool
     authority_confirmed: bool = False
     expires_days: int = Field(default=30, ge=1, le=365)
+
+
+class TeacherReviewDecisionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: str = Field(pattern=r"^(reviewed|revision_requested)$")
+    checklist_confirmed: bool = False
+    note: str = Field(default="", max_length=1000)
 
 
 def _audit(db: Session, actor: User, action: str, resource_type: str, resource_id: str, result: str) -> None:
@@ -775,6 +786,195 @@ def decide_work_product_task(student_id: int, payload: WorkProductTaskDecisionIn
     resource_id = f"{payload.product_id}:{payload.task_index}"
     _audit(db, teacher, f"{payload.decision}_work_product_task", "work_product_task", resource_id, "allowed")
     return {"product_id": payload.product_id, "task_index": payload.task_index, "status": payload.decision, "audited": True}
+
+
+def _review_report_payload(row: TeacherReviewReport) -> dict:
+    payload = json.loads(row.report_json or "{}")
+    payload.update({
+        "report_id": row.report_id,
+        "report_version": row.version,
+        "status": row.status,
+        "review_note": row.review_note,
+        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
+        "reviewed_by_user_id": row.reviewed_by_user_id,
+        "created_at": row.created_at.isoformat() if row.created_at else payload.get("generated_at"),
+        "content_hash": row.content_hash,
+        "revision_number": row.revision_number,
+        "parent_report_id": row.parent_report_id,
+    })
+    return payload
+
+
+@router.post("/students/{student_id}/review-reports")
+async def generate_teacher_review_report(
+    student_id: int,
+    request_id: int | None = None,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
+    """在审批边界内运行报告 Agent，并保存不可变内容快照。"""
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    expected_request_id = approved.id if approved else None
+    work_product = student_work_product(student_id=student_id, request_id=request_id, db=db, teacher=teacher)
+    snapshot = db.query(TeacherWorkProductSnapshot).filter(
+        TeacherWorkProductSnapshot.product_id == work_product["case_id"],
+        TeacherWorkProductSnapshot.student_user_id == student_id,
+        TeacherWorkProductSnapshot.generated_by_user_id == teacher.id,
+        TeacherWorkProductSnapshot.request_id == expected_request_id,
+    ).first()
+    if not snapshot:
+        raise HTTPException(status_code=409, detail="支持工单快照尚未完成")
+    scope_key = f"request-{expected_request_id}" if expected_request_id else "direct"
+    prior = db.query(TeacherReviewReport).filter(
+        TeacherReviewReport.source_product_id == snapshot.product_id,
+        TeacherReviewReport.generated_by_user_id == teacher.id,
+        TeacherReviewReport.scope_key == scope_key,
+        TeacherReviewReport.version == "teacher-review-report-v1",
+    ).order_by(TeacherReviewReport.revision_number.desc(), TeacherReviewReport.id.desc()).first()
+    if prior and prior.status in {"draft", "reviewed"}:
+        _audit(db, teacher, "reuse_teacher_review_report", "teacher_review_report", prior.report_id, "idempotent")
+        return _review_report_payload(prior)
+    student = db.query(User).filter(User.id == student_id, User.is_admin == 0).first()
+    report = await build_teacher_review_report(
+        work_product=work_product,
+        student_label=(student.nickname or student.username) if student else f"学生 {student_id}",
+        teacher_label=teacher.nickname or teacher.username,
+        external_ai_allowed=student_external_ai_allowed(db, student_id),
+    )
+    _require_student_access(db, teacher, student_id, request_id)
+    generation = report.get("generation") or {}
+    if generation.get("external_transfer_attempted"):
+        _audit(db, teacher, "external_ai_transfer_attempt", "teacher_review_report", snapshot.product_id, "succeeded" if generation.get("external_transfer_succeeded") else "failed_safe_degrade")
+    report_id = f"TR-{student_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
+    report["report_id"] = report_id
+    serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+    row = TeacherReviewReport(
+        report_id=report_id,
+        student_user_id=student_id,
+        request_id=expected_request_id,
+        source_product_id=snapshot.product_id,
+        generated_by_user_id=teacher.id,
+        report_json=serialized,
+        content_hash=hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+        scope_key=scope_key,
+        revision_number=(prior.revision_number + 1) if prior else 1,
+        parent_report_id=prior.report_id if prior else None,
+        status="draft",
+        version="teacher-review-report-v1",
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(TeacherReviewReport).filter(
+            TeacherReviewReport.source_product_id == snapshot.product_id,
+            TeacherReviewReport.generated_by_user_id == teacher.id,
+            TeacherReviewReport.scope_key == scope_key,
+            TeacherReviewReport.version == "teacher-review-report-v1",
+            TeacherReviewReport.revision_number == ((prior.revision_number + 1) if prior else 1),
+        ).first()
+        if existing:
+            _audit(db, teacher, "reuse_teacher_review_report", "teacher_review_report", existing.report_id, "concurrent_idempotent")
+            return _review_report_payload(existing)
+        raise HTTPException(status_code=409, detail="报告版本冲突，请刷新后重试")
+    _audit(db, teacher, "generate_teacher_review_report", "teacher_review_report", report_id, "allowed")
+    return _review_report_payload(row)
+
+
+@router.get("/students/{student_id}/review-reports/latest")
+def latest_teacher_review_report(
+    student_id: int,
+    request_id: int | None = None,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    expected_request_id = approved.id if approved else None
+    row = db.query(TeacherReviewReport).filter(
+        TeacherReviewReport.student_user_id == student_id,
+        TeacherReviewReport.request_id == expected_request_id,
+        TeacherReviewReport.generated_by_user_id == teacher.id,
+    ).order_by(TeacherReviewReport.created_at.desc(), TeacherReviewReport.id.desc()).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="尚未生成最终评审报告")
+    _audit(db, teacher, "view_teacher_review_report", "teacher_review_report", row.report_id, "allowed")
+    return _review_report_payload(row)
+
+
+@router.post("/students/{student_id}/review-reports/{report_id}/decision")
+def decide_teacher_review_report(
+    student_id: int,
+    report_id: str,
+    payload: TeacherReviewDecisionInput,
+    request_id: int | None = None,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    expected_request_id = approved.id if approved else None
+    row = db.query(TeacherReviewReport).filter(
+        TeacherReviewReport.report_id == report_id,
+        TeacherReviewReport.student_user_id == student_id,
+        TeacherReviewReport.request_id == expected_request_id,
+        TeacherReviewReport.generated_by_user_id == teacher.id,
+    ).first()
+    if not row:
+        _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, "denied_scope")
+        raise HTTPException(status_code=404, detail="评审报告不存在或不属于当前授权范围")
+    if row.status == "reviewed":
+        raise HTTPException(status_code=409, detail="已签署报告为终态；如需调整，请生成新的修订版")
+    if row.status == "revision_requested" and payload.decision == "reviewed":
+        raise HTTPException(status_code=409, detail="退回的报告不能直接签署，请先生成新的修订版")
+    if row.status == "revision_requested" and payload.decision == "revision_requested":
+        return _review_report_payload(row)
+    if payload.decision == "reviewed" and not payload.checklist_confirmed:
+        raise HTTPException(status_code=400, detail="签署前必须逐项确认审核清单")
+    if payload.decision == "revision_requested" and len(payload.note.strip()) < 4:
+        raise HTTPException(status_code=400, detail="退回修订时请填写具体说明")
+    db.add(TeacherReviewReportDecision(
+        report_id=row.report_id,
+        teacher_user_id=teacher.id,
+        previous_status=row.status,
+        decision=payload.decision,
+        checklist_confirmed=1 if payload.checklist_confirmed else 0,
+        note=payload.note.strip(),
+    ))
+    row.status = payload.decision
+    row.review_note = payload.note.strip()
+    row.reviewed_by_user_id = teacher.id
+    row.reviewed_at = datetime.now()
+    db.commit()
+    _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, payload.decision)
+    return _review_report_payload(row)
+
+
+@router.get("/students/{student_id}/review-reports/{report_id}.pdf")
+def download_teacher_review_report(
+    student_id: int,
+    report_id: str,
+    request_id: int | None = None,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    expected_request_id = approved.id if approved else None
+    row = db.query(TeacherReviewReport).filter(
+        TeacherReviewReport.report_id == report_id,
+        TeacherReviewReport.student_user_id == student_id,
+        TeacherReviewReport.request_id == expected_request_id,
+        TeacherReviewReport.generated_by_user_id == teacher.id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="评审报告不存在或不属于当前授权范围")
+    report = _review_report_payload(row)
+    content = generate_teacher_review_pdf(report)
+    _audit(db, teacher, "download_teacher_review_report", "teacher_review_report", report_id, "allowed")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="teacher-review-{report_id}.pdf"'},
+    )
 
 
 @router.get("/students/{student_id}/profile")

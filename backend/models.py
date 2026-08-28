@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Index
+from sqlalchemy import CheckConstraint, Column, Integer, String, Text, DateTime, Float, ForeignKey, Index
 from sqlalchemy.sql import func
 from database import Base
 
@@ -345,6 +345,52 @@ class TeacherWorkProductTaskDecision(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (Index("idx_work_product_task_decision", "product_id", "task_index", "teacher_user_id", unique=True),)
+
+
+class TeacherReviewReport(Base):
+    """教师在授权工单范围内生成并人工签署的最终评审报告。"""
+
+    __tablename__ = "teacher_review_reports"
+
+    id = Column(Integer, primary_key=True)
+    report_id = Column(String(120), nullable=False, unique=True, index=True)
+    student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    request_id = Column(Integer, ForeignKey("student_case_access_requests.id"), nullable=True, index=True)
+    source_product_id = Column(String(120), ForeignKey("teacher_work_product_snapshots.product_id"), nullable=False, index=True)
+    generated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    report_json = Column(Text, nullable=False, default="{}")
+    content_hash = Column(String(64), nullable=False, default="")
+    scope_key = Column(String(64), nullable=False, default="direct")
+    revision_number = Column(Integer, nullable=False, default=1)
+    parent_report_id = Column(String(120), nullable=True)
+    status = Column(String(24), nullable=False, default="draft", index=True)
+    review_note = Column(Text, nullable=False, default="")
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    version = Column(String(40), nullable=False, default="teacher-review-report-v1")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_teacher_review_student_time", "student_user_id", "created_at"),
+        Index("idx_teacher_review_revision", "source_product_id", "generated_by_user_id", "scope_key", "version", "revision_number", unique=True),
+        CheckConstraint("status IN ('draft', 'reviewed', 'revision_requested')", name="ck_teacher_review_status"),
+    )
+
+
+class TeacherReviewReportDecision(Base):
+    """评审状态的追加式审计记录；不覆盖历史决定。"""
+
+    __tablename__ = "teacher_review_report_decisions"
+
+    id = Column(Integer, primary_key=True)
+    report_id = Column(String(120), ForeignKey("teacher_review_reports.report_id"), nullable=False, index=True)
+    teacher_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    previous_status = Column(String(24), nullable=False)
+    decision = Column(String(24), nullable=False)
+    checklist_confirmed = Column(Integer, nullable=False, default=0)
+    note = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 # ── 心岛守护者多智能体系统 ────────────────────────────────
