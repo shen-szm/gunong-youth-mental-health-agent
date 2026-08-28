@@ -22,7 +22,7 @@ test('admin teacher approval and direct access are explicit', () => {
   assert.match(store, /isSuperAdmin/)
 })
 
-test('teacher client uses dedicated access request endpoints', () => {
+test('teacher client uses dedicated access endpoints while student model access is globally governed', () => {
   assert.match(api, /students\/\$\{studentId\}\/access-requests/)
   assert.match(api, /access-requests\/\$\{requestId\}\/decision/)
   assert.match(api, /students\/\$\{studentId\}\/case-context/)
@@ -30,6 +30,6 @@ test('teacher client uses dedicated access request endpoints', () => {
   assert.match(api, /work-product\/task-decisions/)
   assert.match(api, /post\('\/assignments'/)
   assert.match(api, /external-ai-authorization/)
-  assert.match(view, /启用学生端模型协作/)
-  assert.match(view, /撤回模型协作授权/)
+  assert.match(view, /学生端受约束模型对话全局启用/)
+  assert.doesNotMatch(view, /撤回模型协作授权/)
 })

@@ -81,7 +81,7 @@
       </section>
 
       <div class="ai-consent" role="status">
-        <span><strong>{{ schema?.external_ai_enabled ? '教师端已启用受约束模型协作' : '当前使用本地确定性规则' }}</strong><small>{{ schema?.external_ai_enabled ? '只发送去标识化的领域等级，不发送逐题原文；风险等级始终由安全规则决定。' : '教师端尚未登记有效授权依据，本次不会向外部模型发送数据。' }}</small></span>
+        <span><strong>{{ schema?.external_ai_enabled ? '受约束模型协作已启用' : '当前使用本地确定性规则' }}</strong><small>{{ schema?.external_ai_enabled ? '无需单独申请；只发送去标识化的领域等级，不发送逐题原文，风险等级始终由安全规则决定。' : '模型服务暂不可用，本次由本地规则完成。' }}</small></span>
       </div>
 
       <p v-if="error" class="assessment-error" role="alert">{{ error }}</p>

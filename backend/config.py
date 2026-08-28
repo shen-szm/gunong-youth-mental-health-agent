@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
-    RELEASE_VERSION: str = "5.1.0-alpha.21"
+    RELEASE_VERSION: str = "5.1.0-alpha.22"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
     ALLOW_GUEST_SESSION: bool = False
@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ALLOW_EXTERNAL_AI: bool = False
     # 学生自由倾诉包含高度敏感信息；除总开关外，必须有教师端登记且未过期的机构/监护授权依据。
     ALLOW_STUDENT_EXTERNAL_AI: bool = False
+    # teacher_authorized=逐学生教师登记；platform_direct=学生无需逐次开通，由运营方在站点层完成合法授权治理。
+    STUDENT_AI_ACCESS_MODE: Literal["teacher_authorized", "platform_direct"] = "teacher_authorized"
+    PLATFORM_STUDENT_AI_GOVERNANCE_ACK: bool = False
     # 守护者表单已强制合成数据确认和去标识校验，可单独启用；失败时仍显式降级。
     ALLOW_GUARDIAN_SYNTHETIC_AI: bool = True
 
@@ -52,6 +55,8 @@ class Settings(BaseSettings):
     def enforce_production_session_security(self):
         if self.APP_ENV == "production" and (self.DEMO_MODE or not self.COOKIE_SECURE):
             raise ValueError("production requires DEMO_MODE=false and COOKIE_SECURE=true")
+        if self.STUDENT_AI_ACCESS_MODE == "platform_direct" and not self.PLATFORM_STUDENT_AI_GOVERNANCE_ACK:
+            raise ValueError("platform_direct requires explicit operator governance acknowledgement")
         return self
 
 @lru_cache()

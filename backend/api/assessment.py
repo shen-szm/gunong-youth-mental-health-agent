@@ -16,7 +16,7 @@ from auth import get_current_user
 from config import settings
 from database import get_db
 from models import SensitiveAccessLog, StudentAssessmentAgentRun, StudentWellbeingAssessment, User
-from student_ai_authorization import AUTHORIZATION_VERSION, student_external_ai_allowed
+from student_ai_authorization import student_ai_audit_basis, student_ai_governance_version, student_external_ai_allowed
 
 
 router = APIRouter(prefix="/api/assessment", tags=["student-assessment"])
@@ -148,7 +148,7 @@ def assessment_schema(db: Session = Depends(get_db), current_user: User = Depend
             {"value": "yes", "label": "有"},
         ],
         "external_ai_enabled": student_external_ai_allowed(db, current_user.id),
-        "external_ai_governance": "teacher_authorization",
+        "external_ai_governance": settings.STUDENT_AI_ACCESS_MODE,
     }
 
 
@@ -174,7 +174,7 @@ async def submit_assessment(
     if result.model_name == "xunfei-constrained" or result.degraded:
         _audit(
             db, current_user.id, "external_model_transfer_assessment", assessment_code,
-            "teacher_authorized_fields" if result.model_name == "xunfei-constrained" else "failed",
+            f"{student_ai_audit_basis()}_fields" if result.model_name == "xunfei-constrained" else "failed",
         )
     row = StudentWellbeingAssessment(
         assessment_code=assessment_code,
@@ -183,7 +183,7 @@ async def submit_assessment(
         result_json=result.model_dump_json(),
         risk_level=result.risk_level,
         review_status=result.review_status,
-        external_ai_consent_version=AUTHORIZATION_VERSION if external_ai_allowed else None,
+        external_ai_consent_version=student_ai_governance_version(db, current_user.id) if external_ai_allowed else None,
         model_name=result.model_name,
         prompt_version=result.prompt_version,
         degraded=int(result.degraded),

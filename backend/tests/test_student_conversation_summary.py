@@ -33,9 +33,13 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.Session = sessionmaker(bind=self.engine)
         self.old_external_ai = settings.ALLOW_EXTERNAL_AI
         self.old_student_external_ai = settings.ALLOW_STUDENT_EXTERNAL_AI
+        self.old_student_ai_access_mode = settings.STUDENT_AI_ACCESS_MODE
+        self.old_platform_governance_ack = settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK
         self.old_ask_spark = chat_api.ask_spark
         settings.ALLOW_EXTERNAL_AI = False
         settings.ALLOW_STUDENT_EXTERNAL_AI = False
+        settings.STUDENT_AI_ACCESS_MODE = "teacher_authorized"
+        settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = False
         self.app = FastAPI()
         self.app.include_router(user_router)
         self.app.include_router(chat_router)
@@ -81,6 +85,8 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.client_two.close()
         settings.ALLOW_EXTERNAL_AI = self.old_external_ai
         settings.ALLOW_STUDENT_EXTERNAL_AI = self.old_student_external_ai
+        settings.STUDENT_AI_ACCESS_MODE = self.old_student_ai_access_mode
+        settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = self.old_platform_governance_ack
         chat_api.ask_spark = self.old_ask_spark
         self.engine.dispose()
 
@@ -251,6 +257,38 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(sent.status_code, 200)
         mock.assert_not_awaited()
 
+    def test_platform_direct_mode_calls_constrained_model_without_per_student_record(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        settings.STUDENT_AI_ACCESS_MODE = "platform_direct"
+        settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = True
+        mock = AsyncMock(return_value="我在听。我们可以从现在最困扰你的一件小事慢慢说起。")
+        chat_api.ask_spark = mock
+        started = self.client_one.post("/api/chat/sessions", json={"force_new": True})
+        self.assertTrue(started.json()["external_ai_enabled"])
+        session_id = started.json()["session_id"]
+        sent = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_one_id,
+            "session_id": session_id,
+            "message": "今天作业很多，我有点焦虑",
+        })
+        self.assertEqual(sent.status_code, 200)
+        self.assertEqual(sent.json()["analysis_source"], "xunfei_constrained")
+        mock.assert_awaited_once()
+        prompt = str(mock.await_args_list[0])
+        self.assertIn("turn_features", prompt)
+        self.assertNotIn("今天作业很多", prompt)
+        db = self.Session()
+        try:
+            session = db.query(StudentChatSession).filter_by(session_code=session_id).one()
+            self.assertEqual(session.external_ai_consent_version, "platform-direct-deidentified-v1")
+            audit = db.query(SensitiveAccessLog).filter_by(action="external_model_transfer_chat").one()
+            self.assertEqual(audit.result, "platform_direct_deidentified_derived_features")
+        finally:
+            db.close()
+
     def test_constrained_xunfei_emotion_and_activity_reflection_reach_report(self):
         from unittest.mock import AsyncMock
 
@@ -309,6 +347,14 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             Settings(APP_ENV="production", DEMO_MODE=True, COOKIE_SECURE=False, _env_file=None)
         secure = Settings(APP_ENV="production", DEMO_MODE=False, COOKIE_SECURE=True, _env_file=None)
         self.assertTrue(secure.COOKIE_SECURE)
+        with self.assertRaises(ValueError):
+            Settings(STUDENT_AI_ACCESS_MODE="platform_direct", PLATFORM_STUDENT_AI_GOVERNANCE_ACK=False, _env_file=None)
+        direct = Settings(
+            STUDENT_AI_ACCESS_MODE="platform_direct",
+            PLATFORM_STUDENT_AI_GOVERNANCE_ACK=True,
+            _env_file=None,
+        )
+        self.assertEqual(direct.STUDENT_AI_ACCESS_MODE, "platform_direct")
 
     def test_indirect_split_crisis_and_professional_actions_are_safety_overrides(self):
         indirect_samples = [

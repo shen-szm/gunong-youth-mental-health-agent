@@ -19,7 +19,7 @@ from config import settings
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning, generated_content_violations
 from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentConversationSummary, User
-from student_ai_authorization import student_external_ai_allowed
+from student_ai_authorization import student_ai_audit_basis, student_ai_governance_version, student_external_ai_allowed
 from xunfei.asr_api import speech_to_text
 from xunfei.spark_api import ask_spark
 from xunfei.tts_api import text_to_speech
@@ -229,7 +229,7 @@ def start_session(payload: SessionStartRequest, db: Session = Depends(get_db),
             raise HTTPException(status_code=409, detail="只能继续已经完成小结的倾诉")
     row = _new_session(db, current_user.id,
         continued_from_id=continued_from.id if continued_from else None,
-        consent_version=None)
+        consent_version=student_ai_governance_version(db, current_user.id))
     return SessionResponse(session_id=row.session_code, status="active", started_at=row.started_at,
                            external_ai_enabled=external_ai_enabled)
 
@@ -366,7 +366,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
             risk_level=risk_level,
             local_emotion=emotion or "不确定",
         )
-        _audit(db, current_user.id, "external_model_transfer_chat", session.session_code, "teacher_authorized_derived_features")
+        _audit(db, current_user.id, "external_model_transfer_chat", session.session_code, f"{student_ai_audit_basis()}_derived_features")
         db.commit()
         try:
             raw = await ask_spark(prompts, max_tokens=500, temperature=0.15)
@@ -965,7 +965,7 @@ async def audio_to_text(request: Request, session_id: str | None = None,
         raise HTTPException(status_code=400, detail="未收到音频数据")
     if len(audio) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="音频过大，请缩短录音后重试")
-    _audit(db, current_user.id, "external_model_transfer_asr", session.session_code, "teacher_authorized_explicit_voice_action")
+    _audit(db, current_user.id, "external_model_transfer_asr", session.session_code, f"{student_ai_audit_basis()}_explicit_voice_action")
     db.commit()
     try:
         text = await speech_to_text(audio)
@@ -996,7 +996,7 @@ async def get_tts_audio(req: TTSRequest, db: Session = Depends(get_db),
     ).first()
     if not assistant_message:
         raise HTTPException(status_code=403, detail="只允许播放本次会话中已经安全校验的助手回复")
-    _audit(db, current_user.id, "external_model_transfer_tts", session.session_code, "teacher_authorized_validated_assistant_text")
+    _audit(db, current_user.id, "external_model_transfer_tts", session.session_code, f"{student_ai_audit_basis()}_validated_assistant_text")
     db.commit()
     audio_data = text_to_speech(req.text)
     if not audio_data:

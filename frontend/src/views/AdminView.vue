@@ -89,16 +89,10 @@
               <section class="student-ai-authorization" aria-labelledby="student-ai-authorization-title">
                 <div>
                   <span class="section-kicker">学生端 Agent 数据处理</span>
-                  <h4 id="student-ai-authorization-title">{{ caseStudent.external_ai_authorization?.active ? '受约束讯飞协作已启用' : '当前仅使用本地规则' }}</h4>
-                  <p>启用后，学生端无需逐次操作。系统仅发送去标识化的会话片段或衍生字段；安全分流仍由本地规则强制裁决。</p>
-                  <small v-if="caseStudent.external_ai_authorization?.expires_at">有效期至 {{ formatDateTime(caseStudent.external_ai_authorization.expires_at) }}</small>
+                  <h4 id="student-ai-authorization-title">学生端受约束模型对话全局启用</h4>
+                  <p>学生无需逐次申请或等待教师开通。文字对话仅发送去标识化结构特征，不发送聊天原文；安全分流仍由本地规则强制裁决。</p>
+                  <small>平台运营方仍须完成适用的机构、监护与隐私治理，不由学生在聊天中重复操作。</small>
                 </div>
-                <template v-if="!caseStudent.external_ai_authorization?.active">
-                  <label class="authority-check"><input v-model="aiAuthorityConfirmed" type="checkbox"><span>我已核验学校或监护人的有效授权依据，并确认本次用途为学生心理支持 Agent。</span></label>
-                  <label class="authority-expiry"><span>有效期</span><select v-model.number="aiAuthorizationDays"><option :value="30">30天</option><option :value="90">90天</option><option :value="180">180天</option></select></label>
-                  <button type="button" class="primary-btn" :disabled="aiAuthorizationLoading || !aiAuthorityConfirmed" @click="updateStudentAiAuthorization(true)">{{ aiAuthorizationLoading ? '正在记录…' : '启用学生端模型协作' }}</button>
-                </template>
-                <button v-else type="button" class="danger-btn" :disabled="aiAuthorizationLoading" @click="updateStudentAiAuthorization(false)">{{ aiAuthorizationLoading ? '正在撤回…' : '撤回模型协作授权' }}</button>
               </section>
 
               <div v-if="['not_requested', 'rejected', 'expired', 'revoked'].includes(caseStudent.access?.status)" class="access-application">

@@ -1247,7 +1247,7 @@
               </div>
             </div>
             <div class="chat-ai-consent" role="status">
-              <span><strong>{{ externalAiConsent ? '教师端已启用受约束模型协作' : '当前使用本地确定性规则' }}</strong><small>{{ externalAiConsent ? '文字倾诉仅外发本地提取的结构化特征，不发送原文；语音输入会发送录音，语音播放会发送本次已安全校验的助手回复至讯飞。危机判断始终由本地安全规则优先处理。' : '教师端尚未登记有效授权依据，本次不会向外部模型发送数据。' }}</small></span>
+              <span><strong>{{ externalAiConsent ? '受约束模型对话已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉仅外发本地提取的去标识化结构特征，不发送原文。语音输入会发送录音，语音播放会发送本次已安全校验的助手回复至讯飞。危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
             </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">

@@ -7,6 +7,7 @@ from models import StudentExternalAiAuthorization
 
 
 AUTHORIZATION_VERSION = "teacher-ai-authorization-v1"
+PLATFORM_DIRECT_VERSION = "platform-direct-deidentified-v1"
 
 
 def get_student_ai_authorization(db: Session, student_user_id: int) -> StudentExternalAiAuthorization | None:
@@ -16,6 +17,21 @@ def get_student_ai_authorization(db: Session, student_user_id: int) -> StudentEx
 
 
 def student_ai_authorization_payload(db: Session, student_user_id: int) -> dict:
+    if settings.STUDENT_AI_ACCESS_MODE == "platform_direct":
+        active = bool(
+            settings.ALLOW_EXTERNAL_AI
+            and settings.ALLOW_STUDENT_EXTERNAL_AI
+            and settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK
+        )
+        return {
+            "active": active,
+            "status": "platform_direct" if active else "disabled",
+            "authorized_by_user_id": None,
+            "basis": "platform_governance",
+            "statement_version": PLATFORM_DIRECT_VERSION,
+            "purpose": "student_support_agents_deidentified",
+            "expires_at": None,
+        }
     row = get_student_ai_authorization(db, student_user_id)
     active = bool(row and row.status == "active" and row.expires_at > datetime.now())
     return {
@@ -30,8 +46,17 @@ def student_ai_authorization_payload(db: Session, student_user_id: int) -> dict:
 
 
 def student_external_ai_allowed(db: Session, student_user_id: int) -> bool:
-    return bool(
-        settings.ALLOW_EXTERNAL_AI
-        and settings.ALLOW_STUDENT_EXTERNAL_AI
-        and student_ai_authorization_payload(db, student_user_id)["active"]
-    )
+    if not settings.ALLOW_EXTERNAL_AI or not settings.ALLOW_STUDENT_EXTERNAL_AI:
+        return False
+    if settings.STUDENT_AI_ACCESS_MODE == "platform_direct":
+        return bool(settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK)
+    return bool(student_ai_authorization_payload(db, student_user_id)["active"])
+
+
+def student_ai_governance_version(db: Session, student_user_id: int) -> str | None:
+    payload = student_ai_authorization_payload(db, student_user_id)
+    return payload["statement_version"] if payload["active"] else None
+
+
+def student_ai_audit_basis() -> str:
+    return "platform_direct_deidentified" if settings.STUDENT_AI_ACCESS_MODE == "platform_direct" else "teacher_authorized"

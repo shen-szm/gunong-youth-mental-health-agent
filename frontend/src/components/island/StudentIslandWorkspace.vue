@@ -229,10 +229,10 @@ const agentSourceLabel = computed(() => ({
   deterministic: '本地确定性规则',
 })[agentSource.value] || '本地确定性规则')
 const agentSourceDetail = computed(() => ({
-  xunfei_constrained: '教师端已登记有效授权依据，安全规则仍具有最终裁决权',
+  xunfei_constrained: '无需单独申请，受约束讯飞协作已执行；安全规则仍具有最终裁决权',
   safety_override: '风险行动由本地安全规则确定，模型不能覆盖',
   degraded: '外部协作不可用或输出未通过校验，已切回审核模板',
-  deterministic: '教师端未启用外部协作，全部在本地整理',
+  deterministic: '模型未参与本次生成，全部在本地整理',
 })[agentSource.value] || '当前来源尚未确认')
 const agentStepIndex = computed(() => safetyLocked.value ? 1 : activityState.value.reflection ? 4 : activityPlayed.value ? 3 : activeActivity.value ? 2 : agentPhase.value === 'moving' ? 1 : 0)
 const agentSteps = computed(() => [

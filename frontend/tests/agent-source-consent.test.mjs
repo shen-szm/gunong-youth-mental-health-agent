@@ -4,11 +4,11 @@ import test from 'node:test'
 
 const read = path => fs.readFileSync(new URL(path, import.meta.url), 'utf8')
 
-test('heart island reads teacher authorization and reports the actual generation source on desktop', () => {
+test('heart island exposes direct constrained model use and the actual generation source on desktop', () => {
   const workspace = read('../src/components/island/StudentIslandWorkspace.vue')
   const api = read('../src/api/island.js')
   assert.doesNotMatch(workspace + api, /student-island-ai-v1|external_ai_consent_version/)
-  assert.match(workspace, /教师端已登记有效授权依据/)
+  assert.match(workspace, /无需单独申请/)
   assert.match(workspace, /讯飞受约束生成/)
   assert.match(workspace, /安全规则强制覆盖/)
   assert.match(workspace, /@media \(min-width: 1024px\)/)
@@ -19,25 +19,25 @@ test('heart island reads teacher authorization and reports the actual generation
   assert.match(workspace, /agent-safety-action/)
 })
 
-test('student chat displays teacher-managed processing state without a student authorization control', () => {
+test('student chat directly enables constrained model processing without a per-student authorization control', () => {
   const room = read('../src/views/RoomHomeView.vue')
   const api = read('../src/api/chat.js')
-  assert.match(room, /教师端已启用受约束模型协作/)
-  assert.match(room, /教师端尚未登记有效授权依据/)
+  assert.match(room, /受约束模型对话已启用/)
+  assert.match(room, /无需单独申请即可对话/)
   assert.doesNotMatch(room + api, /student-ai-v1|update_external_ai_consent|updateChatAiConsent/)
-  assert.match(room, /文字倾诉仅外发本地提取的结构化特征，不发送原文/)
+  assert.match(room, /文字倾诉仅外发本地提取的去标识化结构特征，不发送原文/)
   assert.match(room, /语音播放会发送本次已安全校验的助手回复至讯飞/)
   assert.doesNotMatch(room, /v-if="chatMessages\.length === 0" class="chat-ai-consent"/)
   assert.match(room, /const session = await startChatSession\(false\)[\s\S]*externalAiConsent\.value = !!session\.data\.external_ai_enabled/)
 })
 
-test('teacher work product stays local and exposes its deterministic source', () => {
+test('teacher work product stays local while student model access is globally governed', () => {
   const view = read('../src/views/AdminView.vue')
   const api = read('../src/api/teacher.js')
   assert.match(view, /本地确定性规则/)
   assert.match(view, /teacherGenerationLabel/)
   assert.doesNotMatch(view + api, /teacher-derived-ai-v1|teacher_data_basis|derived_narrative/)
-  assert.match(view, /我已核验学校或监护人的有效授权依据/)
+  assert.match(view, /学生无需逐次申请或等待教师开通/)
   assert.match(api, /external-ai-authorization/)
 })
 

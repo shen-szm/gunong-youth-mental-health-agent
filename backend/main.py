@@ -48,6 +48,8 @@ async def health():
         "version": settings.RELEASE_VERSION,
         "external_ai": bool(settings.ALLOW_EXTERNAL_AI),
         "student_ai": bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_STUDENT_EXTERNAL_AI),
+        "student_ai_access_mode": settings.STUDENT_AI_ACCESS_MODE,
+        "student_ai_governance_ack": bool(settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK),
         "guardian_ai": bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_GUARDIAN_SYNTHETIC_AI),
         "spark_model": settings.SPARK_MODEL,
         "spark_configured": is_spark_available(),
