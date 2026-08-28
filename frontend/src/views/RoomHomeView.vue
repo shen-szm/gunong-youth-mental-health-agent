@@ -1240,10 +1240,9 @@
                 <p>今天怎么样？有什么想聊的，我都在这里。</p>
               </div>
             </div>
-            <label v-if="chatMessages.length === 0" class="chat-ai-consent">
-              <input v-model="externalAiConsent" type="checkbox" @change="updateChatAiConsent">
-              <span><strong>使用讯飞模型理解本次倾诉</strong><small>仅在本次会话内发送经过脱敏的最近对话；危机判断仍由后端安全规则优先处理，可不勾选继续聊天。</small></span>
-            </label>
+            <div class="chat-ai-consent" role="status">
+              <span><strong>{{ externalAiConsent ? '教师端已启用受约束模型协作' : '当前使用本地确定性规则' }}</strong><small>{{ externalAiConsent ? '文字倾诉仅外发本地提取的结构化特征，不发送原文；语音输入会发送录音，语音播放会发送本次已安全校验的助手回复至讯飞。危机判断始终由本地安全规则优先处理。' : '教师端尚未登记有效授权依据，本次不会向外部模型发送数据。' }}</small></span>
+            </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
               <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
@@ -1683,6 +1682,7 @@ let leisureSafetyHandoffPromise = null
 const studentAgentState = reactive({
   status: 'standby',
   phase: 'waiting',
+  source: 'unavailable',
   riskLevel: 'unassessed',
   signal: 'continue',
   emotion: '',
@@ -3768,6 +3768,7 @@ async function sendChatMsg(text) {
   const userMessageIndex = chatMessages.value.length - 1
   studentAgentState.status = 'running'
   studentAgentState.phase = 'chat'
+  studentAgentState.source = 'pending'
   studentAgentState.verifiedSteps = []
   studentAgentState.messageCount = chatMessages.value.filter(item => item.role === 'user').length
   studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
@@ -3776,8 +3777,10 @@ async function sendChatMsg(text) {
   scrollChatBottom()
   chatLoading.value = true
   try {
+    const session = await startChatSession(false)
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    applyChatSessionStatus(session.data?.status)
     if (!chatSessionId.value) {
-      const session = await startChatSession(false, null, externalAiConsent.value ? 'student-ai-v1' : null)
       chatSessionId.value = session.data.session_id
     }
     const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value)
@@ -3793,6 +3796,11 @@ async function sendChatMsg(text) {
       completeFirstRunAfterChat(msg, res.data)
       showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
       studentAgentState.signal = res.data.conversation_signal || 'continue'
+      studentAgentState.source = res.data.analysis_source === 'xunfei_constrained'
+        ? 'xunfei_constrained'
+        : res.data.analysis_source === 'safety_override'
+          ? 'safety_override'
+          : 'deterministic'
       studentAgentState.emotion = res.data.emotion || ''
       studentAgentState.riskLevel = res.data.risk_level || 'routine'
       studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
@@ -3801,6 +3809,7 @@ async function sendChatMsg(text) {
         safetyCurrentSafe.value = false
         safetyContactedAdult.value = false
         studentAgentState.status = 'urgent'
+        studentAgentState.source = 'safety_override'
         studentAgentState.phase = 'urgent'
         studentAgentState.riskLevel = 'urgent'
         studentAgentState.lastEvent = '普通分析已停止，当前优先显示安全协助路径'
@@ -3816,6 +3825,7 @@ async function sendChatMsg(text) {
     } else {
       chatMessages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试...' })
       studentAgentState.status = 'error'
+      studentAgentState.source = 'unavailable'
       studentAgentState.phase = 'chat_error'
       studentAgentState.lastEvent = '本轮没有获得有效结果，聊天内容已保留，可以稍后重试'
     }
@@ -3823,6 +3833,7 @@ async function sendChatMsg(text) {
     console.error('发送失败:', err)
     chatMessages.value.push({ role: 'assistant', content: '网络异常，请检查连接后重试...' })
     studentAgentState.status = 'error'
+    studentAgentState.source = 'unavailable'
     studentAgentState.phase = 'chat_error'
     studentAgentState.lastEvent = '本轮协作未完成，聊天内容已保留，可以稍后重试'
   }
@@ -3870,6 +3881,7 @@ async function completeConversation() {
   summaryStatus.value = 'processing'
   studentAgentState.status = 'running'
   studentAgentState.phase = 'summary'
+  studentAgentState.source = 'pending'
   studentAgentState.lastEvent = '正在整合完整会话、生成下一步并复核输出安全性'
   showAgentRail.value = true
   summaryUnread.value = false
@@ -3889,6 +3901,11 @@ async function completeConversation() {
     studentAgentState.status = 'ready'
     studentAgentState.phase = 'complete'
     studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
+    studentAgentState.source = res.data.metadata?.degraded
+      ? 'degraded'
+      : res.data.metadata?.model_name === 'xunfei-constrained'
+        ? 'xunfei_constrained'
+        : 'deterministic'
     studentAgentState.emotion = res.data.summary?.dominant_emotion || studentAgentState.emotion
     studentAgentState.messageCount = res.data.metadata?.message_count || studentAgentState.messageCount
     studentAgentState.verifiedSteps = [
@@ -3904,6 +3921,7 @@ async function completeConversation() {
     console.error('小结生成失败:', err)
     summaryStatus.value = 'error'
     studentAgentState.status = 'error'
+    studentAgentState.source = 'unavailable'
     studentAgentState.phase = 'summary'
     studentAgentState.lastEvent = '小结整理未完成，聊天记录仍然保留，可以重试'
   }
@@ -3982,7 +4000,7 @@ async function startNewConversation() {
 
 function resetStudentAgentState() {
   Object.assign(studentAgentState, {
-    status: 'standby', phase: 'waiting', riskLevel: 'unassessed', signal: 'continue', emotion: '',
+    status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed', signal: 'continue', emotion: '',
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
   })
@@ -3996,6 +4014,7 @@ function applyChatSessionStatus(status) {
   if (!chatUrgentLocked.value) return
   showEndConfirmation.value = false
   studentAgentState.status = 'urgent'
+  studentAgentState.source = 'safety_override'
   studentAgentState.phase = 'urgent'
   studentAgentState.riskLevel = 'urgent'
   studentAgentState.signal = 'urgent'
@@ -4100,6 +4119,13 @@ async function toggleVoice() {
 
 async function startRecording() {
   try {
+    const session = await startChatSession(false)
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    if (!externalAiConsent.value) {
+      alert('教师端尚未启用语音模型协作，请先使用文字输入')
+      return
+    }
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true } })
     audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
     const source = audioContext.createMediaStreamSource(mediaStream)
@@ -4157,8 +4183,17 @@ function stopRecording() {
   audioChunks = []
 }
 
-function playTTS(text) {
+async function playTTS(text) {
   if (!text) return
+  try {
+    const session = await startChatSession(false)
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    if (!externalAiConsent.value) throw new Error('authorization unavailable')
+  } catch {
+    alert('教师端尚未启用语音模型协作')
+    return
+  }
   fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: chatSessionId.value || null }) })
     .then(r => { if (!r.ok) throw new Error(); return r.blob() })
     .then(blob => {
@@ -4192,17 +4227,6 @@ async function openChatPanel() {
   }
 }
 
-async function updateChatAiConsent() {
-  if (!externalAiConsent.value || chatMessages.value.some(item => item.role === 'user')) return
-  try {
-    const session = await startChatSession(false, null, 'student-ai-v1')
-    chatSessionId.value = session.data.session_id
-    externalAiConsent.value = !!session.data.external_ai_enabled
-  } catch {
-    externalAiConsent.value = false
-  }
-}
-
 async function loadLatestConversationSummary() {
   try {
     const res = await getLatestChatSummary()
@@ -4210,6 +4234,11 @@ async function loadLatestConversationSummary() {
       studentAgentState.status = 'ready'
       studentAgentState.phase = 'complete'
       studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
+      studentAgentState.source = res.data.metadata?.degraded
+        ? 'degraded'
+        : res.data.metadata?.model_name === 'xunfei-constrained'
+          ? 'xunfei_constrained'
+          : 'deterministic'
       studentAgentState.emotion = res.data.summary?.dominant_emotion || ''
       studentAgentState.messageCount = res.data.metadata?.message_count || 0
       studentAgentState.verifiedSteps = [
@@ -6119,8 +6148,7 @@ onUnmounted(() => {
 }
 .chat-panel .welcome-bubble p { margin: 0; font-size: 14px; line-height: 1.6; color: #E0D8CE; }
 .chat-panel .welcome-bubble p + p { margin-top: 6px; }
-.chat-ai-consent { display: flex; align-items: flex-start; gap: 10px; margin: -8px 42px 18px; padding: 11px 12px; border: 1px solid rgba(188,217,202,.18); border-radius: 12px; color: rgba(232,226,216,.78); background: rgba(143,185,166,.07); cursor: pointer; }
-.chat-ai-consent input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; accent-color: #8fb9a6; }
+.chat-ai-consent { display: flex; align-items: flex-start; gap: 10px; margin: -8px 42px 18px; padding: 11px 12px; border: 1px solid rgba(188,217,202,.18); border-radius: 12px; color: rgba(232,226,216,.78); background: rgba(143,185,166,.07); }
 .chat-ai-consent strong,.chat-ai-consent small { display: block; }
 .chat-ai-consent strong { color: #dce9e1; font-size: 11px; }
 .chat-ai-consent small { margin-top: 3px; font-size: 9px; line-height: 1.5; }

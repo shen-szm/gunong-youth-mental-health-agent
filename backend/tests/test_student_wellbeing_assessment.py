@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -19,7 +20,8 @@ from api.island import router as island_router
 from api.user import router as user_router
 from config import settings
 from database import Base, get_db
-from models import IslandReport, SensitiveAccessLog, StudentAssessmentAgentRun, StudentWellbeingAssessment
+from models import IslandReport, SensitiveAccessLog, StudentAssessmentAgentRun, StudentExternalAiAuthorization, StudentWellbeingAssessment, User
+from security import get_password_hash
 
 
 def complete_answers(value="never"):
@@ -62,6 +64,23 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
         self.two = TestClient(app)
         self.user_one = self.one.post("/api/user/demo-session").json()["user_id"]
         self.user_two = self.two.post("/api/user/demo-session").json()["user_id"]
+        db = self.Session()
+        teacher = User(username="assessment_teacher", password_hash=get_password_hash("TeacherPassword12"), nickname="教师", is_admin=1)
+        db.add(teacher)
+        db.commit()
+        self.teacher_id = teacher.id
+        db.close()
+
+    def _authorize(self, user_id):
+        db = self.Session()
+        db.add(StudentExternalAiAuthorization(
+            student_user_id=user_id,
+            authorized_by_user_id=self.teacher_id,
+            status="active",
+            expires_at=datetime.now() + timedelta(days=30),
+        ))
+        db.commit()
+        db.close()
 
     def tearDown(self):
         self.one.close()
@@ -78,7 +97,6 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
             "emotions": ["平静"],
             "self_harm": "no",
             "unsafe_home": "no",
-            "external_ai_consent_version": None,
         })
         self.assertEqual(response.status_code, 201)
         payload = response.json()
@@ -112,7 +130,6 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
             "emotions": ["害怕"],
             "self_harm": "yes",
             "unsafe_home": "no",
-            "external_ai_consent_version": None,
         })
         self.assertEqual(response.status_code, 201)
         payload = response.json()
@@ -137,6 +154,7 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
     def test_watch_and_professional_actions_are_deterministic_and_skip_model(self):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one)
         watch_answers = complete_answers("never")
         watch_answers["low_mood"] = "several_days"
         watch_answers["sleep"] = "several_days"
@@ -149,14 +167,12 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
                 "emotions": ["难过"],
                 "self_harm": "no",
                 "unsafe_home": "no",
-                "external_ai_consent_version": "student-assessment-ai-v1",
             }).json()
             professional = self.one.post("/api/assessment/submit", json={
                 "answers": professional_answers,
                 "emotions": ["疲惫"],
                 "self_harm": "no",
                 "unsafe_home": "no",
-                "external_ai_consent_version": "student-assessment-ai-v1",
             }).json()
 
         mocked.assert_not_awaited()
@@ -170,9 +186,27 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
 
         self.assertEqual(watch["pipeline"][4]["agent"], "CrossReviewer")
 
+        watch_assessment = self.two.post("/api/assessment/submit", json={
+            "answers": watch_answers,
+            "emotions": ["难过"],
+            "self_harm": "no",
+            "unsafe_home": "no",
+        })
+        self.assertEqual(watch_assessment.status_code, 201)
+        watch_island = self.two.post("/api/island/agent/run", json={"trigger": "manual"})
+        professional_run = self.one.post("/api/island/agent/run", json={"trigger": "manual"})
+        self.assertEqual(watch_island.status_code, 200)
+        self.assertEqual(watch_island.json()["safety_status"], "watch")
+        self.assertEqual(watch_island.json()["plan"]["data"]["plan"]["strategy"], "watch_support")
+        self.assertEqual(professional_run.status_code, 200)
+        self.assertEqual(professional_run.json()["safety_status"], "professional")
+        self.assertEqual(professional_run.json()["plan"]["data"]["plan"]["strategy"], "professional_support")
+        self.assertEqual(professional_run.json()["companion"]["status"], "skipped")
+
     def test_routine_model_can_only_rewrite_safe_summary(self):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one)
         safe_model = AsyncMock(return_value=json.dumps({
             "summary": "本次主动选择的情绪是平静，近两周回答未见明显影响。",
         }, ensure_ascii=False))
@@ -182,7 +216,6 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
                 "emotions": ["平静"],
                 "self_harm": "no",
                 "unsafe_home": "no",
-                "external_ai_consent_version": "student-assessment-ai-v1",
             }).json()
 
         safe_model.assert_awaited_once()
@@ -193,6 +226,7 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
     def test_routine_model_advice_is_rejected_and_degraded(self):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one)
         unsafe_model = AsyncMock(return_value=json.dumps({
             "summary": "你应该立即接受治疗并按我的建议行动。",
         }, ensure_ascii=False))
@@ -202,7 +236,6 @@ class StudentWellbeingAssessmentTests(unittest.TestCase):
                 "emotions": [],
                 "self_harm": "no",
                 "unsafe_home": "no",
-                "external_ai_consent_version": "student-assessment-ai-v1",
             }).json()
 
         self.assertTrue(result["degraded"])

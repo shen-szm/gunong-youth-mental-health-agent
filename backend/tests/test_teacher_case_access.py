@@ -20,7 +20,7 @@ from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
 
 
@@ -34,11 +34,13 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.student = User(username="student_a", password_hash=get_password_hash("StudentPassword12"), nickname="合成学生A", is_admin=0)
             self.teacher = User(username="teacher_a", password_hash=get_password_hash("TeacherPassword12"), nickname="普通教师A", is_admin=1)
             self.admin = User(username="admin_a", password_hash=get_password_hash("AdminTeacherPassword12"), nickname="管理员教师A", is_admin=2)
-            db.add_all([self.student, self.teacher, self.admin])
+            self.unassigned_student = User(username="student_b", password_hash=get_password_hash("StudentPassword12"), nickname="未分配学生B", is_admin=0)
+            db.add_all([self.student, self.teacher, self.admin, self.unassigned_student])
             db.commit()
             for item in (self.student, self.teacher, self.admin):
                 db.refresh(item)
             self.student_id, self.teacher_id, self.admin_id = self.student.id, self.teacher.id, self.admin.id
+            self.unassigned_student_id = self.unassigned_student.id
             db.add(TeacherStudentAssignment(teacher_user_id=self.teacher.id, student_user_id=self.student.id, assigned_by_user_id=self.admin.id, active=1))
             db.add(MoodRecord(user_id=self.student.id, mood_score=3, mood_label="难过", content="最近早上不太想去学校"))
             db.add(ChatMessage(user_id=self.student.id, role="user", content="我和同学相处得有点累", emotion="难过"))
@@ -73,6 +75,51 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.admin_client.close()
         self.student_client.close()
         self.engine.dispose()
+
+    def test_teacher_manages_external_ai_authorization_with_scope_attestation_and_audit(self):
+        missing_attestation = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": False, "expires_days": 90},
+        )
+        self.assertEqual(missing_attestation.status_code, 400)
+
+        enabled = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 90},
+        )
+        self.assertEqual(enabled.status_code, 200)
+        self.assertTrue(enabled.json()["active"])
+        self.assertEqual(enabled.json()["basis"], "school_guardian_authority")
+        self.assertEqual(enabled.json()["statement_version"], "teacher-ai-authorization-v1")
+        listed = self.teacher_client.get("/api/teacher/student-list").json()["students"]
+        self.assertTrue(next(item for item in listed if item["id"] == self.student_id)["external_ai_authorization"]["active"])
+
+        self.assertEqual(self.teacher_client.post(
+            f"/api/teacher/students/{self.unassigned_student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 30},
+        ).status_code, 403)
+        admin_enabled = self.admin_client.post(
+            f"/api/teacher/students/{self.unassigned_student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 30},
+        )
+        self.assertEqual(admin_enabled.status_code, 200)
+        self.assertTrue(admin_enabled.json()["active"])
+
+        revoked = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": False, "expires_days": 30},
+        )
+        self.assertEqual(revoked.status_code, 200)
+        self.assertFalse(revoked.json()["active"])
+        self.assertEqual(revoked.json()["status"], "revoked")
+        db = self.Session()
+        try:
+            row = db.query(StudentExternalAiAuthorization).filter_by(student_user_id=self.student_id).one()
+            self.assertEqual(row.authorized_by_user_id, self.teacher_id)
+            self.assertEqual(db.query(SensitiveAccessLog).filter_by(action="enable_student_external_ai").count(), 2)
+            self.assertEqual(db.query(SensitiveAccessLog).filter_by(action="revoke_student_external_ai").count(), 1)
+        finally:
+            db.close()
 
     def test_teacher_requires_approval_before_original_text(self):
         denied = self.teacher_client.get(f"/api/teacher/students/{self.student_id}/case-context")
@@ -337,6 +384,25 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(revised_payload["confirmed_task_indices"], [])
         self.assertTrue(revised_payload["observation"]["trigger_evidence_ids"])
         self.assertTrue(any(item["content"] == "哥哥拿刀威胁我，我现在害怕回去" for item in revised_payload["records"]))
+
+    def test_direct_snapshot_is_superseded_when_any_new_student_record_arrives(self):
+        first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product").json()
+        sleep(0.05)
+        db = self.Session()
+        try:
+            db.add(MoodRecord(
+                user_id=self.student_id,
+                mood_score=4,
+                mood_label="焦虑",
+                content="今天课间有些紧张",
+                created_at=datetime.now(),
+            ))
+            db.commit()
+        finally:
+            db.close()
+        revised = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product").json()
+        self.assertNotEqual(revised["case_id"], first["case_id"])
+        self.assertTrue(any(item["content"] == "今天课间有些紧张" for item in revised["records"]))
 
     def test_approved_teacher_gets_redacted_urgent_override_without_new_original(self):
         submitted = self.teacher_client.post(

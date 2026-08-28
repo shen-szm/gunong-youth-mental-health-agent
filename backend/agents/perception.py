@@ -23,8 +23,8 @@ class PerceptionAgent(BaseAgent):
     name = "perception"
     description = "从心情记录、游戏行为、倾诉中提取情绪状态"
 
-    def __init__(self, db: Session, allow_external_ai: bool = False):
-        super().__init__(allow_external_ai=allow_external_ai)
+    def __init__(self, db: Session, allow_external_ai: bool = False, transfer_start_callback=None):
+        super().__init__(allow_external_ai=allow_external_ai, transfer_start_callback=transfer_start_callback)
         self.db = db
         for name, handler in get_perception_tools(db).items():
             self.register_tool(Tool(name=name, description=name, handler=handler))
@@ -104,19 +104,9 @@ class PerceptionAgent(BaseAgent):
             context.login_pattern = pattern.result.get("login_pattern", "")
             context.breathing_completion = pattern.result.get("breathing_rate", 0.0)
 
-        # 6. 大模型细腻归纳（可选，失败降级）
+        # 6. 只输出可复现的结构化归纳。模型不得自行新增情绪标签、强度或状态结论。
         mood_summary = self._summarize_mood(context)
         llm_used = False
-        if mood_summary and context.recent_moods and not context.crisis_detected and context.risk_level == "routine":
-            prompt = self._build_perception_prompt(context)
-            reply, used_llm = await self.call_llm(
-                [{"role": "user", "content": prompt}],
-                max_tokens=300, temperature=0.5,
-                fallback=mood_summary,
-            )
-            if used_llm:
-                mood_summary = reply
-                llm_used = True
 
         context.notes.append(f"感知完成：主动标签数={len(context.mood_labels)}, 危机={context.crisis_detected}")
 

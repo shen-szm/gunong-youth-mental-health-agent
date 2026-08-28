@@ -29,4 +29,7 @@ test('teacher client uses dedicated access request endpoints', () => {
   assert.match(api, /students\/\$\{studentId\}\/work-product/)
   assert.match(api, /work-product\/task-decisions/)
   assert.match(api, /post\('\/assignments'/)
+  assert.match(api, /external-ai-authorization/)
+  assert.match(view, /启用学生端模型协作/)
+  assert.match(view, /撤回模型协作授权/)
 })

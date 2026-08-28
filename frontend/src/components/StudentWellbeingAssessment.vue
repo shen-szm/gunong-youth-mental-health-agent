@@ -80,10 +80,9 @@
         </fieldset>
       </section>
 
-      <label class="ai-consent">
-        <input v-model="useExternalAi" type="checkbox">
-        <span><strong>允许受约束的讯飞模型整理文字</strong><small>只发送去标识化的领域等级，不发送逐题原文；风险等级始终由安全规则决定。</small></span>
-      </label>
+      <div class="ai-consent" role="status">
+        <span><strong>{{ schema?.external_ai_enabled ? '教师端已启用受约束模型协作' : '当前使用本地确定性规则' }}</strong><small>{{ schema?.external_ai_enabled ? '只发送去标识化的领域等级，不发送逐题原文；风险等级始终由安全规则决定。' : '教师端尚未登记有效授权依据，本次不会向外部模型发送数据。' }}</small></span>
+      </div>
 
       <p v-if="error" class="assessment-error" role="alert">{{ error }}</p>
       <div class="assessment-actions">
@@ -165,7 +164,6 @@ const error = ref('')
 const answers = reactive({})
 const safety = reactive({ self_harm: '', unsafe_home: '' })
 const emotions = ref([])
-const useExternalAi = ref(false)
 
 const lifecycleTitle = computed(() => {
   if (submitting.value) return '正在执行安全分流与支持编排'
@@ -209,7 +207,6 @@ function resetForm() {
   safety.self_harm = ''
   safety.unsafe_home = ''
   emotions.value = []
-  useExternalAi.value = false
   error.value = ''
 }
 
@@ -233,7 +230,6 @@ async function submit() {
       emotions: emotions.value,
       self_harm: safety.self_harm,
       unsafe_home: safety.unsafe_home,
-      external_ai_consent_version: useExternalAi.value ? schema.value.external_ai_consent_version : null,
     })
     result.value = response.data
     editing.value = false

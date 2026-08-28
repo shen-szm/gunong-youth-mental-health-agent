@@ -49,14 +49,19 @@
         </section>
 
         <aside :class="['island-agent-rail', { 'is-expanded': agentExpanded }]" aria-label="心岛陪伴 Agent 工作进度">
-          <button type="button" class="agent-rail-toggle" :aria-expanded="agentExpanded" @click.stop="agentExpanded = !agentExpanded">
+          <button type="button" class="agent-rail-toggle" :aria-expanded="agentExpanded" aria-controls="island-agent-rail-body" @click.stop="agentExpanded = !agentExpanded">
             <span :class="['agent-state-dot', `is-${agentPhase}`]" aria-hidden="true"></span>
             <strong>心岛陪伴 Agent</strong>
             <small>{{ agentExpanded ? '收起' : '进度' }}</small>
           </button>
           <p class="sr-only" role="status" aria-live="polite">{{ agentText }}</p>
-          <div class="agent-rail-body">
+          <div id="island-agent-rail-body" class="agent-rail-body">
             <p>{{ agentText }}</p>
+            <div class="agent-source-row" aria-label="当前 Agent 生成来源">
+              <span>{{ agentSourceLabel }}</span>
+              <small>{{ agentSourceDetail }}</small>
+            </div>
+            <p v-if="agentSafetyAction" class="agent-safety-action" role="status">{{ agentSafetyAction }}</p>
             <ol>
               <li v-for="(step, index) in agentSteps" :key="step.title" :class="agentStepClass(index)" :aria-current="index === agentStepIndex ? 'step' : undefined">
                 <span aria-hidden="true">{{ index < agentStepIndex ? '✓' : index === agentStepIndex ? '•' : '·' }}</span>
@@ -174,6 +179,8 @@ const loading = ref(true)
 const loadError = ref(false)
 const agentPhase = ref('ready')
 const agentText = ref('正在听懂你想去的方向')
+const agentSource = ref('deterministic')
+const agentSafetyAction = ref('')
 const viewportQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 900px)') : null
 const compactViewport = !!viewportQuery?.matches
 const agentExpanded = ref(!compactViewport)
@@ -215,6 +222,18 @@ const reflectionOptions = Object.freeze([
   { id: 'more_tense', label: '反而更紧绷' },
 ])
 const activeActivityLabel = computed(() => activityTabs.find(item => item.id === activeActivity.value)?.label || '')
+const agentSourceLabel = computed(() => ({
+  xunfei_constrained: '讯飞受约束生成',
+  safety_override: '安全规则强制覆盖',
+  degraded: '规则安全降级',
+  deterministic: '本地确定性规则',
+})[agentSource.value] || '本地确定性规则')
+const agentSourceDetail = computed(() => ({
+  xunfei_constrained: '教师端已登记有效授权依据，安全规则仍具有最终裁决权',
+  safety_override: '风险行动由本地安全规则确定，模型不能覆盖',
+  degraded: '外部协作不可用或输出未通过校验，已切回审核模板',
+  deterministic: '教师端未启用外部协作，全部在本地整理',
+})[agentSource.value] || '当前来源尚未确认')
 const agentStepIndex = computed(() => safetyLocked.value ? 1 : activityState.value.reflection ? 4 : activityPlayed.value ? 3 : activeActivity.value ? 2 : agentPhase.value === 'moving' ? 1 : 0)
 const agentSteps = computed(() => [
   { title: '理解你的选择', detail: activeActivity.value ? `你选择了${activeActivityLabel.value}` : '等待你主动选择目的地' },
@@ -392,7 +411,23 @@ async function triggerIslandAgent(trigger = 'login') {
       safetyLocked.value = true
       agentPhase.value = 'urgent'
       agentText.value = data.message || '检测到需要立即关注的信号'
+      agentSource.value = 'safety_override'
       emit('safety', { source: 'island_agent' })
+      return
+    }
+    const supportAction = data?.plan?.data?.plan?.support_action || ''
+    agentSafetyAction.value = supportAction
+    if (data?.safety_status === 'professional') {
+      agentPhase.value = 'perceived'
+      agentText.value = supportAction || '今天请联系一位可信成年人，并请对方协助连接专业支持。'
+      agentSource.value = 'safety_override'
+      return
+    }
+    if (data?.safety_status === 'watch') {
+      agentPhase.value = 'perceived'
+      agentText.value = data?.pet_message || '可以继续低负担活动，同时留意最近的状态变化。'
+      agentSource.value = 'safety_override'
+      pollCommands()
       return
     }
     if (data?.pet_message) {
@@ -401,10 +436,12 @@ async function triggerIslandAgent(trigger = 'login') {
     if (data?.perception?.summary) {
       agentPhase.value = 'perceived'
     }
+    agentSource.value = data?.degraded ? 'degraded' : data?.model_used === 'xunfei-constrained' ? 'xunfei_constrained' : 'deterministic'
     // 立即处理一次指令
     pollCommands()
   } catch {
-    // Agent触发失败不影响游戏
+    agentSource.value = 'degraded'
+    agentText.value = '协作服务暂时不可用，心岛玩法仍可继续；没有伪造分析结果。'
   }
 }
 
@@ -652,6 +689,8 @@ watch(() => props.storageScope, async (nextScope, previousScope) => {
   targetPlaceLabel.value = ''
   agentPhase.value = 'ready'
   agentText.value = '正在听懂你想去的方向'
+  agentSource.value = 'deterministic'
+  agentTriggered = false
   currentState.value = loadIslandState(nextScope)
   activityState.value = loadActivityState(nextScope)
   storageError.value = false
@@ -773,6 +812,7 @@ onBeforeUnmount(() => {
 .agent-rail-body { display: none; padding: 0 12px 12px; }
 .island-agent-rail.is-expanded .agent-rail-body { display: block; }
 .agent-rail-body > p { margin: 0 0 8px; color: var(--island-muted); font-size: 10px; line-height: 1.45; }
+.agent-source-row { display: none; }
 .agent-rail-body ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-rail-body li { display: grid; grid-template-columns: 22px 1fr; gap: 7px; align-items: start; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.08); }
 .agent-rail-body li > span { display: grid; width: 21px; height: 21px; place-items: center; border-radius: 7px; color: rgba(255,248,234,.65); background: rgba(255,255,255,.07); font-size: 11px; }
@@ -782,6 +822,13 @@ onBeforeUnmount(() => {
 .agent-rail-body strong { font-size: 10px; }
 .agent-rail-body li small { margin-top: 2px; color: var(--island-muted); font-size: 9px; line-height: 1.35; }
 .agent-boundary { margin-top: 8px; color: rgba(255,248,234,.58); font-size: 9px; line-height: 1.45; }
+
+@media (min-width: 1024px) {
+  .agent-source-row { display: grid; gap: 2px; margin: 0 0 10px; padding: 8px 9px; border: 1px solid rgba(255,208,131,.2); border-radius: 10px; background: rgba(255,208,131,.08); }
+  .agent-source-row span { color: #ffd998; font-size: 13px; font-weight: 800; }
+  .agent-source-row small { color: rgba(255,248,234,.72); font-size: 12px; line-height: 1.5; }
+  .agent-safety-action { display: block; margin: 0 0 10px !important; padding: 9px; border-left: 3px solid #ffd083; border-radius: 8px; color: #fff4df !important; background: rgba(130,68,48,.42); font-size: 12px !important; line-height: 1.55 !important; }
+}
 
 .island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 12; width: min(300px, calc(100% - 32px)); padding: 14px; border: 1px solid #fff0bd; border-radius: 15px; color: #4a2b22; background: rgba(255, 224, 169, .95); box-shadow: 0 16px 34px rgba(67,30,27,.28); backdrop-filter: blur(18px); }
 .island-arrival-card small, .island-arrival-card strong { display: block; }

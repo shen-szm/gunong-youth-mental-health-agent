@@ -16,11 +16,11 @@ from auth import get_current_user
 from config import settings
 from database import get_db
 from models import SensitiveAccessLog, StudentAssessmentAgentRun, StudentWellbeingAssessment, User
+from student_ai_authorization import AUTHORIZATION_VERSION, student_external_ai_allowed
 
 
 router = APIRouter(prefix="/api/assessment", tags=["student-assessment"])
 RETENTION_DAYS = 30
-CONSENT_VERSION = "student-assessment-ai-v1"
 
 FREQUENCY_OPTIONS = [
     {"value": "never", "label": "没有"},
@@ -55,7 +55,6 @@ class AssessmentSubmitRequest(BaseModel):
     emotions: list[str] = Field(default_factory=list, max_length=3)
     self_harm: Literal["no", "unsure", "yes"]
     unsafe_home: Literal["no", "unsure", "yes"]
-    external_ai_consent_version: Literal["student-assessment-ai-v1"] | None = None
 
     @field_validator("answers")
     @classmethod
@@ -119,7 +118,7 @@ def _response(row: StudentWellbeingAssessment, db: Session) -> dict:
 
 
 @router.get("/schema")
-def assessment_schema(current_user: User = Depends(get_current_user)):
+def assessment_schema(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return {
         "version": "wellbeing-assessment-v1",
         "period": "过去两周",
@@ -148,7 +147,8 @@ def assessment_schema(current_user: User = Depends(get_current_user)):
             {"value": "unsure", "label": "不确定／不便回答"},
             {"value": "yes", "label": "有"},
         ],
-        "external_ai_consent_version": CONSENT_VERSION,
+        "external_ai_enabled": student_external_ai_allowed(db, current_user.id),
+        "external_ai_governance": "teacher_authorization",
     }
 
 
@@ -163,7 +163,7 @@ async def submit_assessment(
     external_ai_allowed = bool(
         settings.ALLOW_EXTERNAL_AI
         and settings.ALLOW_STUDENT_EXTERNAL_AI
-        and payload.external_ai_consent_version == CONSENT_VERSION
+        and student_external_ai_allowed(db, current_user.id)
     )
     assessment_code = f"ASSESS-{datetime.now():%Y%m%d}-{secrets.token_hex(4).upper()}"
     result = await WellbeingAssessmentOrchestrator().run(
@@ -174,7 +174,7 @@ async def submit_assessment(
     if result.model_name == "xunfei-constrained" or result.degraded:
         _audit(
             db, current_user.id, "external_model_transfer_assessment", assessment_code,
-            "consented_derived_fields_only" if result.model_name == "xunfei-constrained" else "failed",
+            "teacher_authorized_fields" if result.model_name == "xunfei-constrained" else "failed",
         )
     row = StudentWellbeingAssessment(
         assessment_code=assessment_code,
@@ -183,7 +183,7 @@ async def submit_assessment(
         result_json=result.model_dump_json(),
         risk_level=result.risk_level,
         review_status=result.review_status,
-        external_ai_consent_version=payload.external_ai_consent_version,
+        external_ai_consent_version=AUTHORIZATION_VERSION if external_ai_allowed else None,
         model_name=result.model_name,
         prompt_version=result.prompt_version,
         degraded=int(result.degraded),

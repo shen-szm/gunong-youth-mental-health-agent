@@ -86,6 +86,21 @@
                 <span class="status-pill">{{ caseStudent.access?.label }}</span>
               </div>
 
+              <section class="student-ai-authorization" aria-labelledby="student-ai-authorization-title">
+                <div>
+                  <span class="section-kicker">学生端 Agent 数据处理</span>
+                  <h4 id="student-ai-authorization-title">{{ caseStudent.external_ai_authorization?.active ? '受约束讯飞协作已启用' : '当前仅使用本地规则' }}</h4>
+                  <p>启用后，学生端无需逐次操作。系统仅发送去标识化的会话片段或衍生字段；安全分流仍由本地规则强制裁决。</p>
+                  <small v-if="caseStudent.external_ai_authorization?.expires_at">有效期至 {{ formatDateTime(caseStudent.external_ai_authorization.expires_at) }}</small>
+                </div>
+                <template v-if="!caseStudent.external_ai_authorization?.active">
+                  <label class="authority-check"><input v-model="aiAuthorityConfirmed" type="checkbox"><span>我已核验学校或监护人的有效授权依据，并确认本次用途为学生心理支持 Agent。</span></label>
+                  <label class="authority-expiry"><span>有效期</span><select v-model.number="aiAuthorizationDays"><option :value="30">30天</option><option :value="90">90天</option><option :value="180">180天</option></select></label>
+                  <button type="button" class="primary-btn" :disabled="aiAuthorizationLoading || !aiAuthorityConfirmed" @click="updateStudentAiAuthorization(true)">{{ aiAuthorizationLoading ? '正在记录…' : '启用学生端模型协作' }}</button>
+                </template>
+                <button v-else type="button" class="danger-btn" :disabled="aiAuthorizationLoading" @click="updateStudentAiAuthorization(false)">{{ aiAuthorizationLoading ? '正在撤回…' : '撤回模型协作授权' }}</button>
+              </section>
+
               <div v-if="['not_requested', 'rejected', 'expired', 'revoked'].includes(caseStudent.access?.status)" class="access-application">
                 <p>请说明查看目的。批准后可在7天内查看“审批时点之前”的该学生近30天倾诉和情绪记录原文；之后新增内容需要重新申请。</p>
                 <label><span>申请理由</span><textarea v-model="accessReason" placeholder="例如：近期到校困难增多，需要结合自愿记录制定一次线下关怀计划。"></textarea></label>
@@ -103,24 +118,18 @@
                 <button class="primary-btn" :disabled="contextLoading" @click="loadCaseContext">{{ contextLoading ? '数字员工正在执行…' : (workProduct ? '重新执行工单' : '执行支持工单') }}</button>
 
                 <section v-if="contextLoading" class="desktop-case-agent-live" role="status" aria-live="polite" aria-label="数字员工当前执行进度">
-                  <div><span class="section-kicker">实时任务轨迹</span><h4>正在把已授权记录转成可执行工单</h4><p>权限已核验；EvidenceAgent 正在读取固定授权范围。后续步骤将在真实接口返回后标记完成。</p></div>
-                  <ol>
-                    <li class="complete"><i>✓</i><span><strong>AccessGate</strong><small>权限与审计范围已确认</small></span></li>
-                    <li class="running"><i>•</i><span><strong>EvidenceAgent</strong><small>读取经授权的原始证据</small></span></li>
-                    <li><i>·</i><span><strong>SafetyGate</strong><small>等待证据输入</small></span></li>
-                    <li><i>·</i><span><strong>CrossReviewer</strong><small>等待安全与引用复核</small></span></li>
-                    <li><i>·</i><span><strong>Coordinator</strong><small>等待生成可确认任务</small></span></li>
-                  </ol>
+                  <div><span class="section-kicker">服务端执行状态</span><h4>正在核验权限并生成支持工单</h4><p>接口返回前不预先宣称任何 Agent 步骤已完成；完成后会展示服务端返回的可核验流水线。</p></div>
+                  <div class="case-processing-state"><i aria-hidden="true">•</i><span><strong>本次工单处理中</strong><small>等待真实接口结果</small></span></div>
                 </section>
 
                 <template v-if="workProduct">
-                  <div class="case-command-head">
+                  <div ref="caseResultHeading" class="case-command-head" tabindex="-1">
                     <div><span class="section-kicker">{{ workProduct.case_id }}</span><h4>工单协作画布</h4></div>
-                    <span :class="['risk-decision', workProduct.risk]">{{ workProduct.risk === 'urgent' ? '立即处置' : workProduct.risk === 'professional' ? '需要专业支持' : workProduct.risk === 'watch' ? '持续关注' : '常规支持' }}</span>
+                    <div class="case-result-badges"><span class="agent-source-badge">{{ teacherGenerationLabel }}</span><span :class="['risk-decision', workProduct.risk]">{{ workProduct.risk === 'urgent' ? '立即处置' : workProduct.risk === 'professional' ? '需要专业支持' : workProduct.risk === 'watch' ? '持续关注' : '常规支持' }}</span></div>
                   </div>
                   <div class="agent-pipeline" aria-label="数字员工执行进度">
-                    <article v-for="(step, index) in workProduct.pipeline" :key="step.name">
-                      <span>{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ step.name }}</strong><small>{{ step.result }}</small></div><em>已完成</em>
+                    <article v-for="(step, index) in workProduct.pipeline" :key="step.name" :class="step.status">
+                      <span>{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ step.name }}</strong><small>{{ step.result }}</small></div><em>{{ pipelineStatusText(step.status) }}</em>
                     </article>
                   </div>
                   <div class="work-product-grid">
@@ -394,6 +403,7 @@ import {
   getStudentWorkProduct,
   decideStudentWorkProductTask,
   setTeacherStudentAssignment,
+  setStudentExternalAiAuthorization,
 } from '../api/teacher'
 
 
@@ -428,9 +438,13 @@ const accessReason = ref('')
 const accessSubmitting = ref(false)
 const contextLoading = ref(false)
 const workProduct = ref(null)
+const caseResultHeading = ref(null)
 const confirmedTasks = ref([])
 const taskDecisionLoading = ref(null)
 const caseMessage = ref('')
+const aiAuthorityConfirmed = ref(false)
+const aiAuthorizationDays = ref(30)
+const aiAuthorizationLoading = ref(false)
 const approvalLoading = ref(false)
 const approvalError = ref('')
 const reviewTargetId = ref(null)
@@ -474,6 +488,13 @@ const profileKeywords = computed(() => {
 const dominantRecordLabel = computed(() => Object.keys(sortedDist.value)[0] || '--')
 const maxTrendCount = computed(() => Math.max(1, ...(detail.value.trend || []).map(item => Number(item.count || 0))))
 const analysisHeading = computed(() => analysisMeta.value.degraded ? '规则化记录整理' : 'Agent 记录整理')
+const teacherGenerationLabel = computed(() => {
+  const generation = workProduct.value?.generation || {}
+  if (generation.source === 'safety_override') return '安全规则强制覆盖'
+  if (generation.source === 'xunfei_constrained') return '讯飞受约束生成'
+  if (generation.degraded) return '规则安全降级'
+  return '本地确定性规则'
+})
 
 const normalizedWordCloud = computed(() => {
   const raw = Array.isArray(detail.value.word_cloud) ? detail.value.word_cloud : []
@@ -618,6 +639,23 @@ function chooseCaseStudent(student) {
   workProduct.value = null
   confirmedTasks.value = []
   caseMessage.value = ''
+  aiAuthorityConfirmed.value = false
+}
+
+async function updateStudentAiAuthorization(active) {
+  if (!caseStudent.value || aiAuthorizationLoading.value) return
+  aiAuthorizationLoading.value = true
+  caseMessage.value = ''
+  try {
+    await setStudentExternalAiAuthorization(caseStudent.value.id, active, active ? aiAuthorityConfirmed.value : false, aiAuthorizationDays.value)
+    await loadStudents()
+    caseMessage.value = active ? '学生端模型协作已启用并记录审计。' : '学生端模型协作授权已撤回，后续自动切回本地规则。'
+    aiAuthorityConfirmed.value = false
+  } catch (e) {
+    caseMessage.value = e.response?.data?.detail || '授权状态更新失败，请重试。'
+  } finally {
+    aiAuthorizationLoading.value = false
+  }
 }
 
 async function submitAccessRequest() {
@@ -643,6 +681,9 @@ async function loadCaseContext() {
     const productResponse = await getStudentWorkProduct(caseStudent.value.id, caseStudent.value.access?.request_id)
     workProduct.value = productResponse.data
     confirmedTasks.value = Array.isArray(productResponse.data.confirmed_task_indices) ? productResponse.data.confirmed_task_indices : []
+    caseMessage.value = `支持工单已生成：${teacherGenerationLabel.value}`
+    await nextTick()
+    caseResultHeading.value?.focus({ preventScroll: true })
   } catch (e) {
     workProduct.value = null
     caseMessage.value = e.response?.data?.detail || '暂时无法读取个案原文。'
@@ -713,6 +754,10 @@ function accessStatusText(status) {
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '--'
+}
+
+function pipelineStatusText(status) {
+  return ({ completed: '已完成', running: '进行中', blocked: '已停止', degraded: '已降级', failed: '失败' })[status] || '等待'
 }
 
 async function selectWarning(item) {
@@ -1061,6 +1106,13 @@ textarea { min-height: 96px; resize: vertical; }
 .access-application textarea { min-height: 112px; padding: 12px; border: 2px solid #778e85; border-radius: 10px; resize: vertical; color: #26332f; background: #fff; }
 .approval-waiting, .privacy-notice { padding: 16px; border-radius: 12px; background: #fff7df; color: #654f18; }
 .privacy-notice { display: grid; gap: 5px; background: #eef5f2; color: #36554d; }
+.student-ai-authorization { display:grid; gap:12px; margin-top:16px; padding:16px; border:1px solid #d8e3dd; border-radius:14px; background:#f7faf8; }
+.student-ai-authorization h4 { margin:4px 0 6px; }
+.student-ai-authorization p,.student-ai-authorization small { margin:0; color:#5d7169; line-height:1.55; }
+.authority-check { display:grid; grid-template-columns:18px minmax(0,1fr); gap:9px; align-items:start; color:#435a51; line-height:1.55; }
+.authority-check input { width:18px; height:18px; margin:2px 0 0; accent-color:#5f8977; }
+.authority-expiry { display:flex; align-items:center; gap:10px; color:#435a51; }
+.authority-expiry select { min-height:38px; padding:0 10px; border:1px solid #ccd9d3; border-radius:9px; background:#fff; }
 .agent-brief { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .case-command-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 22px 0 12px; }
 .case-command-head h4 { margin: 3px 0 0; font-size: 22px; color: #203c33; }
@@ -1075,6 +1127,7 @@ textarea { min-height: 96px; resize: vertical; }
 .agent-pipeline article small { color: #4d625a; }
 .agent-pipeline article em { color: #3d765f; font-style: normal; font-size: 12px; font-weight: 700; }
 .desktop-case-agent-live { display:none; }
+.agent-source-badge { display:none; }
 @media (min-width:1024px) {
   .desktop-case-agent-live { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.6fr); gap:18px; margin:14px 0; padding:16px; border:1px solid #dce8e2; border-radius:14px; background:linear-gradient(145deg,#f7fbf9,#fffaf2); }
   .desktop-case-agent-live h4 { margin:4px 0 6px; color:#29483d; }
@@ -1087,7 +1140,15 @@ textarea { min-height: 96px; resize: vertical; }
   .desktop-case-agent-live li span,.desktop-case-agent-live li strong,.desktop-case-agent-live li small { display:block; min-width:0; }
   .desktop-case-agent-live li strong { overflow:hidden; color:#314c42; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
   .desktop-case-agent-live li small { margin-top:3px; color:#687a73; font-size:9px; line-height:1.35; }
+  .case-processing-state { display:flex; align-items:center; gap:10px; padding:12px; border-radius:12px; background:#eef3f0; }
+  .case-processing-state i { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; color:#523d19; background:#e4c379; font-style:normal; animation:agent-wait-pulse 1.2s ease-in-out infinite; }
+  .case-processing-state strong,.case-processing-state small { display:block; }
+  .case-processing-state strong { color:#314c42; font-size:12px; }
+  .case-processing-state small { margin-top:3px; color:#687a73; font-size:10px; }
+  .case-result-badges { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+  .agent-source-badge { display:inline-flex; align-items:center; padding:6px 10px; border:1px solid #d4e2dc; border-radius:999px; color:#315e51; background:#f3f8f5; font-size:11px; font-weight:800; }
 }
+@keyframes agent-wait-pulse { 50% { opacity:.55; } }
 .work-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .assessment-brief { margin-top: 12px; padding: 16px; border: 1px solid rgba(104,82,64,.16); border-radius: 16px; background: rgba(255,250,242,.72); }
 .assessment-emotion { color: #5e4b3f; font-weight: 700; }

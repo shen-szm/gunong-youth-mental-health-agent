@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from auth import require_admin_teacher, require_teacher
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload
 
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
@@ -58,6 +59,13 @@ class WorkProductTaskDecisionInput(BaseModel):
     product_id: str = Field(min_length=12, max_length=120, pattern=r"^WP-[A-Za-z0-9-]+$")
     task_index: int = Field(ge=0, le=2)
     decision: str = Field(pattern=r"^(confirmed|revoked)$")
+
+
+class StudentAiAuthorizationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active: bool
+    authority_confirmed: bool = False
+    expires_days: int = Field(default=30, ge=1, le=365)
 
 
 def _audit(db: Session, actor: User, action: str, resource_type: str, resource_id: str, result: str) -> None:
@@ -270,8 +278,59 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
             "risk_level": risk,
             "mood_count": count,
             "access": _student_access_state(db, teacher, student.id),
+            "external_ai_authorization": student_ai_authorization_payload(db, student.id),
         })
     return {"students": items}
+
+
+@router.get("/students/{student_id}/external-ai-authorization")
+def get_external_ai_authorization(student_id: int, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+    _require_student_responsibility(db, teacher, student_id)
+    _audit(db, teacher, "view_student_ai_authorization", "student", str(student_id), "allowed")
+    return student_ai_authorization_payload(db, student_id)
+
+
+@router.post("/students/{student_id}/external-ai-authorization")
+def set_external_ai_authorization(
+    student_id: int,
+    payload: StudentAiAuthorizationInput,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
+    _require_student_responsibility(db, teacher, student_id)
+    if payload.active and not payload.authority_confirmed:
+        raise HTTPException(status_code=400, detail="启用前必须确认已核验学校或监护人的有效授权依据")
+    now = datetime.now()
+    row = get_student_ai_authorization(db, student_id)
+    if not row:
+        row = StudentExternalAiAuthorization(
+            student_user_id=student_id,
+            authorized_by_user_id=teacher.id,
+            basis="school_guardian_authority",
+            statement_version=AUTHORIZATION_VERSION,
+            purpose="student_support_agents",
+            status="active" if payload.active else "revoked",
+            expires_at=now + timedelta(days=payload.expires_days),
+            revoked_at=None if payload.active else now,
+        )
+        db.add(row)
+    else:
+        row.authorized_by_user_id = teacher.id
+        row.statement_version = AUTHORIZATION_VERSION
+        row.purpose = "student_support_agents"
+        row.status = "active" if payload.active else "revoked"
+        row.expires_at = now + timedelta(days=payload.expires_days)
+        row.revoked_at = None if payload.active else now
+    db.flush()
+    _audit(
+        db,
+        teacher,
+        "enable_student_external_ai" if payload.active else "revoke_student_external_ai",
+        "student",
+        str(student_id),
+        "authority_verified" if payload.active else "revoked",
+    )
+    return student_ai_authorization_payload(db, student_id)
 
 
 @router.get("/warning-list")
@@ -442,7 +501,12 @@ def _case_context_payload(db: Session, teacher: User, student_id: int, approved:
 
 
 @router.get("/students/{student_id}/work-product")
-def student_work_product(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
+def student_work_product(
+    student_id: int,
+    request_id: int | None = None,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+):
     """在同一授权边界内，把原始记录整理成教师可审核的工作成果。"""
     approved = _require_student_access(db, teacher, student_id, request_id)
     cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
@@ -479,9 +543,17 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
                 StudentWellbeingAssessment.created_at <= incremental_cutoff,
                 StudentWellbeingAssessment.risk_level == "urgent",
                 StudentWellbeingAssessment.deleted_at.is_(None),
+                StudentWellbeingAssessment.expires_at > datetime.now(),
             ).first()
-            has_new_urgent_signal = bool(new_urgent_assessment) or any(_context_has_urgent_meaning(item.content or "") for item in [*new_moods, *new_chats])
-            cutoff = incremental_cutoff if has_new_urgent_signal else existing_direct_snapshot.content_cutoff
+            has_new_assessment = db.query(StudentWellbeingAssessment.id).filter(
+                StudentWellbeingAssessment.user_id == student_id,
+                StudentWellbeingAssessment.created_at > existing_direct_snapshot.content_cutoff,
+                StudentWellbeingAssessment.created_at <= incremental_cutoff,
+                StudentWellbeingAssessment.deleted_at.is_(None),
+                StudentWellbeingAssessment.expires_at > datetime.now(),
+            ).first()
+            has_new_record = bool(new_moods or new_chats or has_new_assessment or new_urgent_assessment)
+            cutoff = incremental_cutoff if has_new_record else existing_direct_snapshot.content_cutoff
     elif approved is not None:
         safety_check_at = datetime.now()
         post_approval_moods = db.query(MoodRecord).filter(
@@ -501,6 +573,7 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
             StudentWellbeingAssessment.created_at <= safety_check_at,
             StudentWellbeingAssessment.risk_level == "urgent",
             StudentWellbeingAssessment.deleted_at.is_(None),
+            StudentWellbeingAssessment.expires_at > datetime.now(),
         ).all()
         urgent_after_approval = [item for item in [*post_approval_moods, *post_approval_chats] if _context_has_urgent_meaning(item.content or "")]
         urgent_after_approval.extend(post_approval_assessments)
@@ -622,6 +695,14 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
         TeacherWorkProductTaskDecision.teacher_user_id == teacher.id,
         TeacherWorkProductTaskDecision.status == "confirmed",
     ).all()
+    generation = {
+        "source": "safety_override" if urgent else "deterministic",
+        "model_name": "deterministic",
+        "degraded": False,
+        "consented": False,
+        "prompt_version": "teacher-deterministic-work-product-v1",
+        "external_transfer": False,
+    }
     _audit(db, teacher, "generate_teacher_work_product", "work_product", product_id, "allowed")
     return {
         "case_id": product_id,
@@ -659,6 +740,7 @@ def student_work_product(student_id: int, request_id: int | None = None, db: Ses
         "decision_evidence_ids": trigger_evidence_ids or evidence_ids,
         "tasks": [{**task, "evidence_ids": trigger_evidence_ids or evidence_ids} for task in next_tasks],
         "confirmed_task_indices": sorted(item.task_index for item in task_decisions),
+        "generation": generation,
         "guardrails": ["不作诊断", "不把单条表达当作结论", "敏感触达前由教师确认", "仅使用本次授权范围内记录"],
     }
 

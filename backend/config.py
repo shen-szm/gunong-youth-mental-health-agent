@@ -6,16 +6,16 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
-    RELEASE_VERSION: str = "5.1.0-alpha.15"
+    RELEASE_VERSION: str = "5.1.0-alpha.17"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
     SESSION_COOKIE_NAME: str = "shengyu_session"
     SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
     COOKIE_SECURE: bool = False
     AGENT_STEP_DELAY_MS: int = 180
-    # 默认禁止把聊天、语音或情绪记录发送给第三方模型；仅合成数据演示可显式开启。
+    # 外部模型总开关；学生数据还必须通过教师端登记且未过期的授权记录。
     ALLOW_EXTERNAL_AI: bool = False
-    # 学生自由倾诉包含高度敏感信息；除总开关外，必须单独启用并取得逐会话明确同意。
+    # 学生自由倾诉包含高度敏感信息；除总开关外，必须有教师端登记且未过期的机构/监护授权依据。
     ALLOW_STUDENT_EXTERNAL_AI: bool = False
     # 守护者表单已强制合成数据确认和去标识校验，可单独启用；失败时仍显式降级。
     ALLOW_GUARDIAN_SYNTHETIC_AI: bool = True

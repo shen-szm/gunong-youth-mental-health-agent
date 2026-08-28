@@ -2,11 +2,10 @@ import axios from "axios";
 
 const instance = axios.create({ baseURL: "/api/chat" });
 
-export function startChatSession(forceNew = false, continueFromSessionId = null, externalAiConsentVersion = null) {
+export function startChatSession(forceNew = false, continueFromSessionId = null) {
   return instance.post("/sessions", {
     force_new: forceNew,
     continue_from_session_id: continueFromSessionId,
-    external_ai_consent_version: externalAiConsentVersion,
   });
 }
 export function sendMessage(userId, content, inputType = "text", sessionId = null) {

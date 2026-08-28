@@ -90,9 +90,11 @@ class BaseAgent:
     name: str = "base"
     description: str = ""
 
-    def __init__(self, allow_external_ai: bool = False):
+    def __init__(self, allow_external_ai: bool = False, transfer_start_callback: Callable[[str], None] | None = None):
         self.tools: dict[str, Tool] = {}
         self.allow_external_ai = allow_external_ai
+        self.transfer_start_callback = transfer_start_callback
+        self.last_llm_attempted = False
 
     def register_tool(self, tool: Tool) -> None:
         self.tools[tool.name] = tool
@@ -122,6 +124,9 @@ class BaseAgent:
         if not self.allow_external_ai or not is_spark_available():
             return fallback, False
         try:
+            self.last_llm_attempted = True
+            if self.transfer_start_callback:
+                self.transfer_start_callback(self.name)
             reply = await ask_spark(messages, max_tokens=max_tokens, temperature=temperature)
             if reply and reply.strip():
                 return reply.strip(), True

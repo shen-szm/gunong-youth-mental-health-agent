@@ -69,10 +69,11 @@ def get_chat_summary(db: Session, user_id: int, days: int = 7) -> str:
     cutoff = datetime.now() - timedelta(days=days)
     summaries = (
         db.query(StudentConversationSummary)
+        .join(StudentChatSession, StudentConversationSummary.session_id == StudentChatSession.id)
         .filter(
             StudentConversationSummary.user_id == user_id,
             StudentConversationSummary.generated_at >= cutoff,
-            StudentConversationSummary.summary_deleted_at.is_(None),
+            StudentChatSession.summary_deleted_at.is_(None),
             StudentConversationSummary.expires_at > datetime.now(),
         )
         .order_by(StudentConversationSummary.generated_at.desc())
@@ -268,7 +269,10 @@ def get_user_safety_state(db: Session, user_id: int) -> dict:
             StudentWellbeingAssessment.deleted_at.is_(None),
             StudentWellbeingAssessment.expires_at > now,
         )
-        .order_by(StudentWellbeingAssessment.created_at.desc())
+        .order_by(
+            StudentWellbeingAssessment.created_at.desc(),
+            StudentWellbeingAssessment.id.desc(),
+        )
         .first()
     )
     urgent_session = (

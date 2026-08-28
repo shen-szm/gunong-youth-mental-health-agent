@@ -50,8 +50,8 @@ class CompanionAgent(BaseAgent):
     name = "companion"
     description = "以咕团身份执行干预计划，控制心岛环境"
 
-    def __init__(self, db: Session, allow_external_ai: bool = False):
-        super().__init__(allow_external_ai=allow_external_ai)
+    def __init__(self, db: Session, allow_external_ai: bool = False, transfer_start_callback=None):
+        super().__init__(allow_external_ai=allow_external_ai, transfer_start_callback=transfer_start_callback)
         self.db = db
         for name, handler in get_companion_tools(db).items():
             self.register_tool(Tool(name=name, description=name, handler=handler))
@@ -68,6 +68,13 @@ class CompanionAgent(BaseAgent):
                 summary="危机状态下跳过普通陪伴",
                 data={},
             )
+        if context.risk_level == "professional":
+            return AgentResult(
+                agent_name=self.name,
+                status="skipped",
+                summary="专业支持路径下不执行普通宠物陪伴或外部模型调用",
+                data={"commands_issued": 0, "llm_used": False, "model_name": "deterministic-safety"},
+            )
 
         plan = context.intervention_plan or {"steps": []}
         steps = plan.get("steps", [])
@@ -81,7 +88,10 @@ class CompanionAgent(BaseAgent):
             actions_executed.append(result.get("action", {}))
 
         # 生成咕团对话
-        pet_message = await self._generate_pet_message(context)
+        if context.risk_level == "watch":
+            pet_message, llm_used = self._fallback_pet_message(context), False
+        else:
+            pet_message, llm_used = await self._generate_pet_message(context)
         context.companion_actions = actions_executed
 
         # 更新咕团状态
@@ -95,6 +105,8 @@ class CompanionAgent(BaseAgent):
                 "actions": actions_executed,
                 "pet_message": pet_message,
                 "commands_issued": len(actions_executed),
+                "llm_used": llm_used,
+                "model_name": "xunfei-constrained" if llm_used else "deterministic-template",
             },
             tool_calls=tool_calls,
         )
@@ -153,7 +165,7 @@ class CompanionAgent(BaseAgent):
 
         return {"action": action_result, "tool_calls": tool_calls}
 
-    async def _generate_pet_message(self, context: IslandContext) -> str:
+    async def _generate_pet_message(self, context: IslandContext) -> tuple[str, bool]:
         """生成咕团对话。大模型优先，失败降级模板。"""
         # 大模型生成
         prompt = self._build_pet_prompt(context)
@@ -163,9 +175,13 @@ class CompanionAgent(BaseAgent):
             fallback="",
         )
         if used and reply and self._safe_pet_message(reply):
-            return reply
+            return reply, True
 
-        # 降级模板
+        return self._fallback_pet_message(context), False
+
+    @staticmethod
+    def _fallback_pet_message(context: IslandContext) -> str:
+        """仅按学生主动标签选择人工审核模板。"""
         labels = set(context.mood_labels)
         if labels & {"难过", "焦虑", "疲惫", "害怕", "孤独", "委屈"}:
             category = "comfort"
@@ -204,7 +220,7 @@ class CompanionAgent(BaseAgent):
         if not pet:
             pet = PetState(user_id=context.user_id)
             self.db.add(pet)
-        pet.intimacy = min(1000, pet.intimacy + 5)
+        pet.intimacy = min(1000, int(pet.intimacy or 0) + 5)
         pet.last_interaction = datetime.now()
         # 根据用户情绪设置咕团心情
         labels = set(context.mood_labels)

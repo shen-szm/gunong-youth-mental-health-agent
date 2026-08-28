@@ -17,3 +17,5 @@ Thumbs.db
 /migration/
 /output/
 /tmp/
+/data/reports/
+/backend/data/reports/

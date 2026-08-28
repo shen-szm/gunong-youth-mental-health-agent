@@ -36,11 +36,14 @@ class IslandOrchestrator:
 
     def __init__(self, db: Session, report_output_dir: str = "data/reports", external_ai_allowed: bool = False):
         self.db = db
-        self.perception = PerceptionAgent(db, allow_external_ai=external_ai_allowed)
+        self.current_run_code = "island-pending"
+        self.current_user_id = 0
+        self.external_transfer_attempted = False
+        self.perception = PerceptionAgent(db, allow_external_ai=external_ai_allowed, transfer_start_callback=self._record_transfer_start)
         self.safety = SafetyAgent()
-        self.planner = PlanningAgent(allow_external_ai=external_ai_allowed)
-        self.companion = CompanionAgent(db, allow_external_ai=external_ai_allowed)
-        self.reporter = ReportAgent(db, output_dir=report_output_dir, allow_external_ai=external_ai_allowed)
+        self.planner = PlanningAgent(allow_external_ai=external_ai_allowed, transfer_start_callback=self._record_transfer_start)
+        self.companion = CompanionAgent(db, allow_external_ai=external_ai_allowed, transfer_start_callback=self._record_transfer_start)
+        self.reporter = ReportAgent(db, output_dir=report_output_dir, allow_external_ai=external_ai_allowed, transfer_start_callback=self._record_transfer_start)
 
     async def run(self, user_id: int, nickname: str = "",
                   trigger: str = "login") -> dict:
@@ -57,6 +60,8 @@ class IslandOrchestrator:
         """
         context = IslandContext(user_id=user_id, nickname=nickname)
         run_code = f"island-{uuid.uuid4().hex[:12]}"
+        self.current_run_code = run_code
+        self.current_user_id = user_id
         started_at = datetime.now()
 
         results: dict[str, AgentResult] = {}
@@ -68,6 +73,7 @@ class IslandOrchestrator:
         # Step 0: 确定性安全门必须先于任何模型与普通 Agent。
         safety_state = get_user_safety_state(self.db, user_id)
         context.risk_level = safety_state["risk_level"]
+        safety_status = context.risk_level
         if context.risk_level == "urgent":
             context.crisis_detected = True
             context.crisis_signal = safety_state["evidence"]
@@ -121,6 +127,8 @@ class IslandOrchestrator:
         companion_result = await self.companion.run(context)
         results["companion"] = companion_result
         commands_issued = companion_result.data.get("commands_issued", 0)
+        if companion_result.data.get("llm_used"):
+            model_used = "xunfei-constrained"
         if companion_result.status == "degraded":
             degraded = 1
 
@@ -142,12 +150,15 @@ class IslandOrchestrator:
             "commands": self._get_pending_commands(user_id),
             "model_used": model_used,
             "degraded": bool(degraded),
+            "external_transfer_attempted": self.external_transfer_attempted,
         }
 
     async def generate_report(self, user_id: int, nickname: str = "",
                               days: int = 7) -> dict:
         """单独触发生成报告。"""
         context = IslandContext(user_id=user_id, nickname=nickname)
+        self.current_run_code = f"island-report-{uuid.uuid4().hex[:12]}"
+        self.current_user_id = user_id
         safety_state = get_user_safety_state(self.db, user_id)
         context.risk_level = safety_state["risk_level"]
         if context.risk_level == "urgent":
@@ -160,6 +171,21 @@ class IslandOrchestrator:
                 "crisis": True, "safety_status": "urgent",
                 "crisis_resources": safety_result.data.get("resources", {}),
                 "message": "当前优先处理安全，已停止生成普通情绪报告。",
+                "audit_run_code": self.current_run_code,
+                "external_transfer_attempted": self.external_transfer_attempted,
+            }
+        if context.risk_level in {"watch", "professional"}:
+            return {
+                "report_code": "", "pdf_path": "", "period_days": days,
+                "mood_dominant": "", "llm_used": False, "status": "blocked",
+                "crisis": False, "safety_status": context.risk_level,
+                "message": (
+                    "当前优先落实与可信成年人和专业支持的连接，暂不生成普通情绪报告。"
+                    if context.risk_level == "professional"
+                    else "当前建议先持续留意并与可信成年人沟通，暂不生成普通情绪报告。"
+                ),
+                "audit_run_code": self.current_run_code,
+                "external_transfer_attempted": self.external_transfer_attempted,
             }
         result = await self.reporter.run(context, days=days)
         self.db.commit()
@@ -170,7 +196,23 @@ class IslandOrchestrator:
             "mood_dominant": result.data.get("mood_dominant", ""),
             "llm_used": result.data.get("llm_used", False),
             "status": result.status,
+            "audit_run_code": self.current_run_code,
+            "external_transfer_attempted": self.external_transfer_attempted,
         }
+
+    def _record_transfer_start(self, agent_name: str) -> None:
+        """在发送去标识化字段前落盘最小审计，结果是否采用与是否传输分开记录。"""
+        from models import SensitiveAccessLog
+        self.external_transfer_attempted = True
+        self.db.add(SensitiveAccessLog(
+            actor_user_id=self.current_user_id,
+            action="island_external_ai_transfer_started",
+            resource_type="island_agent_run",
+            resource_id=self.current_run_code[:64],
+            result=f"agent:{agent_name};model:xunfei-constrained;prompt:v1",
+            created_at=datetime.now(),
+        ))
+        self.db.commit()
 
     def _save_run(self, run_code: str, user_id: int, trigger: str,
                   results: dict[str, AgentResult], safety_status: str,

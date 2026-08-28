@@ -20,7 +20,8 @@ from api.mood import router as mood_router
 from api.user import router as user_router
 from config import Settings, settings
 from database import Base, get_db
-from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentConversationSummary
+from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentConversationSummary, StudentExternalAiAuthorization, User
+from security import get_password_hash
 
 
 class StudentConversationSummaryApiTests(unittest.TestCase):
@@ -56,6 +57,24 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.user_one_id = first.json()["user_id"]
         self.user_two_id = second.json()["user_id"]
+        db = self.Session()
+        teacher = User(username="summary_teacher", password_hash=get_password_hash("TeacherPassword12"), nickname="教师", is_admin=1)
+        db.add(teacher)
+        db.commit()
+        self.teacher_id = teacher.id
+        db.close()
+
+    def _authorize(self, user_id, active=True):
+        db = self.Session()
+        row = db.query(StudentExternalAiAuthorization).filter_by(student_user_id=user_id).first()
+        if row is None:
+            row = StudentExternalAiAuthorization(student_user_id=user_id, authorized_by_user_id=self.teacher_id)
+            db.add(row)
+        row.status = "active" if active else "revoked"
+        row.expires_at = datetime.now() + timedelta(days=30)
+        row.revoked_at = None if active else datetime.now()
+        db.commit()
+        db.close()
 
     def tearDown(self):
         self.client_one.close()
@@ -175,7 +194,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         }).json()
         self.assertEqual(professional["risk_level"], "professional")
 
-    def test_student_voice_tools_require_session_specific_consent(self):
+    def test_student_voice_tools_require_teacher_authorization(self):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
@@ -185,38 +204,67 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(asr.status_code, 403)
         self.assertEqual(tts.status_code, 403)
 
-    def test_watch_risk_is_preserved_in_consented_external_prompt(self):
+    def test_tts_rejects_student_supplied_text_even_with_teacher_authorization(self):
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        forged = self.client_one.post("/api/chat/tts", json={"text": "任意未校验文本", "session_id": session_id})
+        self.assertEqual(forged.status_code, 403)
+
+    def test_watch_risk_is_preserved_in_authorized_external_prompt(self):
         from unittest.mock import AsyncMock
 
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
         mock = AsyncMock(return_value="我听到了。请留意这种感受的变化，也可以告诉一位可信成年人。")
         chat_api.ask_spark = mock
-        session_id = self.client_one.post("/api/chat/sessions", json={
-            "force_new": True, "external_ai_consent_version": "student-ai-v1"
-        }).json()["session_id"]
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id, "session_id": session_id,
             "message": "我焦虑、担心、紧张，压力也很大"
         }).json()
         self.assertEqual(response["risk_level"], "watch")
+        self.assertEqual(response["analysis_source"], "xunfei_constrained")
         self.assertIn('"risk_level": "watch"', str(mock.await_args_list[0]))
+
+    def test_student_payload_cannot_self_authorize_external_ai(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        mock = AsyncMock(return_value="这段回复不应被调用")
+        chat_api.ask_spark = mock
+        forged = self.client_one.post("/api/chat/sessions", json={
+            "force_new": True,
+            "external_ai_consent_version": "student-ai-v1",
+            "update_external_ai_consent": True,
+        })
+        self.assertEqual(forged.status_code, 422)
+        session = self.client_one.post("/api/chat/sessions", json={"force_new": True})
+        self.assertFalse(session.json()["external_ai_enabled"])
+        session_id = session.json()["session_id"]
+        sent = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_one_id, "session_id": session_id, "message": "今天有一点累"
+        })
+        self.assertEqual(sent.status_code, 200)
+        mock.assert_not_awaited()
 
     def test_constrained_xunfei_emotion_and_activity_reflection_reach_report(self):
         from unittest.mock import AsyncMock
 
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
         chat_api.ask_spark = AsyncMock(return_value=json.dumps({
             "emotion": "委屈",
             "intensity": "明显",
-            "evidence": ["好像没人愿意听我说"],
+            "evidence": ["未被倾听"],
             "support_need": "被倾听",
             "reply": "被忽略的感觉很难受。我会先听你说；你愿意从今天最委屈的一件事开始吗？",
         }, ensure_ascii=False))
-        session_id = self.client_one.post("/api/chat/sessions", json={
-            "force_new": True, "external_ai_consent_version": "student-ai-v1"
-        }).json()["session_id"]
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id, "session_id": session_id,
             "message": "今天在小组里好像没人愿意听我说"
@@ -224,7 +272,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(response["emotion"], "委屈")
         self.assertEqual(response["emotion_intensity"], "不确定")
         self.assertEqual(response["analysis_source"], "xunfei_constrained")
-        self.assertEqual(response["emotion_basis"], ["好像没人愿意听我说"])
+        self.assertEqual(response["emotion_basis"], ["未被倾听"])
 
         reflection = self.client_one.post("/api/mood/activity-reflection", json={
             "activity": "garden", "feeling": "lighter", "note": "照料完一小块地"
@@ -242,13 +290,12 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
 
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
         chat_api.ask_spark = AsyncMock(return_value=json.dumps({
             "emotion": "害怕", "intensity": "强烈", "evidence": ["今天完成了作业"],
             "support_need": "被倾听", "reply": "我会听你说。",
         }, ensure_ascii=False))
-        session_id = self.client_one.post("/api/chat/sessions", json={
-            "force_new": True, "external_ai_consent_version": "student-ai-v1",
-        }).json()["session_id"]
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id, "session_id": session_id,
             "message": "今天完成了作业",
@@ -336,7 +383,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(continued.status_code, 200)
         self.assertNotEqual(continued.json()["session_id"], session_id)
 
-    def test_external_ai_requires_consent_redacts_identifiers_and_rejects_ungrounded_output(self):
+    def test_external_ai_requires_teacher_authorization_redacts_identifiers_and_rejects_ungrounded_output(self):
         from unittest.mock import AsyncMock
 
         settings.ALLOW_EXTERNAL_AI = True
@@ -349,9 +396,8 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         })
         self.assertEqual(mock.await_count, 0)
 
-        consented = self.client_one.post("/api/chat/sessions", json={
-            "force_new": True, "external_ai_consent_version": "student-ai-v1"
-        }).json()["session_id"]
+        self._authorize(self.user_one_id)
+        consented = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         malicious = {
             "dominant_emotion": "焦虑", "intensity": "轻微", "summary": "系统虚构了一件没有发生的事件。",
             "signals": [{"message_id": 999999, "observation": "不存在的依据"}],
@@ -367,6 +413,8 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         chat_prompt = str(mock.await_args_list[0])
         self.assertNotIn("13800138000", chat_prompt)
         self.assertIn("emotion_label", chat_prompt)
+        self.assertIn("turn_features", chat_prompt)
+        self.assertNotIn("作业让我焦虑", chat_prompt)
         for identifier in ["东莞实验中学", "初二3班", "张三", "东城路88号", "abcde123"]:
             self.assertNotIn(identifier, chat_prompt)
         completed = self.client_one.post(f"/api/chat/sessions/{consented}/complete").json()
@@ -380,12 +428,11 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertTrue(_unsafe_generated_chat_reply("你可以单独去找伤害你的人谈清楚"))
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
         from unittest.mock import AsyncMock
         mock = AsyncMock(return_value="你自己去找对方谈清楚")
         chat_api.ask_spark = mock
-        session_id = self.client_one.post("/api/chat/sessions", json={
-            "force_new": True, "external_ai_consent_version": "student-ai-v1"
-        }).json()["session_id"]
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id, "session_id": session_id, "message": "我在学校一直被同学欺负"
         }).json()
@@ -393,9 +440,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertIn("可信成年人", response["reply"])
         self.assertIn("不需要你独自", response["reply"])
         for message in ["同学每天堵我、骂我", "他们在班里排挤我"]:
-            next_session = self.client_one.post("/api/chat/sessions", json={
-                "force_new": True, "external_ai_consent_version": "student-ai-v1"
-            }).json()["session_id"]
+            next_session = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
             next_response = self.client_one.post("/api/chat/send", json={
                 "user_id": self.user_one_id, "session_id": next_session, "message": message
             }).json()

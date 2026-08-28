@@ -29,6 +29,7 @@ from models import (
     PetState, IslandReport,
     SensitiveAccessLog,
 )
+from student_ai_authorization import student_external_ai_allowed
 
 router = APIRouter(prefix="/api/island", tags=["island"])
 
@@ -38,7 +39,6 @@ router = APIRouter(prefix="/api/island", tags=["island"])
 class AgentRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     trigger: Literal["login", "activity_end", "manual", "scheduled"] = "login"
-    external_ai_consent_version: Literal["student-island-ai-v1"] | None = None
 
 
 class BehaviorLogRequest(BaseModel):
@@ -66,7 +66,6 @@ class PetInteractRequest(BaseModel):
 class ReportGenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     days: int = Field(default=7, ge=1, le=30)
-    external_ai_consent_version: Literal["student-island-ai-v1"] | None = None
 
 
 # ── Agent 运行 ────────────────────────────────────────────
@@ -79,13 +78,29 @@ async def run_agent(
 ):
     """触发一次心岛守护者多Agent流程。"""
     from agents import IslandOrchestrator
-    external_ai_allowed = bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_STUDENT_EXTERNAL_AI and payload.external_ai_consent_version == "student-island-ai-v1")
+    external_ai_allowed = student_external_ai_allowed(db, current_user.id)
     orchestrator = IslandOrchestrator(db, external_ai_allowed=external_ai_allowed)
     result = await orchestrator.run(
         user_id=current_user.id,
         nickname=current_user.nickname or current_user.username,
         trigger=payload.trigger,
     )
+    audit_result = "local_no_transfer"
+    if result.get("crisis"):
+        audit_result = "safety_override"
+    elif external_ai_allowed and result.get("external_transfer_attempted"):
+        audit_result = "xunfei_consent_used"
+    elif external_ai_allowed:
+        audit_result = "consented_no_transfer"
+    db.add(SensitiveAccessLog(
+        actor_user_id=current_user.id,
+        action="island_external_ai_execution",
+        resource_type="island_agent_run",
+        resource_id=str(result.get("run_code") or "safety")[:64],
+        result=audit_result,
+        created_at=datetime.now(),
+    ))
+    db.commit()
     return result
 
 
@@ -310,22 +325,42 @@ async def generate_report(
 ):
     """生成情绪报告（可验收成果）。"""
     from agents import IslandOrchestrator
-    external_ai_allowed = bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_STUDENT_EXTERNAL_AI and payload.external_ai_consent_version == "student-island-ai-v1")
-    db.add(SensitiveAccessLog(
-        actor_user_id=current_user.id,
-        action="generate_island_emotion_report",
-        resource_type="island_report",
-        resource_id=f"pending-{datetime.now().timestamp()}",
-        result="external_ai_consented" if external_ai_allowed else "local_deterministic",
-    ))
+    external_ai_allowed = student_external_ai_allowed(db, current_user.id)
     orchestrator = IslandOrchestrator(db, external_ai_allowed=external_ai_allowed)
-    result = await orchestrator.generate_report(
-        user_id=current_user.id,
-        nickname=current_user.nickname or current_user.username,
-        days=payload.days,
-    )
-    db.commit()
-    return result
+    try:
+        result = await orchestrator.generate_report(
+            user_id=current_user.id,
+            nickname=current_user.nickname or current_user.username,
+            days=payload.days,
+        )
+        if result.get("status") == "blocked":
+            audit_result = "safety_blocked_no_transfer"
+        elif result.get("external_transfer_attempted") and result.get("llm_used"):
+            audit_result = "transfer_attempted_output_accepted"
+        elif result.get("external_transfer_attempted"):
+            audit_result = "transfer_attempted_output_rejected_or_failed"
+        else:
+            audit_result = "local_no_transfer"
+        db.add(SensitiveAccessLog(
+            actor_user_id=current_user.id,
+            action="generate_island_emotion_report",
+            resource_type="island_report",
+            resource_id=str(result.get("audit_run_code") or result.get("report_code"))[:64],
+            result=audit_result,
+        ))
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        db.add(SensitiveAccessLog(
+            actor_user_id=current_user.id,
+            action="generate_island_emotion_report",
+            resource_type="island_report",
+            resource_id=orchestrator.current_run_code[:64],
+            result="execution_failed_after_transfer" if orchestrator.external_transfer_attempted else "local_execution_failed",
+        ))
+        db.commit()
+        raise
 
 
 @router.get("/report/list")

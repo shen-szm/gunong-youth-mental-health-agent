@@ -16,7 +16,7 @@ test('student room exposes a truthful agent workflow rail', () => {
   assert.match(room, /res\.data\.metadata\?\.degraded/)
   assert.match(room, /res\.data\.workflow/)
   assert.match(room, /res\.data\.risk_level/)
-  assert.match(room, /studentAgentState\.phase = 'chat'\s+studentAgentState\.verifiedSteps = \[\]/)
+  assert.match(room, /studentAgentState\.phase = 'chat'[\s\S]{0,120}studentAgentState\.source = 'pending'[\s\S]{0,120}studentAgentState\.verifiedSteps = \[\]/)
   const railTemplate = rail.slice(0, rail.indexOf('<style scoped>'))
   assert.doesNotMatch(railTemplate, /\d+%/)
   assert.match(rail, /不展示模型私有思维过程/)

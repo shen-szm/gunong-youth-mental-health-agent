@@ -40,6 +40,10 @@
         <div class="agent-role-row" aria-label="当前协作角色">
           <span v-for="role in activeRoles" :key="role">{{ role }}</span>
         </div>
+        <div class="student-agent-source" aria-label="当前 Agent 生成来源">
+          <strong>{{ sourceLabel }}</strong>
+          <small>{{ sourceDetail }}</small>
+        </div>
 
         <ol class="agent-step-list">
           <li v-for="step in steps" :key="step.id" :class="`is-${step.status}`">
@@ -119,6 +123,27 @@ const riskLabel = computed(() => {
   }
   return labels[props.state.riskLevel] || labels.unassessed
 })
+
+const sourceLabel = computed(() => ({
+  xunfei_constrained: '讯飞受约束生成',
+  safety_override: '安全规则强制覆盖',
+  degraded: '规则安全降级',
+  deterministic: '本地确定性规则',
+  pending: '来源等待确认',
+  unavailable: '来源未确认',
+})[props.state.source] || '来源未确认')
+
+const sourceDetail = computed(() => props.state.source === 'xunfei_constrained'
+  ? '模型负责受约束语言生成，风险与禁止诊断规则由后端强制执行'
+  : props.state.source === 'safety_override'
+    ? '普通生成已停止，当前只执行确定性安全路径'
+    : props.state.source === 'degraded'
+      ? '模型结果不可用或未通过校验，已使用可审核规则模板'
+  : props.state.source === 'pending'
+    ? '等待后端返回可核验的执行结果'
+    : props.state.source === 'unavailable'
+      ? '本轮未获得有效执行结果，不能判断生成来源'
+      : '本轮未使用外部模型')
 
 function statusIcon(status) {
   return ({ completed: '✓', running: '•', attention: '!', blocked: '—', waiting: '·', error: '×' })[status] || '·'
@@ -225,6 +250,7 @@ watch(() => props.open, async (value, previous) => {
 .agent-rail-event span.is-urgent, .agent-rail-event span.is-error { background: #e49b84; }
 .agent-role-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
 .agent-role-row span { padding: 4px 7px; border: 1px solid rgba(185,217,201,.2); border-radius: 7px; color: rgba(213,235,224,.84); background: rgba(185,217,201,.065); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.student-agent-source { display: none; }
 .agent-step-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-step-list li {
   display: grid;
@@ -274,6 +300,9 @@ watch(() => props.open, async (value, previous) => {
 @media (min-width: 1024px) {
   .student-agent-shell { top: 82px; right: 22px; }
   .student-agent-rail { width: 360px; max-height: calc(100vh - 116px); border: 1px solid rgba(255,255,255,.1); background: linear-gradient(145deg, rgba(25,31,36,.96), rgba(35,31,29,.93)); }
+  .student-agent-source { display:grid; gap:3px; margin:0 0 10px; padding:9px 10px; border:1px solid rgba(185,217,201,.18); border-radius:10px; background:rgba(185,217,201,.065); }
+  .student-agent-source strong { color:#cfe7db; font-size:10px; }
+  .student-agent-source small { color:var(--agent-muted); font-size:10px; line-height:1.45; }
 }
 
 @media (max-width: 899px) {

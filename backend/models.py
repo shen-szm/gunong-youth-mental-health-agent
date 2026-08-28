@@ -301,6 +301,24 @@ class TeacherStudentAssignment(Base):
     )
 
 
+class StudentExternalAiAuthorization(Base):
+    """由职责教师登记的学生外部 AI 处理授权依据；不保存证明材料原文。"""
+
+    __tablename__ = "student_external_ai_authorizations"
+
+    id = Column(Integer, primary_key=True)
+    student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    authorized_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    basis = Column(String(40), nullable=False, default="school_guardian_authority")
+    statement_version = Column(String(40), nullable=False, default="teacher-ai-authorization-v1")
+    purpose = Column(String(120), nullable=False, default="student_support_agents")
+    status = Column(String(16), nullable=False, default="active", index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class TeacherWorkProductSnapshot(Base):
     """绑定教师、学生、审批工单和截止时点的工作成果快照。"""
 

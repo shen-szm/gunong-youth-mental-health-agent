@@ -74,6 +74,14 @@ export function decideStudentWorkProductTask(studentId, productId, taskIndex, de
   }, { params: requestId ? { request_id: requestId } : {} })
 }
 
+export function setStudentExternalAiAuthorization(studentId, active, authorityConfirmed = false, expiresDays = 30) {
+  return instance.post(`/students/${studentId}/external-ai-authorization`, {
+    active,
+    authority_confirmed: authorityConfirmed,
+    expires_days: expiresDays,
+  })
+}
+
 export function setTeacherStudentAssignment(teacherUserId, studentUserId, active = true) {
   return instance.post('/assignments', { teacher_user_id: teacherUserId, student_user_id: studentUserId, active })
 }

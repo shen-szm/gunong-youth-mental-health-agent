@@ -52,8 +52,8 @@ class PlanningAgent(BaseAgent):
     name = "planner"
     description = "基于情绪状态自主制定干预计划"
 
-    def __init__(self, allow_external_ai: bool = False):
-        super().__init__(allow_external_ai=allow_external_ai)
+    def __init__(self, allow_external_ai: bool = False, transfer_start_callback=None):
+        super().__init__(allow_external_ai=allow_external_ai, transfer_start_callback=transfer_start_callback)
 
     async def run(self, context: IslandContext) -> AgentResult:
         # 如果危机已检测，不做规划
@@ -63,6 +63,36 @@ class PlanningAgent(BaseAgent):
                 status="skipped",
                 summary="危机状态下跳过普通规划",
                 data={},
+            )
+
+        # watch/professional 来自确定性安全门，不允许模型降低行动强度。
+        if context.risk_level == "professional":
+            plan = {
+                "strategy": "professional_support",
+                "steps": [],
+                "reason": "安全规则要求今天连接可信成年人或专业支持",
+                "support_action": "今天告诉一位可信成年人，请对方陪你联系学校心理老师或专业支持。",
+            }
+            context.intervention_plan = plan
+            return AgentResult(
+                agent_name=self.name,
+                status="completed",
+                summary="已切换到确定性的专业支持连接路径",
+                data={"plan": plan, "llm_used": False, "step_count": 0},
+            )
+        if context.risk_level == "watch":
+            plan = {
+                "strategy": "watch_support",
+                "steps": RULE_BASED_PLANS["neutral"]["steps"],
+                "reason": "保留低负担陪伴，同时提示持续留意",
+                "support_action": "24小时内告诉一位可信成年人最近的状态，并继续记录变化。",
+            }
+            context.intervention_plan = plan
+            return AgentResult(
+                agent_name=self.name,
+                status="completed",
+                summary="已安排低负担陪伴与持续留意路径",
+                data={"plan": plan, "llm_used": False, "step_count": len(plan["steps"])},
             )
 
         # 1. 尝试大模型规划

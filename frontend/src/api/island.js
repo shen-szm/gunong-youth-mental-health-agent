@@ -4,7 +4,9 @@ const instance = axios.create({ baseURL: "/api/island" });
 
 // ── Agent 运行 ──
 export function runIslandAgent(trigger = "login") {
-  return instance.post("/agent/run", { trigger });
+  return instance.post("/agent/run", {
+    trigger,
+  });
 }
 export function getIslandAgentHistory(limit = 20) {
   return instance.get("/agent/history", { params: { limit } });
