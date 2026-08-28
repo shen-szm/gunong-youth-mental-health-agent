@@ -179,7 +179,7 @@ async function handleLogout() {
     return
   }
   try {
-    await userStore.ensureDemoSession()
+    await userStore.ensureStudentSession()
   } catch {
     router.push('/teacher-login')
   }

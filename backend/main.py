@@ -42,7 +42,17 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": settings.RELEASE_VERSION}
+    from xunfei.spark_api import is_spark_available
+    return {
+        "status": "ok",
+        "version": settings.RELEASE_VERSION,
+        "external_ai": bool(settings.ALLOW_EXTERNAL_AI),
+        "student_ai": bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_STUDENT_EXTERNAL_AI),
+        "guardian_ai": bool(settings.ALLOW_EXTERNAL_AI and settings.ALLOW_GUARDIAN_SYNTHETIC_AI),
+        "spark_model": settings.SPARK_MODEL,
+        "spark_configured": is_spark_available(),
+        "guest_session": bool(settings.ALLOW_GUEST_SESSION),
+    }
 
 # 启动时初始化数据库和管理员账号
 @app.on_event("startup")

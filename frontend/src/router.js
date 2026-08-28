@@ -45,7 +45,7 @@ router.beforeEach(async (to) => {
   }
 
   try {
-    await userStore.ensureDemoSession();
+    await userStore.ensureStudentSession();
   } catch {
     return { path: "/teacher-login", query: { redirect: to.fullPath } };
   }

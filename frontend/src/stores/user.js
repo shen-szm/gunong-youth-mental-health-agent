@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import { closeSession, createDemoSession, getCurrentSession } from "../api/user";
+import { closeSession, createGuestSession, getCurrentSession } from "../api/user";
 
 export const useUserStore = defineStore("user", () => {
   const userId = ref(localStorage.getItem("shengyu_user_id") || "");
@@ -9,7 +9,7 @@ export const useUserStore = defineStore("user", () => {
   const isSuperAdmin = ref(localStorage.getItem("shengyu_is_super_admin") === "1");
   const role = ref(localStorage.getItem("shengyu_role") || (isAdmin.value ? "teacher" : "student"));
   const sessionChecked = ref(false);
-  let demoSessionPromise = null;
+  let studentSessionPromise = null;
 
   const isLoggedIn = computed(() => !!userId.value);
 
@@ -45,29 +45,29 @@ export const useUserStore = defineStore("user", () => {
     localStorage.removeItem("shengyu_role");
   }
 
-  async function ensureDemoSession() {
+  async function ensureStudentSession() {
     if (sessionChecked.value && isLoggedIn.value) return;
 
-    if (!demoSessionPromise) {
-      demoSessionPromise = (async () => {
+    if (!studentSessionPromise) {
+      studentSessionPromise = (async () => {
         let response;
         try {
           response = await getCurrentSession();
         } catch {
           clearLocalSession();
-          response = await createDemoSession();
+          response = await createGuestSession();
         }
         const data = response.data;
         login(data.user_id, data.nickname, !!data.is_admin, !!data.is_super_admin, data.role);
         sessionChecked.value = true;
         return data;
       })().finally(() => {
-        demoSessionPromise = null;
+        studentSessionPromise = null;
       });
     }
 
-    return demoSessionPromise;
+    return studentSessionPromise;
   }
 
-  return { userId, nickname, isAdmin, isSuperAdmin, role, isLoggedIn, login, logout, ensureDemoSession };
+  return { userId, nickname, isAdmin, isSuperAdmin, role, isLoggedIn, login, logout, ensureStudentSession };
 });

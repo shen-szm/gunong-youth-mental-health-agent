@@ -8,8 +8,8 @@ export function register(username, password, nickname) {
 export function login(username, password) {
   return instance.post("/login", { username, password });
 }
-export function createDemoSession() {
-  return instance.post("/demo-session");
+export function createGuestSession() {
+  return instance.post("/guest-session");
 }
 export function getCurrentSession() {
   return instance.get("/me");

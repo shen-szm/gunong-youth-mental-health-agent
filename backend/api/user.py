@@ -93,6 +93,20 @@ def _create_isolated_demo_user(db: Session) -> User:
     return user
 
 
+def _create_isolated_guest_user(db: Session) -> User:
+    """创建正式匿名访客身份；每个浏览器会话隔离，绝不授予教师权限。"""
+    user = User(
+        username=f"guest_{secrets.token_hex(12)}",
+        password_hash=get_password_hash(secrets.token_urlsafe(32)),
+        nickname="新朋友",
+        is_admin=0,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def get_demo_session(db: Session) -> dict:
     """保留现有测试和调用方使用的无状态返回形状。"""
     user = _get_demo_user(db)
@@ -106,6 +120,15 @@ async def demo_session(response: Response, db: Session = Depends(get_db)):
     user = _create_isolated_demo_user(db)
     establish_session(response, db, user)
     return {"msg": "合成数据演示会话已就绪", **_payload(user)}
+
+
+@router.post("/guest-session")
+async def guest_session(response: Response, db: Session = Depends(get_db)):
+    if not settings.ALLOW_GUEST_SESSION:
+        raise HTTPException(status_code=404, detail="访客入口未启用")
+    user = _create_isolated_guest_user(db)
+    establish_session(response, db, user)
+    return {"msg": "匿名会话已就绪", **_payload(user)}
 
 
 @router.post("/register")

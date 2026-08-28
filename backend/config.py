@@ -6,9 +6,10 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
-    RELEASE_VERSION: str = "5.1.0-alpha.19"
+    RELEASE_VERSION: str = "5.1.0-alpha.20"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
+    ALLOW_GUEST_SESSION: bool = False
     SESSION_COOKIE_NAME: str = "shengyu_session"
     SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
     COOKIE_SECURE: bool = False
