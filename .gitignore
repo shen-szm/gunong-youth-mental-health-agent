@@ -9,6 +9,7 @@ __pycache__/
 .codex-*-alpha*.log
 .codex-alpha*.png
 .alpha*-*.log
+/backend/*.log
 .vite/
 .DS_Store
 Thumbs.db

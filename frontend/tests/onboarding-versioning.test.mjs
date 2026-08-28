@@ -51,9 +51,9 @@ test('patch release continues from latest baseline and records changelog', async
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '5.1.0-alpha.23')
-  assert.equal(lock.version, '5.1.0-alpha.23')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.23')
+  assert.equal(pkg.version, '5.1.0-alpha.24')
+  assert.equal(lock.version, '5.1.0-alpha.24')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.24')
   assert.match(changelog, /## \[5\.1\.0-alpha\.5\] - 2026-08-25/)
   assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
   assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)
