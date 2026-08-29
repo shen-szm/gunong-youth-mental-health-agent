@@ -82,10 +82,11 @@ export function getLatestStudentReviewReport(studentId, requestId = null) {
   return instance.get(`/students/${studentId}/review-reports/latest`, { params: requestId ? { request_id: requestId } : {} })
 }
 
-export function decideStudentReviewReport(studentId, reportId, decision, checklistConfirmed, note = '', requestId = null) {
+export function decideStudentReviewReport(studentId, reportId, decision, checklistConfirmed, evidenceGapAcknowledged = false, note = '', requestId = null) {
   return instance.post(`/students/${studentId}/review-reports/${reportId}/decision`, {
     decision,
     checklist_confirmed: checklistConfirmed,
+    evidence_gap_acknowledged: evidenceGapAcknowledged,
     note,
   }, { params: requestId ? { request_id: requestId } : {} })
 }

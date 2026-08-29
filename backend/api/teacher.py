@@ -76,6 +76,7 @@ class TeacherReviewDecisionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str = Field(pattern=r"^(reviewed|revision_requested)$")
     checklist_confirmed: bool = False
+    evidence_gap_acknowledged: bool = False
     note: str = Field(default="", max_length=1000)
 
 
@@ -829,7 +830,7 @@ async def generate_teacher_review_report(
         TeacherReviewReport.source_product_id == snapshot.product_id,
         TeacherReviewReport.generated_by_user_id == teacher.id,
         TeacherReviewReport.scope_key == scope_key,
-        TeacherReviewReport.version == "teacher-review-report-v1",
+        TeacherReviewReport.version == "teacher-review-report-v2",
     ).order_by(TeacherReviewReport.revision_number.desc(), TeacherReviewReport.id.desc()).first()
     if prior and prior.status in {"draft", "reviewed"}:
         _audit(db, teacher, "reuse_teacher_review_report", "teacher_review_report", prior.report_id, "idempotent")
@@ -860,7 +861,7 @@ async def generate_teacher_review_report(
         revision_number=(prior.revision_number + 1) if prior else 1,
         parent_report_id=prior.report_id if prior else None,
         status="draft",
-        version="teacher-review-report-v1",
+        version="teacher-review-report-v2",
     )
     db.add(row)
     try:
@@ -871,7 +872,7 @@ async def generate_teacher_review_report(
             TeacherReviewReport.source_product_id == snapshot.product_id,
             TeacherReviewReport.generated_by_user_id == teacher.id,
             TeacherReviewReport.scope_key == scope_key,
-            TeacherReviewReport.version == "teacher-review-report-v1",
+            TeacherReviewReport.version == "teacher-review-report-v2",
             TeacherReviewReport.revision_number == ((prior.revision_number + 1) if prior else 1),
         ).first()
         if existing:
@@ -922,31 +923,72 @@ def decide_teacher_review_report(
     if not row:
         _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, "denied_scope")
         raise HTTPException(status_code=404, detail="评审报告不存在或不属于当前授权范围")
+
+    def deny(status_code: int, detail: str, result: str) -> None:
+        _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, result)
+        raise HTTPException(status_code=status_code, detail=detail)
+
     if row.status == "reviewed":
-        raise HTTPException(status_code=409, detail="已签署报告为终态；如需调整，请生成新的修订版")
+        deny(409, "已签署报告为终态；如需调整，请生成新的修订版", "denied_terminal_reviewed")
     if row.status == "revision_requested" and payload.decision == "reviewed":
-        raise HTTPException(status_code=409, detail="退回的报告不能直接签署，请先生成新的修订版")
+        deny(409, "退回的报告不能直接签署，请先生成新的修订版", "denied_revision_terminal")
     if row.status == "revision_requested" and payload.decision == "revision_requested":
+        _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, "idempotent_revision_requested")
         return _review_report_payload(row)
     if payload.decision == "reviewed" and not payload.checklist_confirmed:
-        raise HTTPException(status_code=400, detail="签署前必须逐项确认审核清单")
+        deny(400, "签署前必须逐项确认审核清单", "denied_checklist")
+    report_snapshot = json.loads(row.report_json or "{}")
+    evidence_audit = report_snapshot.get("evidence_audit") or {}
+    evidence_status = evidence_audit.get("status", "insufficient")
+    unlinked_claims = int(evidence_audit.get("unlinked_claim_count") or 0)
+    if payload.decision == "reviewed" and (evidence_status == "insufficient" or unlinked_claims > 0):
+        deny(409, "报告存在证据不足或未关联主张，请退回补充证据后再签署", "denied_evidence_gate")
+    if payload.decision == "reviewed" and evidence_status == "partial":
+        if not payload.evidence_gap_acknowledged:
+            deny(400, "部分可回溯报告需明确确认证据缺口", "denied_gap_ack")
+        if len(payload.note.strip()) < 10:
+            deny(400, "请记录接受证据缺口的具体理由和线下核对安排", "denied_gap_note")
     if payload.decision == "revision_requested" and len(payload.note.strip()) < 4:
-        raise HTTPException(status_code=400, detail="退回修订时请填写具体说明")
+        deny(400, "退回修订时请填写具体说明", "denied_revision_note")
+    stored_note = payload.note.strip()
+    if payload.decision == "reviewed" and evidence_status == "partial":
+        stored_note = f"[已确认证据缺口] {stored_note}"
+    reviewed_at = datetime.now()
+    updated = db.query(TeacherReviewReport).filter(
+        TeacherReviewReport.id == row.id,
+        TeacherReviewReport.status == "draft",
+    ).update({
+        TeacherReviewReport.status: payload.decision,
+        TeacherReviewReport.review_note: stored_note,
+        TeacherReviewReport.reviewed_by_user_id: teacher.id,
+        TeacherReviewReport.reviewed_at: reviewed_at,
+    }, synchronize_session=False)
+    if updated != 1:
+        db.rollback()
+        current = db.query(TeacherReviewReport).filter(
+            TeacherReviewReport.report_id == report_id,
+            TeacherReviewReport.student_user_id == student_id,
+            TeacherReviewReport.request_id == expected_request_id,
+            TeacherReviewReport.generated_by_user_id == teacher.id,
+        ).first()
+        if current and current.status == "revision_requested" and payload.decision == "revision_requested":
+            _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, "idempotent_revision_requested")
+            return _review_report_payload(current)
+        _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, "denied_concurrent_terminal")
+        raise HTTPException(status_code=409, detail="报告状态已被其他审核操作更新，请刷新后重试")
+
     db.add(TeacherReviewReportDecision(
         report_id=row.report_id,
         teacher_user_id=teacher.id,
-        previous_status=row.status,
+        previous_status="draft",
         decision=payload.decision,
         checklist_confirmed=1 if payload.checklist_confirmed else 0,
-        note=payload.note.strip(),
+        note=stored_note,
     ))
-    row.status = payload.decision
-    row.review_note = payload.note.strip()
-    row.reviewed_by_user_id = teacher.id
-    row.reviewed_at = datetime.now()
     db.commit()
     _audit(db, teacher, "review_teacher_report", "teacher_review_report", report_id, payload.decision)
-    return _review_report_payload(row)
+    refreshed = db.query(TeacherReviewReport).filter(TeacherReviewReport.id == row.id).first()
+    return _review_report_payload(refreshed)
 
 
 @router.get("/students/{student_id}/review-reports/{report_id}.pdf")

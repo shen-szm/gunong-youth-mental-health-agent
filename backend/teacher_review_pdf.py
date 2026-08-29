@@ -123,10 +123,39 @@ def generate_teacher_review_pdf(report: dict) -> bytes:
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ])))
 
-    story.extend([_p("六、证据来源与适用边界", heading)])
+    audit = report.get("evidence_audit") or {}
+    story.extend([
+        _p("六、结论—证据可追溯审计", heading),
+        _p(f"{audit.get('label')}：{audit.get('summary')}", body),
+    ])
+    audit_rows = [
+        ["授权记录", audit.get("record_count", 0)],
+        ["已被引用", audit.get("cited_record_count", 0)],
+        ["报告主张", audit.get("claim_count", 0)],
+        ["未关联主张", audit.get("unlinked_claim_count", 0)],
+    ]
+    story.append(Table([[_p(a, small), _p(b, body)] for a, b in audit_rows], colWidths=[45 * mm, 131 * mm], style=TableStyle([
+        ("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#CCD8D3")), ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EFF4F1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ])))
+    claim_rows = [[_p("主张", small), _p("关联依据", small)]]
+    claim_status = {"record_linked": "学生记录", "guidance_linked": "权威指南", "declared_gap": "信息缺口", "unlinked": "未关联"}
+    for claim in audit.get("claims") or []:
+        basis = "、".join(claim.get("evidence_ids") or claim.get("guidance_codes") or []) or claim_status.get(claim.get("status"), "未关联")
+        claim_rows.append([_p(f"{claim.get('claim_id')} · {claim.get('section')} · {claim.get('label')}", small), _p(f"{claim_status.get(claim.get('status'), claim.get('status'))}：{basis}", small)])
+    if len(claim_rows) > 1:
+        story.append(Table(claim_rows, colWidths=[116 * mm, 60 * mm], repeatRows=1, style=TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8F1ED")), ("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#C7D6D0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ])))
+    story.append(_p(audit.get("boundary"), small))
+
+    story.extend([_p("七、证据来源与适用边界", heading)])
     for source in report.get("evidence_sources") or []:
         story.append(_p(f"{source.get('code')} · {source.get('title')}（{source.get('issuer')}）\n{source.get('use')}\n{source.get('url')}", small))
-    story.extend([_p("七、教师审核", heading), *_bullets([item.get("item") for item in report.get("review_checklist") or []], body), _p(f"审核意见：{report.get('review_note') or '尚未填写'}", body), _p(f"签署教师：{report.get('teacher_label')}　|　签署时间：{report.get('reviewed_at') or '尚未签署'}　|　修订号：{report.get('revision_number', 1)}", small), _p(f"内容摘要：{report.get('content_hash') or '生成后记录'}", small), _p("本报告必须由具备权限的教师核对后使用；子 Agent 工程复核不能替代持证心理专业人员正式签署。", small)])
+    story.extend([_p("八、教师审核", heading), *_bullets([item.get("item") for item in report.get("review_checklist") or []], body), _p(f"审核意见：{report.get('review_note') or '尚未填写'}", body), _p(f"签署教师：{report.get('teacher_label')}　|　签署时间：{report.get('reviewed_at') or '尚未签署'}　|　修订号：{report.get('revision_number', 1)}", small), _p(f"内容摘要：{report.get('content_hash') or '生成后记录'}", small), _p("本报告必须由具备权限的教师核对后使用；子 Agent 工程复核不能替代持证心理专业人员正式签署。", small)])
 
     def footer(canvas, doc):
         canvas.saveState()

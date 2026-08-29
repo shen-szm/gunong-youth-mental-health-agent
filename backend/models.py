@@ -419,7 +419,7 @@ class TeacherReviewReport(Base):
     review_note = Column(Text, nullable=False, default="")
     reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
-    version = Column(String(40), nullable=False, default="teacher-review-report-v1")
+    version = Column(String(40), nullable=False, default="teacher-review-report-v2")
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 

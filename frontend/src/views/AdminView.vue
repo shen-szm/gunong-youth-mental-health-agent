@@ -723,7 +723,7 @@ async function generateReviewReport() {
   }
 }
 
-async function submitReviewDecision({ decision, checklistConfirmed, note }) {
+async function submitReviewDecision({ decision, checklistConfirmed, evidenceGapAcknowledged, note }) {
   if (!caseStudent.value || !reviewReport.value || reviewDecisionLoading.value) return
   reviewDecisionLoading.value = true
   caseMessage.value = ''
@@ -733,6 +733,7 @@ async function submitReviewDecision({ decision, checklistConfirmed, note }) {
       reviewReport.value.report_id,
       decision,
       checklistConfirmed,
+      evidenceGapAcknowledged,
       note,
       caseStudent.value.access?.request_id,
     )).data
