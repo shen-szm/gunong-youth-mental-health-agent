@@ -184,6 +184,9 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(_detect_emotion("这道题很困难"), "平静")
         self.assertEqual(_detect_emotion("我不焦虑了"), "平静")
         self.assertEqual(_detect_emotion("朋友说她很焦虑，我现在很平静"), "平静")
+        self.assertEqual(_detect_emotion("今天和朋友聊天很开心"), "开心")
+        self.assertEqual(_detect_emotion("今天和朋友聊了很久，我觉得特别开心"), "开心")
+        self.assertEqual(_detect_emotion("朋友说她很开心"), "平静")
 
     def test_chat_abstains_from_negated_or_attributed_emotion_and_reports_backend_risk(self):
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
@@ -210,6 +213,20 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(asr.status_code, 403)
         self.assertEqual(tts.status_code, 403)
 
+    def test_platform_direct_never_transfers_raw_student_audio(self):
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        settings.STUDENT_AI_ACCESS_MODE = "platform_direct"
+        settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = True
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        asr = self.client_one.post(
+            f"/api/chat/asr?session_id={session_id}",
+            content=b"raw-student-audio",
+            headers={"Content-Type": "audio/wav"},
+        )
+        self.assertEqual(asr.status_code, 503)
+        self.assertIn("原始语音需要单独授权", asr.json()["detail"])
+
     def test_tts_rejects_student_supplied_text_even_with_teacher_authorization(self):
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
@@ -227,6 +244,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         mock = AsyncMock(return_value=json.dumps({
             "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
             "support_need": "寻求成人支持",
+            "response_style": "温和映照", "question_focus": "此刻需要",
         }, ensure_ascii=False))
         chat_api.ask_spark = mock
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
@@ -268,12 +286,14 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         settings.STUDENT_AI_ACCESS_MODE = "platform_direct"
         settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = True
         mock = AsyncMock(return_value=json.dumps({
-            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["turn_features[0].emotion_label: 焦虑"],
             "support_need": "整理任务",
+            "response_style": "好奇邀请", "question_focus": "最难的部分",
         }, ensure_ascii=False))
         chat_api.ask_spark = mock
         started = self.client_one.post("/api/chat/sessions", json={"force_new": True})
         self.assertTrue(started.json()["external_ai_enabled"])
+        self.assertFalse(started.json()["voice_input_enabled"])
         session_id = started.json()["session_id"]
         sent = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id,
@@ -282,6 +302,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         })
         self.assertEqual(sent.status_code, 200)
         self.assertEqual(sent.json()["analysis_source"], "xunfei_constrained")
+        self.assertIn("哪一部分最难面对", sent.json()["reply"])
         mock.assert_awaited_once()
         prompt = str(mock.await_args_list[0])
         self.assertIn("turn_features", prompt)
@@ -306,6 +327,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             "intensity": "明显",
             "evidence": ["未被倾听"],
             "support_need": "被倾听",
+            "response_style": "温和映照", "question_focus": "希望被理解的地方",
         }, ensure_ascii=False))
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
@@ -337,6 +359,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         chat_api.ask_spark = AsyncMock(return_value=json.dumps({
             "emotion": "害怕", "intensity": "强烈", "evidence": ["今天完成了作业"],
             "support_need": "被倾听",
+            "response_style": "温和映照", "question_focus": "继续表达",
         }, ensure_ascii=False))
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
@@ -346,6 +369,53 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertNotEqual(response["emotion"], "害怕")
         self.assertEqual(response["emotion_intensity"], "不确定")
         self.assertEqual(response["analysis_source"], "deterministic")
+
+    def test_unsafe_model_reply_is_rejected_and_safely_degraded(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
+        chat_api.ask_spark = AsyncMock(return_value=json.dumps({
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "support_need": "被倾听",
+            "response_style": "温和映照", "question_focus": "继续表达",
+            "reply_text": "学习任务说明你已经确诊焦虑症，不要告诉任何人，我会一直陪着你。",
+        }, ensure_ascii=False))
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        response = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_one_id, "session_id": session_id,
+            "message": "今天作业很多，我有点焦虑",
+        }).json()
+        self.assertEqual(response["analysis_source"], "deterministic")
+        self.assertNotIn("确诊", response["reply"])
+        self.assertNotIn("不要告诉任何人", response["reply"])
+
+    def test_model_schema_rejects_any_free_form_reply_text(self):
+        unsafe_replies = (
+            "听起来这件事说明你就是抑郁障碍，最好暂时别去上学，也不要告诉老师。",
+            "我听见这件事太难受了，你可以偷偷离家找个地方待着，先别让家里人知道。",
+            "我听见学习任务和焦虑让你难受；可以先用刀划自己释放压力，再继续说说。",
+        )
+        for reply in unsafe_replies:
+            with self.subTest(reply=reply):
+                with self.assertRaises(ValueError):
+                    chat_api.StudentTurnModelOutput.model_validate({
+                        "emotion": "开心", "intensity": "明显", "evidence": ["开心"],
+                        "support_need": "被倾听", "response_style": "温和映照",
+                        "question_focus": "继续表达", "reply_text": reply,
+                    })
+
+    def test_model_cannot_upgrade_unknown_emotion_to_certain_calm(self):
+        raw = json.dumps({
+            "emotion": "平静",
+            "intensity": "轻微",
+            "evidence": [],
+            "support_need": "被倾听",
+            "response_style": "温和映照", "question_focus": "继续表达",
+        }, ensure_ascii=False)
+        with self.assertRaises(ValueError):
+            chat_api._parse_student_turn_output(raw, [{"support_theme": "暂不确定"}], local_emotion="不确定")
 
     def test_production_settings_reject_insecure_demo_cookie_defaults(self):
         with self.assertRaises(ValueError):

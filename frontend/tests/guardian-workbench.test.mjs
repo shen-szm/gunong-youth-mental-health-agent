@@ -52,16 +52,16 @@ test('alpha release is synchronized and business UI omits development labels', a
   const changelog = await source('CHANGELOG.md')
   const backend = await source('backend/config.py')
   const currentReleaseNotes = changelog.split('## [5.1.0-alpha.1]')[0]
-  assert.equal(pkg.version, '5.1.0-alpha.25')
-  assert.equal(lock.version, '5.1.0-alpha.25')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.25')
+  assert.equal(pkg.version, '5.1.0-alpha.26')
+  assert.equal(lock.version, '5.1.0-alpha.26')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.26')
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.12\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.7\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.6\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.3\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.2\]/)
   assert.match(currentReleaseNotes, /未部署、未推送远端/)
-  assert.match(backend, /RELEASE_VERSION: str = "5\.1\.0-alpha\.25"/)
+  assert.match(backend, /RELEASE_VERSION: str = "5\.1\.0-alpha\.26"/)
 })
 
 test('plaintext password recovery and hard-coded weak admin are removed', async () => {

@@ -1248,7 +1248,7 @@
               </div>
             </div>
             <div class="chat-ai-consent" role="status">
-              <span><strong>{{ externalAiConsent ? '受约束模型对话已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉仅外发本地提取的去标识化结构特征，不发送原文。语音输入会发送录音，语音播放会发送本次已安全校验的助手回复至讯飞。危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
+              <span><strong>{{ externalAiConsent ? '受约束模型对话已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉仅外发本地提取的去标识化结构特征，不发送原文。当前不向外部模型发送原始录音；语音输入需独立授权后启用。危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
             </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
@@ -1335,7 +1335,7 @@
 
           <!-- 输入栏 -->
           <div v-if="!chatUrgentLocked" class="input-bar">
-            <button class="voice-btn" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading" :title="recording ? '停止录音' : '语音输入'">
+            <button class="voice-btn" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading || !voiceInputEnabled" :title="voiceInputEnabled ? (recording ? '停止录音' : '语音输入') : '语音输入需独立授权后启用'">
               <svg v-if="!recording" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 14c1.7 0 3-1.3 3-3V5c0-1.7-1.3-3-3-3S9 3.3 9 5v6c0 1.7 1.3 3 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7h-1.7z"/></svg>
               <span v-else class="rec-wave"></span>
             </button>
@@ -1706,7 +1706,6 @@ const studentAgentState = reactive({
   messageCount: 0,
   lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
 })
-const isDesktopAgentViewport = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
 const studentAgentSteps = computed(() => {
   const phase = studentAgentState.phase
   const urgent = studentAgentState.status === 'urgent'
@@ -1819,9 +1818,10 @@ const showStatusPicker = ref(false)
 function closeRoomWorkspaces(except = '') {
   const panels = roomWorkspacePanels()
   Object.entries(panels).forEach(([key, panel]) => {
-    if (key !== except) panel.value = false
+    const agentChatPair = (except === 'agent' && key === 'chat')
+    if (key !== except && !agentChatPair) panel.value = false
   })
-  if (except !== 'agent') showAgentRail.value = false
+  if (except !== 'agent' && except !== 'chat') showAgentRail.value = false
 }
 
 function roomWorkspacePanels() {
@@ -3836,6 +3836,7 @@ function goProfile() { openProfile() }
 // ═══ 聊天面板 ═══
 const chatInput = ref('')
 const externalAiConsent = ref(false)
+const voiceInputEnabled = ref(false)
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const chatInputPlaceholder = computed(() => isFirstRunChatPending.value ? '把今天最想说的一句话丢给我' : '说说你的感受...')
@@ -3922,13 +3923,13 @@ async function sendChatMsg(text) {
   studentAgentState.modelName = ''
   studentAgentState.messageCount = 0
   studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
-  if (isDesktopAgentViewport()) showAgentRail.value = true
   await nextTick()
   scrollChatBottom()
   chatLoading.value = true
   try {
     const session = await startChatSession(false)
     externalAiConsent.value = !!session.data.external_ai_enabled
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
     if (!chatSessionId.value) {
       chatSessionId.value = session.data.session_id
@@ -4035,7 +4036,6 @@ async function completeConversation() {
   studentAgentState.phase = 'summary'
   studentAgentState.source = 'pending'
   studentAgentState.lastEvent = '正在整合完整会话、生成下一步并复核输出安全性'
-  showAgentRail.value = true
   summaryUnread.value = false
   try {
     const res = await completeChatSession(chatSessionId.value)
@@ -4275,8 +4275,9 @@ async function startRecording() {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
-    if (!externalAiConsent.value) {
-      alert('教师端尚未启用语音模型协作，请先使用文字输入')
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    if (!voiceInputEnabled.value) {
+      alert('语音输入需要独立授权，当前请使用文字输入')
       return
     }
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true } })
@@ -4342,6 +4343,7 @@ async function playTTS(text) {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
     if (!externalAiConsent.value) throw new Error('authorization unavailable')
   } catch {
     alert('教师端尚未启用语音模型协作')
@@ -4362,12 +4364,12 @@ async function openChatPanel() {
   const pendingSafetyHandoff = leisureSafetyHandoffPromise
   if (pendingSafetyHandoff) await pendingSafetyHandoff
   openWorkspacePanel('chat')
-  if (isDesktopAgentViewport()) showAgentRail.value = true
   chatInput.value = ''
   try {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     if (res.data?.length) chatMessages.value = res.data

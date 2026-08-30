@@ -4,13 +4,17 @@ import test from 'node:test'
 
 const read = path => fs.readFileSync(new URL(path, import.meta.url), 'utf8')
 
-test('desktop chat opens a real workflow rail without changing mobile breakpoints', () => {
+test('desktop chat exposes a real workflow rail only after the student opens it', () => {
   const room = read('../src/views/RoomHomeView.vue')
   const rail = read('../src/components/StudentAgentRail.vue')
 
-  assert.match(room, /matchMedia\('\(min-width: 1024px\)'\)/)
   assert.match(room, /studentAgentState\.verifiedSteps = Array\.isArray\(res\.data\.workflow\)/)
-  assert.match(room, /if \(isDesktopAgentViewport\(\)\) showAgentRail\.value = true/)
+  assert.match(room, /function toggleAgentRail\(\)[\s\S]*?showAgentRail\.value = next/)
+  assert.doesNotMatch(room, /showAgentRail\.value = true/)
+  assert.match(room, /const agentChatPair = \(except === 'agent' && key === 'chat'\)/)
+  assert.match(room, /except !== 'agent' && except !== 'chat'/)
+  assert.match(room, /:disabled="chatLoading \|\| !voiceInputEnabled"/)
+  assert.match(room, /当前不向外部模型发送原始录音/)
   assert.match(rail, /多 Agent 协作轨迹/)
   assert.match(rail, /不展示模型私有思维过程/)
   assert.match(rail, /@media \(min-width: 1024px\)/)
