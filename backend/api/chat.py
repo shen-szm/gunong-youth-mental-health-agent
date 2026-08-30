@@ -473,7 +473,8 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
     emotion_intensity = _explicit_intensity(req.message) if emotion_hits else "不确定"
     emotion_basis = _local_emotion_evidence(req.message, emotion)
     analysis_source = "deterministic"
-    fallback = "我听到了你的感受。你不必马上把一切解决，我们可以先找出此刻最需要的支持，再决定一个很小的下一步。"
+    reply_variant = message_count % 3
+    fallback = _render_safe_student_fallback(emotion or "不确定", reply_variant, risk_level)
     reply = fallback
     if safeguarding_required:
         reply = ("这不是你的错，也不需要你独自去面对伤害你的人。请尽快告诉一位不涉事的可信成年人或老师；"
@@ -488,6 +489,10 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
         history = db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id,
             ChatMessage.session_id.in_(session_ids)).order_by(ChatMessage.created_at.desc()).limit(10).all()
         history.reverse()
+        previous_assistant_reply = next(
+            (item.content for item in reversed(history) if item.role == "assistant"),
+            "",
+        )
         derived_turns = [
             _derive_student_turn_features(item.content, index + 1)
             for index, item in enumerate(history) if item.role == "user"
@@ -507,7 +512,9 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
             emotion = "" if candidate.emotion == "不确定" else candidate.emotion
             emotion_intensity = candidate.intensity
             emotion_basis = candidate.evidence
-            reply = _render_model_selected_student_reply(candidate, risk_level)
+            reply = _render_model_selected_student_reply(
+                candidate, risk_level, reply_variant, previous_assistant_reply
+            )
             analysis_source = "xunfei_constrained"
             _audit(db, current_user.id, "external_model_result_chat", support_run.run_code,
                    f"validated:{support_run.prompt_version}:structured_fields_and_reply")
@@ -973,33 +980,52 @@ def _render_grounded_student_reply(emotion: str, support_need: str, risk_level: 
     return f"{openings.get(emotion, openings['不确定'])}{suffix}"
 
 
-def _render_model_selected_student_reply(candidate: StudentTurnModelOutput, risk_level: str) -> str:
+def _render_safe_student_fallback(emotion: str, variant: int, risk_level: str = "routine") -> str:
+    """Keep degraded replies useful and non-repetitive without accepting model prose."""
+    emotion_opening = {
+        "开心": ("我听见了这份开心。", "这份开心值得被好好说出来。", "听起来，今天有让你高兴的事。"),
+        "焦虑": ("我听见你提到了焦虑。", "这些担心值得慢慢说清。", "听起来，你正在表达一些压力。"),
+        "难过": ("我听见你提到了难过。", "这份低落值得被认真听见。", "听起来，这件事让你有些伤心。"),
+        "愤怒": ("我听见了这份生气。", "这份不舒服值得被认真听见。", "听起来，你心里有一些火气。"),
+        "疲惫": ("我听见你提到了疲惫。", "这份累值得被认真听见。", "听起来，你想先缓一缓。"),
+        "孤独": ("我听见你提到了孤单。", "这份孤单值得被认真听见。", "听起来，你希望有人听你说说。"),
+        "委屈": ("我听见你提到了委屈。", "这份委屈值得被认真听见。", "听起来，有些话你还想继续说。"),
+        "害怕": ("我听见了这份害怕。", "这份不安值得被认真对待。", "听起来，你现在有些担心。"),
+        "复杂": ("我听见这里有不止一种感受。", "这些感受交织在一起，确实不容易说清。", "听起来，你心里同时装着好几种感受。"),
+        "平静": ("听起来，你此刻比较平静。", "这一刻似乎稍微安稳了一些。", "我听见你现在比较放松。"),
+        "不确定": ("我在认真听。", "现在还不必急着给感受下结论。", "不知道怎么形容也没关系。"),
+    }
+    follow_ups = (
+        "如果愿意，你可以从最想说的那一部分开始。",
+        "你更想继续说说，还是先一起理一理？",
+        "可以按自己的节奏，把接下来那句话说完。",
+    )
+    index = variant % 3
+    reply = emotion_opening.get(emotion, emotion_opening["不确定"])[index] + follow_ups[index]
+    if risk_level == "watch":
+        reply += " 如果这种状态持续或影响学习、睡眠，可以考虑告诉一位可信成年人。"
+    return reply
+
+
+def _render_model_selected_student_reply(
+    candidate: StudentTurnModelOutput,
+    risk_level: str,
+    variant: int = 0,
+    previous_reply: str = "",
+) -> str:
     """Realise model-selected enums through a closed, auditable student-safe language set."""
     openings = {
-        "温和映照": {
-            "开心": "听起来，这份开心对你很有意义。", "平静": "听起来，你此刻比较平静。",
-            "焦虑": "我听见了这份焦虑和压力。", "难过": "我听见了这份难过。",
-            "愤怒": "我听见了这份生气和不舒服。", "疲惫": "我听见你现在有些累。",
-            "孤独": "我听见了这份孤单。", "委屈": "我听见了这份委屈。",
-            "害怕": "我听见了这份害怕。", "复杂": "听起来，这里面交织着不止一种感受。",
-            "不确定": "我在听，现在还不必急着给感受下结论。",
-        },
-        "好奇邀请": {
-            "开心": "这份开心似乎值得多停留一会儿。", "平静": "你现在似乎更接近平静。",
-            "焦虑": "焦虑好像正在占用你的一些精力。", "难过": "这份难过好像有些沉。",
-            "愤怒": "这份生气背后似乎有重要的感受。", "疲惫": "疲惫好像让你有些难以继续。",
-            "孤独": "这份孤单似乎不太容易承受。", "委屈": "没有被理解的委屈似乎很难受。",
-            "害怕": "这份害怕值得被认真听见。", "复杂": "这些交织的感受似乎不容易一下说清。",
-            "不确定": "我们可以先不急着定义现在的感受。",
-        },
-        "轻缓陪伴": {
-            "开心": "可以按你的节奏，说说这份开心。", "平静": "可以按你的节奏继续说。",
-            "焦虑": "不用急着一次说清这份焦虑。", "难过": "不用急着推开这份难过。",
-            "愤怒": "可以慢一点说这份生气。", "疲惫": "累的时候，也可以把话说得慢一点。",
-            "孤独": "这份孤单可以慢慢说。", "委屈": "这份委屈可以被慢慢听见。",
-            "害怕": "可以按你觉得安全的节奏说。", "复杂": "复杂的感受也可以一点点说。",
-            "不确定": "不知道怎么形容也没关系，可以慢慢来。",
-        },
+        "开心": ("听起来，这份开心对你很有意义。", "这份开心似乎值得多停留一会儿。", "可以按你的节奏，说说这份开心。"),
+        "平静": ("听起来，你此刻比较平静。", "这一刻似乎安稳了一些。", "可以按你的节奏继续说。"),
+        "焦虑": ("我听见了这份焦虑和压力。", "焦虑好像正在占用你的一些精力。", "不用急着一次说清这份焦虑。"),
+        "难过": ("我听见了这份难过。", "这份难过好像有些沉。", "不用急着推开这份难过。"),
+        "愤怒": ("我听见了这份生气和不舒服。", "这份生气背后似乎有重要的感受。", "可以慢一点说这份生气。"),
+        "疲惫": ("我听见你现在有些累。", "疲惫好像占用了你不少精力。", "累的时候，也可以把话说得慢一点。"),
+        "孤独": ("我听见了这份孤单。", "这份孤单似乎不太容易承受。", "这份孤单可以慢慢说。"),
+        "委屈": ("我听见了这份委屈。", "没有被理解的委屈似乎很难受。", "这份委屈可以被慢慢听见。"),
+        "害怕": ("我听见了这份害怕。", "这份害怕值得被认真听见。", "可以按你觉得安全的节奏说。"),
+        "复杂": ("听起来，这里面交织着不止一种感受。", "这些交织的感受似乎不容易一下说清。", "复杂的感受也可以一点点说。"),
+        "不确定": ("我在听，现在还不必急着给感受下结论。", "我们可以先不急着定义现在的感受。", "不知道怎么形容也没关系，可以慢慢来。"),
     }
     questions = {
         "发生了什么": "如果愿意，你可以从刚才发生的事开始说。",
@@ -1010,9 +1036,14 @@ def _render_model_selected_student_reply(candidate: StudentTurnModelOutput, risk
         "继续表达": "你愿意继续说说吗？",
         "暂不追问": "不想回答也没关系，可以先停一会儿。",
     }
-    reply = openings[candidate.response_style][candidate.emotion] + questions[candidate.question_focus]
-    if risk_level == "watch":
-        reply += " 如果这种状态持续或影响学习、睡眠，可以考虑告诉一位可信成年人。"
+    style_offset = {"温和映照": 0, "好奇邀请": 1, "轻缓陪伴": 2}[candidate.response_style]
+    opening_index = (style_offset + variant) % 3
+    for shift in range(3):
+        reply = openings[candidate.emotion][(opening_index + shift) % 3] + questions[candidate.question_focus]
+        if risk_level == "watch":
+            reply += " 如果这种状态持续或影响学习、睡眠，可以考虑告诉一位可信成年人。"
+        if reply != previous_reply:
+            return reply
     return reply
 
 

@@ -27,8 +27,10 @@ class IslandAgentConsentTests(unittest.TestCase):
     def setUp(self):
         self.old_external = settings.ALLOW_EXTERNAL_AI
         self.old_student = settings.ALLOW_STUDENT_EXTERNAL_AI
+        self.old_student_ai_access_mode = settings.STUDENT_AI_ACCESS_MODE
         settings.ALLOW_EXTERNAL_AI = True
         settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        settings.STUDENT_AI_ACCESS_MODE = "teacher_authorized"
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -64,6 +66,7 @@ class IslandAgentConsentTests(unittest.TestCase):
     def tearDown(self):
         settings.ALLOW_EXTERNAL_AI = self.old_external
         settings.ALLOW_STUDENT_EXTERNAL_AI = self.old_student
+        settings.STUDENT_AI_ACCESS_MODE = self.old_student_ai_access_mode
         self.client.close()
         self.engine.dispose()
 

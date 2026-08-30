@@ -406,6 +406,39 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
                         "question_focus": "继续表达", "reply_text": reply,
                     })
 
+    def test_safe_reply_realisation_rotates_without_model_free_text(self):
+        candidate = chat_api.StudentTurnModelOutput(
+            emotion="开心",
+            intensity="明显",
+            evidence=["开心"],
+            support_need="被倾听",
+            response_style="温和映照",
+            question_focus="继续表达",
+        )
+        rendered = {
+            chat_api._render_model_selected_student_reply(candidate, "routine", slot)
+            for slot in range(3)
+        }
+        degraded = {
+            chat_api._render_safe_student_fallback("开心", slot)
+            for slot in range(3)
+        }
+        self.assertEqual(len(rendered), 3)
+        self.assertEqual(len(degraded), 3)
+        self.assertTrue(all(not chat_api.generated_content_violations(reply) for reply in rendered | degraded))
+
+        watch_fallback = chat_api._render_safe_student_fallback("焦虑", 1, "watch")
+        self.assertIn("可信成年人", watch_fallback)
+        self.assertNotIn("占用了不少精力", watch_fallback)
+        self.assertNotIn("不太轻", chat_api._render_safe_student_fallback("难过", 1))
+
+        changed_style = candidate.model_copy(update={"response_style": "轻缓陪伴"})
+        previous = chat_api._render_model_selected_student_reply(candidate, "routine", 0)
+        collision_safe = chat_api._render_model_selected_student_reply(
+            changed_style, "routine", 1, previous
+        )
+        self.assertNotEqual(previous, collision_safe)
+
     def test_model_cannot_upgrade_unknown_emotion_to_certain_calm(self):
         raw = json.dumps({
             "emotion": "平静",

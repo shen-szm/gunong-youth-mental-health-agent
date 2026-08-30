@@ -20,6 +20,7 @@ from api.user import router as user_router
 from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
+from config import settings
 from database import Base, get_db
 from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
@@ -28,6 +29,8 @@ from teacher_review_engine import NarrativeOutput, _safe_model_narrative
 
 class TeacherCaseAccessTests(unittest.TestCase):
     def setUp(self):
+        self.old_student_ai_access_mode = settings.STUDENT_AI_ACCESS_MODE
+        settings.STUDENT_AI_ACCESS_MODE = "teacher_authorized"
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -73,6 +76,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.student_client.post("/api/user/login", json={"username": "student_a", "password": "StudentPassword12"})
 
     def tearDown(self):
+        settings.STUDENT_AI_ACCESS_MODE = self.old_student_ai_access_mode
         self.teacher_client.close()
         self.admin_client.close()
         self.student_client.close()
