@@ -1427,4 +1427,139 @@ textarea { min-height: 96px; resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .teacher-page *, .teacher-page *::before, .teacher-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* v5.1.0-alpha.30 desktop teacher workbench refinement.
+   Product UI stays familiar and dense; glass is reserved for the sticky toolbar. */
+@media (min-width: 761px) {
+  .teacher-page {
+    --teacher-sidebar: var(--ui-forest-950, #15382f);
+    --teacher-sidebar-2: #285247;
+    --teacher-canvas: var(--ui-canvas, #f1f4f2);
+    --teacher-surface: var(--ui-surface, #ffffff);
+    --teacher-ink: var(--ui-ink, #1f332c);
+    --teacher-muted: var(--ui-muted, #566a62);
+    --teacher-line: var(--ui-line, #d5dfda);
+    --teacher-accent: var(--ui-forest-650, #2f6758);
+    grid-template-columns: 244px minmax(0, 1fr);
+  }
+  .teacher-sidebar {
+    padding: 20px 14px 16px;
+    background: var(--teacher-sidebar);
+    box-shadow: inset -1px 0 rgba(255,255,255,.07);
+  }
+  .teacher-brand {
+    gap: 12px;
+    padding: 2px 8px 18px;
+    margin-bottom: 6px;
+  }
+  .teacher-brand > span {
+    width: 40px;
+    height: 40px;
+    color: #193a31;
+    background: var(--ui-gold-300, #ead49a);
+  }
+  .teacher-brand strong { font-size: 15px; letter-spacing: -.01em; }
+  .teacher-brand small { color: rgba(244, 250, 247, .7); }
+  .teacher-brand em { color: var(--ui-gold-300, #ead49a); }
+  .teacher-nav { gap: 3px; }
+  .teacher-nav button {
+    min-height: 44px;
+    border-radius: 9px;
+    color: rgba(244, 250, 247, .76);
+    transition: color var(--ui-duration-fast, 180ms) ease, background-color var(--ui-duration-fast, 180ms) ease;
+  }
+  .teacher-nav button:hover { background: rgba(255,255,255,.075); }
+  .teacher-nav button.active { background: #285247; }
+  .teacher-nav button.active > span:first-child {
+    border-radius: 7px;
+    color: #ead49a;
+    background: rgba(234, 212, 154, .1);
+  }
+  .teacher-sidebar button:focus-visible { outline-color: #f5dda0; }
+  .teacher-sidebar-footer button { transition: color 180ms ease, background-color 180ms ease; }
+
+  .teacher-topbar {
+    min-height: 72px;
+    padding: 11px 28px;
+    border-color: rgba(202, 215, 209, .88);
+    background: rgba(248, 250, 249, .88);
+    -webkit-backdrop-filter: blur(22px) saturate(1.12);
+    backdrop-filter: blur(22px) saturate(1.12);
+  }
+  .teacher-topbar p { color: #60726b; }
+  .teacher-topbar h1 { color: #1d342c; font-size: 21px; letter-spacing: -.025em; }
+  .teacher-search { width: min(380px, 42vw); }
+  .teacher-search input {
+    min-height: 44px;
+    border-color: #c6d4ce;
+    border-radius: 10px;
+    background: rgba(255,255,255,.94);
+  }
+  .teacher-search input:hover { border-color: #9fb6ac; }
+  .teacher-search input:focus { border-color: #4a7b6e; }
+
+  .workspace { padding: 26px 28px 44px; }
+  .workspace > .panel {
+    padding: 24px;
+    border: 1px solid var(--teacher-line);
+    border-radius: 14px;
+    box-shadow: none;
+  }
+  .panel-title { margin-bottom: 20px; }
+  .panel-title h3 { color: #1f392f; font-size: 20px; letter-spacing: -.02em; }
+  .panel-title p { color: var(--teacher-muted); line-height: 1.6; }
+  .section-kicker {
+    padding: 4px 7px;
+    color: #315f52;
+    background: #e9f1ed;
+  }
+
+  .primary-btn,
+  .ghost-btn,
+  .danger-btn {
+    min-height: 40px;
+    border-radius: 9px;
+    transition: background-color var(--ui-duration-fast, 180ms) ease, color var(--ui-duration-fast, 180ms) ease, filter var(--ui-duration-fast, 180ms) ease;
+  }
+  .primary-btn { background: #2f6758; }
+  .primary-btn:hover { background: #28594d; filter: none; }
+  .ghost-btn { color: #315d51; background: #eaf1ee; }
+  .ghost-btn:hover { background: #dfeae5; filter: none; }
+
+  .case-student,
+  .warning-item,
+  .student-card,
+  .account-row,
+  .template-list button {
+    border-radius: 10px;
+    background: #f7f9f8;
+    transition: border-color 180ms ease, background-color 180ms ease;
+  }
+  .case-student:hover,
+  .warning-item:hover,
+  .student-card:hover,
+  .template-list button:hover { border-color: #afc2b9; background: #f2f6f4; }
+  .case-student.selected,
+  .warning-item.selected,
+  .student-card.selected,
+  .template-list button.selected { border-color: #5e897c; background: #eaf2ee; }
+
+  .case-stage,
+  .detail-card,
+  .profile-card,
+  .lesson-result,
+  .emotion-detail-panel,
+  .evidence-brief,
+  .decision-brief,
+  .agent-conflict,
+  .task-board,
+  .approval-card { border-radius: 12px; }
+  .agent-pipeline article { padding: 13px 14px; background: #f2f6f4; }
+  .desktop-case-agent-live {
+    border-color: #d4e0da;
+    background: #f7faf8;
+  }
+  .desktop-case-agent-live li { background: #eaf1ee; }
+  .chart-section { border-radius: 12px; }
+}
 </style>

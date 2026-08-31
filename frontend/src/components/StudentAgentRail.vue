@@ -14,7 +14,7 @@
         <span class="agent-toggle-heading"><strong>咕哝 Agent</strong><small>{{ compactStatus }}</small></span>
         <span class="agent-toggle-latest">{{ state.lastEvent || '等待你开始表达' }}</span>
       </span>
-      <span class="agent-toggle-chevron" aria-hidden="true">⌃</span>
+      <span class="agent-toggle-chevron" aria-hidden="true">{{ open ? '⌃' : '›' }}</span>
     </button>
     <span v-if="!open" class="agent-toggle-live" role="status" aria-live="polite">
       {{ compactStatus }}：{{ state.lastEvent || '等待你开始表达' }}
@@ -187,7 +187,7 @@ const sourceDetail = computed(() => props.state.source === 'xunfei_constrained'
       : '本轮未使用外部模型')
 
 function statusIcon(status) {
-  return ({ completed: '✓', running: '•', attention: '!', blocked: '—', waiting: '·', error: '×' })[status] || '·'
+  return ({ completed: '✓', running: '•', attention: '!', blocked: '停', waiting: '·', error: '×' })[status] || '·'
 }
 
 function statusLabel(status) {
@@ -417,6 +417,109 @@ watch(() => props.open, async (value, previous) => {
   }
   .agent-rail-enter-from,
   .agent-rail-leave-to { opacity: 0; transform: translateY(12px); }
+}
+
+/* v5.1.0-alpha.30 desktop visual pass guided by taste-skill.
+   This is a restrained web frosted-glass approximation. */
+@media (min-width: 900px) {
+  .student-agent-shell {
+    --agent-ink: #fffaf0;
+    --agent-muted: #d7cec1;
+    --agent-subtle: #afa69b;
+    --agent-accent: var(--ui-gold-300, #efd79c);
+    --agent-success: var(--ui-mint-200, #abd8c2);
+    --agent-warning: #f0cf82;
+    --agent-danger: #efa291;
+    --agent-base: rgba(35, 27, 24, .82);
+    --agent-raised: rgba(255, 250, 240, .075);
+    --agent-hover: rgba(255, 250, 240, .12);
+    --agent-line: rgba(255, 248, 235, .13);
+    top: 76px;
+    right: 18px;
+  }
+
+  .student-agent-toggle {
+    grid-template-columns: 8px minmax(0, 1fr) 18px;
+    gap: 10px;
+    width: 286px;
+    min-height: 58px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 14px;
+    background: rgba(35, 27, 24, .8);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 6px 8px rgba(10, 7, 6, .24);
+    -webkit-backdrop-filter: blur(24px) saturate(1.18);
+    backdrop-filter: blur(24px) saturate(1.18);
+  }
+  .student-agent-toggle:hover {
+    border-color: transparent;
+    background: rgba(42, 33, 29, .9);
+    transform: translateY(-1px);
+  }
+  .agent-toggle-heading strong { font-size: 12px; letter-spacing: -.01em; }
+  .agent-toggle-heading small { color: var(--agent-accent); font-size: 11px; font-weight: 700; }
+  .agent-toggle-latest { color: var(--agent-muted); font-size: 11px; }
+  .agent-toggle-chevron { color: var(--agent-accent); font-size: 20px; }
+
+  .student-agent-rail {
+    width: 360px;
+    max-height: calc(100vh - 96px);
+    padding: 18px;
+    border: 0;
+    border-radius: 15px;
+    background: rgba(31, 25, 23, .91);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 6px 8px rgba(9, 6, 5, .3);
+    -webkit-backdrop-filter: blur(30px) saturate(1.16);
+    backdrop-filter: blur(30px) saturate(1.16);
+  }
+  .agent-rail-header { align-items: center; }
+  .agent-rail-header h2 { font-size: 17px; letter-spacing: -.02em; }
+  .agent-rail-header p { color: var(--agent-muted); }
+  .agent-rail-close {
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(255, 250, 240, .08);
+  }
+  .agent-rail-event {
+    margin: 14px 0 8px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: rgba(255, 250, 240, .07);
+  }
+  .agent-step-list { position: relative; gap: 0; }
+  .agent-step-list::before {
+    content: '';
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    left: 11px;
+    width: 1px;
+    background: rgba(255, 248, 235, .13);
+  }
+  .agent-step-list li {
+    position: relative;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px 0;
+    border: 0;
+  }
+  .agent-step-icon { z-index: 1; width: 22px; height: 22px; border-radius: 7px; }
+  .agent-step-list strong { font-size: 12px; }
+  .agent-step-list small { max-width: 29ch; color: var(--agent-muted); }
+  .agent-technical-details { margin-top: 8px; }
+  .agent-technical-details summary { min-height: 42px; }
+  .agent-delete-run { border-color: rgba(255, 248, 235, .14); }
+}
+
+@media (min-width: 900px) and (max-width: 1087px) {
+  .student-agent-toggle { width: 188px; }
+  .agent-toggle-heading small { display: none; }
+}
+
+@media (min-width: 900px) and (max-width: 1235px) {
+  .student-agent-shell.is-open .student-agent-rail { width: 320px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

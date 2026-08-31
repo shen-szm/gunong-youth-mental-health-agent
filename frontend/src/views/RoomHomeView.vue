@@ -1391,7 +1391,7 @@
 
         <template v-if="supportDrawerMode === 'plan' && summaryStatus === 'ready' && conversationSummary">
           <p class="support-eyebrow">本次倾诉小结</p>
-          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是——</h2>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是</h2>
           <div class="support-emotion-state" :data-level="conversationSummary.intensity">
             <span class="support-emotion-icon" aria-hidden="true">{{ getEmotionEmoji(conversationSummary.dominant_emotion) }}</span>
             <div><small>主要情绪</small><strong>{{ conversationSummary.dominant_emotion }} · {{ conversationSummary.intensity }}</strong></div>
@@ -1721,7 +1721,7 @@ const studentAgentSteps = computed(() => {
   const steps = [
     { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待后端核对本轮表达', status: chatError ? 'error' : verified.has('observation') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
     { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || '检查危机、伤害与需要成人介入的线索', status: urgent ? 'attention' : verified.has('safety') ? 'completed' : 'waiting' },
-    { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '由后端返回本轮可确认的情绪标签', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
+    { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '整理本轮表达中的候选情绪线索，可由你修正', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
     { id: 'next_step', label: '支持回应编排', summary: phase === 'end_candidate' ? '本轮回应已完成，等待你确认是否生成完整小结' : workflowStep('response')?.summary || '等待安全检查后生成支持回应', status: urgent ? 'blocked' : phase === 'end_candidate' ? 'attention' : verified.has('response') ? 'completed' : 'waiting' },
     { id: 'summary', label: '倾诉后小结', summary: summaryError ? '上次整理未完成，可以安全重试' : '结束后整合完整会话并进行输出审查', status: urgent ? 'blocked' : summaryError ? 'error' : phase === 'summary' ? 'running' : phase === 'complete' ? 'completed' : 'waiting' },
   ]
@@ -2461,7 +2461,7 @@ function groomPet() {
   petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 10, 0, 100)
   rememberPetCare('你顺着绒毛轻轻梳了几下，咕团舒服得眯起眼睛。')
   showPetVisual('happy')
-  setPetStatus('happy', '咕——梳到耳朵旁边时，它开心地抖了抖叶芽。')
+  setPetStatus('happy', '咕...梳到耳朵旁边时，它开心地抖了抖叶芽。')
 }
 function playBallWithPet() {
   if (!petCanPlay.value) {
@@ -3209,13 +3209,13 @@ function clearStatus() {
 const distribution = ref({})
 const totalMoodCount = computed(() => Object.values(distribution.value).reduce((a, b) => a + b, 0))
 
-// 情绪分布 — 评判说明
+// 情绪分布说明：数据只来自学生主动选择的心情记录，不从对话语气推断。
 const moodJudgeNote = {
-  '开心': '通过对话中的积极关键词、感叹词、愉悦语气和正面事件描述综合判定',
-  '平静': '由中性平稳的叙述节奏、日常话题和低情绪波动表达判定',
-  '焦虑': '依据不安词汇、反复确认、急促表达和对未来的担忧信号识别',
-  '难过': '从低能量措辞、悲伤表达、回避性话题和自我否定倾向判断',
-  '愤怒': '基于激烈用语、否定句式、不满情绪和对事件的强烈反应分析',
+  '开心': '你主动选择“开心”的记录次数，占当前心情记录总数的比例',
+  '平静': '你主动选择“平静”的记录次数，占当前心情记录总数的比例',
+  '焦虑': '你主动选择“焦虑”的记录次数，占当前心情记录总数的比例',
+  '难过': '你主动选择“难过”的记录次数，占当前心情记录总数的比例',
+  '愤怒': '你主动选择“愤怒”的记录次数，占当前心情记录总数的比例',
 }
 // 占比最大时的安慰/建议
 const moodComfort = {
@@ -7970,5 +7970,95 @@ onUnmounted(() => {
   .pet-scene-character-label,
   .pet-scene-hotspot::before,
   .pet-scene-dock button { transition: none; }
+}
+
+/* v5.1.0-alpha.30 desktop-only taste pass.
+   The room remains the primary canvas; controls recede until requested. */
+@media (min-width: 900px) {
+  .room {
+    --room-control: rgba(35, 27, 24, .78);
+    --room-control-strong: rgba(35, 27, 24, .9);
+    --room-control-ink: #fffaf0;
+    --room-control-muted: #d7cec1;
+    --room-control-gold: var(--ui-gold-300, #efd79c);
+    --room-control-mint: var(--ui-mint-200, #bedbce);
+  }
+
+  .room-status-bar {
+    top: 16px;
+    left: 18px;
+    min-height: 50px;
+    padding: 6px;
+    border: 0;
+    border-radius: 14px;
+    color: var(--room-control-ink);
+    background: var(--room-control);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 6px 8px rgba(8,6,5,.22);
+    -webkit-backdrop-filter: blur(24px) saturate(1.18);
+    backdrop-filter: blur(24px) saturate(1.18);
+  }
+  .room-status-greeting { min-width: 180px; padding-inline: 13px; }
+  .room-status-greeting time { color: var(--room-control-muted); }
+  .room-status-checkin { border-color: rgba(255, 248, 235, .13); }
+  .room-status-checkin small { color: var(--room-control-muted); }
+  .room-status-checkin:hover,
+  .room-status-utility:hover { background: rgba(255, 250, 240, .1); }
+
+  .bottom-nav::before {
+    width: 330px;
+    height: 66px;
+    border: 0;
+    border-radius: 15px;
+    background: rgba(42, 32, 28, .54) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 6px 8px rgba(8,6,5,.2) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(1.2) !important;
+    backdrop-filter: blur(26px) saturate(1.2) !important;
+  }
+  .day .bottom-nav::before { background: rgba(238, 241, 235, .68) !important; }
+  .evening .bottom-nav::before { background: rgba(79, 54, 44, .56) !important; }
+  .night .bottom-nav::before { background: rgba(35, 29, 35, .62) !important; }
+  .bnav-item {
+    color: rgba(255, 250, 240, .72);
+    transition: color var(--ui-duration-fast, 180ms) ease, background-color var(--ui-duration-fast, 180ms) ease, transform var(--ui-duration-fast, 180ms) var(--ui-ease-out, cubic-bezier(.22,1,.36,1));
+  }
+  .day .bnav-item { color: #41534c; }
+  .bnav-item:hover,
+  .bnav-item.active { color: var(--room-control-ink); background: rgba(255, 250, 240, .11); }
+  .day .bnav-item:hover,
+  .day .bnav-item.active { color: #21453a; background: rgba(55, 100, 86, .1); }
+  .bnav-item.active .icon-wrap { color: var(--room-control-gold); }
+  .day .bnav-item.active .icon-wrap { color: #356c5c; }
+  .bnav-item:focus-visible { outline-color: #f6dea2; }
+  .day .bnav-item:focus-visible { outline-color: var(--ui-forest-950, #15382f); }
+
+  .hot-zone::after { border-radius: 8px; }
+  .hot-zone:hover::after,
+  .hot-zone:focus-visible::after,
+  .hot-zone.is-selected::after {
+    border-color: rgba(239, 215, 156, .78);
+    background: rgba(239, 215, 156, .07);
+  }
+  .hot-zone .hover-tip,
+  .hot-zone .bed-label,
+  .hot-zone .window-label {
+    color: var(--room-control-ink);
+    background: var(--room-control-strong);
+    -webkit-backdrop-filter: blur(16px) saturate(1.12);
+    backdrop-filter: blur(16px) saturate(1.12);
+  }
+
+  .heart-island-door-glow {
+    border-color: rgba(44, 35, 30, .9);
+    background: linear-gradient(180deg, #d8c58f, #82b9a3);
+    box-shadow: 0 0 0 3px rgba(239, 215, 156, .62), 0 0 18px rgba(130, 185, 163, .48), inset 0 1px 0 rgba(255,255,255,.45);
+  }
+  .heart-island-door-copy {
+    color: var(--room-control-ink);
+    background: var(--room-control-strong);
+    -webkit-backdrop-filter: blur(16px) saturate(1.12);
+    backdrop-filter: blur(16px) saturate(1.12);
+  }
+  .heart-island-door-copy small { color: var(--room-control-muted); }
+  .beian-footer { background: rgba(35, 27, 24, .64); backdrop-filter: blur(14px); }
 }
 </style>

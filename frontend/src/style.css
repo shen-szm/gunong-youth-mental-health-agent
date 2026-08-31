@@ -18,6 +18,25 @@
   --danger: #D4766A;
   --border: #E8EDE9;
   --hover: #EDF2EE;
+
+  /* v5.1.0-alpha.30 shared product tokens.
+     "Liquid glass" below is an honest web approximation, not an Apple API. */
+  --ui-forest-950: #14352d;
+  --ui-forest-800: #28594d;
+  --ui-forest-650: #427667;
+  --ui-mint-200: #bddbcf;
+  --ui-gold-300: #ead49a;
+  --ui-coral-400: #d77f70;
+  --ui-canvas: #f2f5f3;
+  --ui-surface: #ffffff;
+  --ui-ink: #22342e;
+  --ui-muted: #5b6d66;
+  --ui-line: #d7e1dc;
+  --ui-radius-control: 10px;
+  --ui-radius-panel: 14px;
+  --ui-duration-fast: 180ms;
+  --ui-ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ui-focus: #1f6387;
 }
 
 body {
@@ -32,4 +51,13 @@ button {
   border: none;
   outline: none;
   font-family: inherit;
+}
+
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { scroll-behavior: auto; }
 }

@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 dist/
 __pycache__/
 *.pyc
@@ -8,6 +9,7 @@ __pycache__/
 .codex-alpha*.log
 .codex-*-alpha*.log
 .codex-alpha*.png
+.codex-audit-*/
 .alpha*-*.log
 /backend/*.log
 .vite/

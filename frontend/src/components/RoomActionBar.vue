@@ -164,6 +164,34 @@ watch(() => props.feature?.id, async value => {
   .room-action-moods { grid-column: 1 / -1; }
 }
 
+/* Desktop-only room command surface. Mobile keeps the established layout. */
+@media (min-width: 900px) {
+  .room-action-bar {
+    bottom: 104px;
+    width: min(700px, calc(100vw - 40px));
+    min-height: 76px;
+    padding: 13px 14px;
+    border: 0;
+    border-radius: 14px;
+    color: #fffaf0;
+    background: rgba(35, 27, 24, .86);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 8px rgba(8,6,5,.28);
+    -webkit-backdrop-filter: blur(26px) saturate(1.16);
+    backdrop-filter: blur(26px) saturate(1.16);
+  }
+  .room-action-symbol {
+    color: #21453a;
+    background: #bedbce;
+  }
+  .room-action-copy p { color: #efd79c; }
+  .room-action-copy span { color: #d8d0c4; }
+  .room-action-primary { color: #302613; background: #edd59a; }
+  .room-action-primary:hover { background: #f4dda0; }
+  .room-action-close,
+  .room-action-moods button { background: rgba(255, 250, 240, .08); }
+  .room-action-moods button.active { color: #21453a; background: #bedbce; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .room-action-enter-active,
   .room-action-leave-active { transition: none; }
