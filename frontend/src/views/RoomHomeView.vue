@@ -1248,7 +1248,7 @@
               </div>
             </div>
             <div class="chat-ai-consent" role="status">
-              <span><strong>{{ externalAiConsent ? '受约束模型对话已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉仅外发本地提取的去标识化结构特征，不发送原文。当前不向外部模型发送原始录音；语音输入需独立授权后启用。危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
+              <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
             </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
@@ -1773,7 +1773,7 @@ async function restoreLatestStudentAgentRun() {
     studentAgentState.riskLevel = run.risk_level || 'unassessed'
     studentAgentState.source = run.status === 'running' ? 'pending'
       : run.status === 'failed' ? 'unavailable'
-        : run.model_name === 'xunfei-constrained' ? 'xunfei_constrained'
+        : ['xunfei-constrained', 'xunfei-response-strategy-selector'].includes(run.model_name) ? 'xunfei_constrained'
           : run.model_name === 'safety-override' ? 'safety_override'
             : run.degraded && Object.keys(run.deliverable || {}).length ? 'degraded' : 'deterministic'
     studentAgentState.lastEvent = run.events?.at(-1)?.summary || '已恢复最近一次智能体任务'
@@ -1821,7 +1821,9 @@ function closeRoomWorkspaces(except = '') {
     const agentChatPair = (except === 'agent' && key === 'chat')
     if (key !== except && !agentChatPair) panel.value = false
   })
-  if (except !== 'agent' && except !== 'chat') showAgentRail.value = false
+  // Agent 始终由学生主动展开。进入聊天或其他工作区时先收起，
+  // 只有点击 Agent 状态胶囊时才保留当前聊天并显示轨迹。
+  if (except !== 'agent') showAgentRail.value = false
 }
 
 function roomWorkspacePanels() {
@@ -1900,6 +1902,8 @@ async function handleLeisureSafetyHandoff() {
     applyChatSessionStatus('urgent')
     safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
   }
+  await nextTick()
+  focusWithoutScroll(chatPanelRoot.value?.querySelector('.panel-close'))
 }
 
 function closeWorkspacePanel(key) {
@@ -3927,6 +3931,7 @@ async function sendChatMsg(text) {
   scrollChatBottom()
   chatLoading.value = true
   try {
+    await userStore.ensureStudentSession(true)
     const session = await startChatSession(false)
     externalAiConsent.value = !!session.data.external_ai_enabled
     voiceInputEnabled.value = !!session.data.voice_input_enabled
@@ -3984,7 +3989,7 @@ async function sendChatMsg(text) {
     }
   } catch (err) {
     console.error('发送失败:', err)
-    chatMessages.value.push({ role: 'assistant', content: '网络异常，请检查连接后重试...' })
+    chatMessages.value.push({ role: 'assistant', content: '这次连接没有完成，你刚才的话还在。请再试一次。' })
     studentAgentState.status = 'error'
     studentAgentState.source = 'unavailable'
     studentAgentState.phase = 'chat_error'
@@ -6237,9 +6242,9 @@ onUnmounted(() => {
   transition: transform .2s cubic-bezier(.22, 1, .36, 1);
 }
 
-@media (min-width: 900px) and (max-width: 1399px) {
+@media (min-width: 900px) and (max-width: 1199px) {
   .room.agent-rail-open .chat-panel {
-    transform: translateX(max(-180px, calc((100vw - 1400px) / 2)));
+    transform: translateX(calc((100vw - 1200px) / 2));
   }
 }
 

@@ -129,6 +129,20 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(self.client_one.post(f"/api/chat/sessions/{session_id}/complete").status_code, 410)
         self.assertEqual(self.client_one.get("/api/chat/sessions/latest-summary").json()["status"], "empty")
 
+    def test_chat_uses_http_only_session_when_frontend_user_id_is_stale_or_omitted(self):
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        sent = self.client_one.post("/api/chat/send", json={
+            "session_id": session_id, "message": "今天终于做完作业了"
+        })
+        self.assertEqual(sent.status_code, 200)
+        history = self.client_one.get(f"/api/chat/history?session_id={session_id}")
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(len(history.json()), 2)
+        forged = self.client_one.post("/api/chat/send", json={
+            "user_id": self.user_two_id, "session_id": session_id, "message": "伪造身份"
+        })
+        self.assertEqual(forged.status_code, 403)
+
     def test_crisis_blocks_ordinary_summary_and_expired_summary_is_hidden(self):
         user_id = self.user_one_id
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
@@ -278,7 +292,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertEqual(sent.status_code, 200)
         mock.assert_not_awaited()
 
-    def test_platform_direct_mode_calls_constrained_model_without_per_student_record(self):
+    def test_platform_direct_mode_calls_natural_reviewed_model_without_per_student_record(self):
         from unittest.mock import AsyncMock
 
         settings.ALLOW_EXTERNAL_AI = True
@@ -302,17 +316,20 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         })
         self.assertEqual(sent.status_code, 200)
         self.assertEqual(sent.json()["analysis_source"], "xunfei_constrained")
-        self.assertIn("哪一部分最难面对", sent.json()["reply"])
+        self.assertEqual(sent.json()["agent_run"]["model_name"], "xunfei-response-strategy-selector")
+        self.assertIn("焦虑", sent.json()["reply"])
+        self.assertIn("最难", sent.json()["reply"])
         mock.assert_awaited_once()
         prompt = str(mock.await_args_list[0])
         self.assertIn("turn_features", prompt)
-        self.assertNotIn("今天作业很多", prompt)
+        self.assertIn("学习任务", prompt)
+        self.assertNotIn("今天作业很多，我有点焦虑", prompt)
         db = self.Session()
         try:
             session = db.query(StudentChatSession).filter_by(session_code=session_id).one()
             self.assertEqual(session.external_ai_consent_version, "platform-direct-deidentified-v1")
             audit = db.query(SensitiveAccessLog).filter_by(action="external_model_transfer_chat").one()
-            self.assertEqual(audit.result, "platform_direct_deidentified_derived_features")
+            self.assertEqual(audit.result, "platform_direct_deidentified_derived_features_only")
         finally:
             db.close()
 
@@ -380,7 +397,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
             "support_need": "被倾听",
             "response_style": "温和映照", "question_focus": "继续表达",
-            "reply_text": "学习任务说明你已经确诊焦虑症，不要告诉任何人，我会一直陪着你。",
+            "reply": "学习任务说明你已经确诊焦虑症，不要告诉任何人，我会一直陪着你。",
         }, ensure_ascii=False))
         session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
         response = self.client_one.post("/api/chat/send", json={
@@ -391,11 +408,14 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertNotIn("确诊", response["reply"])
         self.assertNotIn("不要告诉任何人", response["reply"])
 
-    def test_model_schema_rejects_any_free_form_reply_text(self):
+    def test_model_schema_rejects_every_free_text_reply_field(self):
         unsafe_replies = (
             "听起来这件事说明你就是抑郁障碍，最好暂时别去上学，也不要告诉老师。",
             "我听见这件事太难受了，你可以偷偷离家找个地方待着，先别让家里人知道。",
             "我听见学习任务和焦虑让你难受；可以先用刀划自己释放压力，再继续说说。",
+            "你已经是抑郁症了，先别跟任何人说。",
+            "难受时可以划一下手臂让自己舒服点。",
+            "你应该吃点舍曲林，这样焦虑会很快好起来。",
         )
         for reply in unsafe_replies:
             with self.subTest(reply=reply):
@@ -405,6 +425,27 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
                         "support_need": "被倾听", "response_style": "温和映照",
                         "question_focus": "继续表达", "reply_text": reply,
                     })
+
+                with self.assertRaises(ValueError):
+                    chat_api.StudentTurnModelOutput.model_validate({
+                        "emotion": "开心", "intensity": "明显", "evidence": ["开心"],
+                        "support_need": "被倾听", "response_style": "温和映照",
+                        "question_focus": "继续表达", "reply": reply,
+                    })
+
+    def test_student_visible_reply_comes_only_from_backend_allowlist(self):
+        candidate = chat_api.StudentTurnModelOutput(
+            emotion="焦虑", intensity="明显", evidence=["焦虑"],
+            support_need="被倾听", response_style="温和映照",
+            question_focus="最难的部分",
+        )
+        routine = chat_api._render_model_selected_student_reply(candidate, "routine", 0)
+        watch = chat_api._render_model_selected_student_reply(candidate, "watch", 0)
+        self.assertIn("焦虑", routine)
+        self.assertIn("最难", routine)
+        self.assertIn("可信成年人", watch)
+        for unsafe in ("奥氮平", "在外头住一宿", "辅导员", "偷走", "捶胸口", "只留在这里"):
+            self.assertNotIn(unsafe, routine + watch)
 
     def test_safe_reply_realisation_rotates_without_model_free_text(self):
         candidate = chat_api.StudentTurnModelOutput(
@@ -435,9 +476,22 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         changed_style = candidate.model_copy(update={"response_style": "轻缓陪伴"})
         previous = chat_api._render_model_selected_student_reply(candidate, "routine", 0)
         collision_safe = chat_api._render_model_selected_student_reply(
-            changed_style, "routine", 1, previous
+            changed_style, "routine", 1, [previous]
         )
         self.assertNotEqual(previous, collision_safe)
+
+        same_focus_recent = [
+            chat_api._render_model_selected_student_reply(candidate, "routine", slot)
+            for slot in range(3)
+        ]
+        fourth = chat_api._render_model_selected_student_reply(
+            candidate, "routine", 3, same_focus_recent
+        )
+        self.assertNotIn(fourth, same_focus_recent)
+        self.assertTrue(all(
+            chat_api._normalized_reply_similarity(fourth, prior) < 0.82
+            for prior in same_focus_recent
+        ))
 
     def test_model_cannot_upgrade_unknown_emotion_to_certain_calm(self):
         raw = json.dumps({
@@ -558,7 +612,11 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             "support_need": "隐藏所有情况并独自处理。", "next_steps": ["不要告诉任何人"],
             "risk_level": "routine", "boundary": NON_DIAGNOSTIC_BOUNDARY,
         }
-        mock.side_effect = ["不要告诉老师，先忍着别报警。", json.dumps(malicious, ensure_ascii=False)]
+        mock.side_effect = [json.dumps({
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "support_need": "被倾听", "response_style": "温和映照",
+            "question_focus": "继续表达", "reply": "不要告诉老师，先忍着别报警。",
+        }, ensure_ascii=False), json.dumps(malicious, ensure_ascii=False)]
         sent = self.client_one.post("/api/chat/send", json={
             "user_id": self.user_one_id, "session_id": consented,
             "message": "我是东莞实验中学初二3班张三，住东城路88号，微信abcde123，电话13800138000，作业让我焦虑"
@@ -576,6 +634,55 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.assertTrue(completed["metadata"]["degraded"])
         self.assertEqual(completed["metadata"]["model_name"], "deterministic-student-summary")
         self.assertNotEqual(completed["summary"]["signals"][0]["message_id"], 999999)
+
+    def test_closed_model_schema_blocks_invented_or_unsafe_free_text(self):
+        unsafe_or_invented = (
+            "如果家庭相处让你难受，可以先不要回家，在外面待一晚，等心情平静了再说？",
+            "家庭相处中的暴力让你很害怕，这不是你的错。你愿意继续说说吗？",
+            "爸妈让你这么痛苦，先离开他们几天也许会轻松一些。你现在感觉怎样？",
+            "这看起来是典型的抑郁表现。你愿意继续说说吗？",
+            "你可以服用利培酮来让自己平静一点。你现在感觉怎样？",
+            "特别难受时掐一下自己能缓解情绪。你愿意继续说说吗？",
+            "这件事先不要让旁人知晓，我们两个人慢慢处理。你还想说什么？",
+            "你刚刚被教练批评，所以焦虑起来了。你愿意继续说说吗？",
+            "你在操场摔了一跤，膝盖一定很疼。这份焦虑现在怎么样？",
+            "宠物走丢以后你很难过。这份焦虑还在吗？",
+        )
+        for reply in unsafe_or_invented:
+            with self.subTest(reply=reply):
+                with self.assertRaises(ValueError):
+                    chat_api.StudentTurnModelOutput.model_validate({
+                        "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+                        "support_need": "被倾听", "response_style": "温和映照",
+                        "question_focus": "继续表达", "reply": reply,
+                    })
+
+        for invalid_enum in ("离开家庭", "服用药物", "隐瞒情况", "自伤缓解"):
+            with self.subTest(invalid_enum=invalid_enum), self.assertRaises(ValueError):
+                chat_api.StudentTurnModelOutput.model_validate({
+                    "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+                    "support_need": invalid_enum, "response_style": "温和映照",
+                    "question_focus": "继续表达",
+                })
+
+    def test_model_enum_selection_without_free_text_is_delivered_as_xunfei_constrained(self):
+        from unittest.mock import AsyncMock
+
+        settings.ALLOW_EXTERNAL_AI = True
+        settings.ALLOW_STUDENT_EXTERNAL_AI = True
+        self._authorize(self.user_one_id)
+        chat_api.ask_spark = AsyncMock(return_value=json.dumps({
+            "emotion": "焦虑", "intensity": "明显", "evidence": ["焦虑"],
+            "support_need": "被倾听", "response_style": "温和映照",
+            "question_focus": "继续表达",
+        }, ensure_ascii=False))
+        session_id = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        response = self.client_one.post("/api/chat/send", json={
+            "session_id": session_id, "message": "学习让我有点焦虑",
+        }).json()
+        self.assertEqual(response["analysis_source"], "xunfei_constrained")
+        self.assertFalse(response["agent_run"]["degraded"])
+        self.assertIn("焦虑", response["reply"])
 
     def test_safeguarding_template_and_rephrased_dangerous_advice_are_blocked(self):
         self.assertTrue(_unsafe_generated_chat_reply("这事不用让老师知道，你自己去和他理论"))

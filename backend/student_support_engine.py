@@ -29,7 +29,7 @@ def _plan(risk_level: str, external_ai_enabled: bool) -> tuple[list[dict], list[
     if risk_level in {"watch", "professional"}:
         plan.append({"id": "resource", "agent": "ResourceNavigator", "tool": "local_support_resource_registry"})
         tools.append("local_support_resource_registry")
-    generator = "xunfei_structured_synthesizer" if external_ai_enabled else "deterministic_response_template"
+    generator = "xunfei_response_strategy_selector" if external_ai_enabled else "deterministic_response_template"
     plan.extend([
         {"id": "response", "agent": "ResponseAgent", "tool": generator},
         {"id": "review", "agent": "StudentResponseReviewer", "tool": "generated_content_validator"},
@@ -152,8 +152,8 @@ def complete_chat_support_run(
         summaries = {
             "emotion": ("EmotionSynthesizer", "emotion_feature_synthesizer", f"已整理情绪线索：{emotion or '不确定'} · {intensity}"),
             "resource": ("ResourceNavigator", "local_support_resource_registry", f"已从本地审计注册表匹配 {len(resources)} 个支持入口"),
-            "response": ("ResponseAgent", "xunfei_structured_synthesizer" if source == "xunfei_constrained" else "deterministic_response_template", "已生成本轮支持回应"),
-            "review": ("StudentResponseReviewer", "generated_content_validator", "模型结构已校验并由本地安全模板完成交付" if source == "xunfei_constrained" else "规则回应已完成诊断措辞与危险建议校验"),
+            "response": ("ResponseAgent", "xunfei_response_strategy_selector" if source == "xunfei_constrained" else "deterministic_response_template", "模型已选择回应策略，后端完成安全话术实现"),
+            "review": ("StudentResponseReviewer", "generated_content_validator", "枚举策略与后端话术已完成结构、安全及重复内容复核" if source == "xunfei_constrained" else "规则回应已完成诊断措辞与危险建议校验"),
             "coordinate": ("StudentCoordinator", "student_delivery_formatter", "已交付回应、情绪线索与下一步状态"),
         }
         for step in plan[2:]:
@@ -171,7 +171,7 @@ def complete_chat_support_run(
             ))
             sequence += 1
         run.status = "completed"
-        run.model_name = "xunfei-constrained" if source == "xunfei_constrained" else "deterministic-student-support"
+        run.model_name = "xunfei-response-strategy-selector" if source == "xunfei_constrained" else "deterministic-student-support"
     run.risk_level = risk_level
     run.output_message_id = output_message_id
     run.emotion_basis_json = json.dumps(emotion_basis or [], ensure_ascii=False)

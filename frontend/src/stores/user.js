@@ -45,8 +45,8 @@ export const useUserStore = defineStore("user", () => {
     localStorage.removeItem("shengyu_role");
   }
 
-  async function ensureStudentSession() {
-    if (sessionChecked.value && isLoggedIn.value) return;
+  async function ensureStudentSession(forceRefresh = false) {
+    if (!forceRefresh && sessionChecked.value && isLoggedIn.value) return;
 
     if (!studentSessionPromise) {
       studentSessionPromise = (async () => {

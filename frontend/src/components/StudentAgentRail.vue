@@ -4,18 +4,21 @@
       ref="toggleButton"
       class="student-agent-toggle"
       type="button"
-      :aria-label="open ? '收起咕哝智能体进度' : `展开咕哝智能体进度，最新状态：${state.lastEvent}`"
+      :aria-label="open ? '收起咕哝智能体进度' : `展开咕哝智能体进度，最新状态：${state.lastEvent || '等待你开始表达'}`"
       :aria-expanded="open"
       aria-controls="student-agent-rail"
       @click="$emit('toggle')"
     >
       <span class="agent-toggle-mark" :class="`is-${state.status}`" aria-hidden="true"></span>
       <span class="agent-toggle-copy">
-        <span class="agent-toggle-heading"><strong>Agent 协作</strong><small>{{ compactStatus }}</small></span>
+        <span class="agent-toggle-heading"><strong>咕哝 Agent</strong><small>{{ compactStatus }}</small></span>
         <span class="agent-toggle-latest">{{ state.lastEvent || '等待你开始表达' }}</span>
       </span>
-      <span class="agent-toggle-chevron" aria-hidden="true">›</span>
+      <span class="agent-toggle-chevron" aria-hidden="true">⌃</span>
     </button>
+    <span v-if="!open" class="agent-toggle-live" role="status" aria-live="polite">
+      {{ compactStatus }}：{{ state.lastEvent || '等待你开始表达' }}
+    </span>
 
     <Transition name="agent-rail">
       <aside
@@ -27,34 +30,19 @@
       >
         <header class="agent-rail-header">
           <div>
+            <h2 id="student-agent-title">本轮协作</h2>
             <p>{{ taskEyebrow }}</p>
-            <h2 id="student-agent-title">多 Agent 协作轨迹</h2>
           </div>
-          <button ref="closeButton" class="agent-rail-close" type="button" aria-label="收起智能体进度" @click="$emit('close')">×</button>
+          <button ref="closeButton" class="agent-rail-close" type="button" aria-label="收起智能体进度" @click="$emit('close')">⌄</button>
         </header>
 
         <p class="agent-rail-event" role="status" aria-live="polite">
           <span :class="`is-${state.status}`" aria-hidden="true"></span>
-          {{ state.lastEvent }}
+          <strong>{{ compactStatus }}</strong>
+          <small>{{ state.lastEvent || '等待你开始表达' }}</small>
         </p>
 
-        <div v-if="activeRoles.length" class="agent-role-row" aria-label="已核验协作角色">
-          <span v-for="role in activeRoles" :key="role">{{ role }}</span>
-        </div>
-        <div class="student-agent-source" aria-label="当前 Agent 生成来源">
-          <strong>{{ sourceLabel }}</strong>
-          <small>{{ sourceDetail }}</small>
-        </div>
-
-        <section v-if="state.runCode" class="agent-task-brief" aria-label="本次智能体任务理解">
-          <div><strong>任务理解</strong><code>{{ state.runCode }}</code></div>
-          <p>{{ state.intentSummary || '等待服务端返回结构化任务摘要' }}</p>
-          <div v-if="state.tools?.length" class="agent-tool-row" aria-label="实际调用工具">
-            <span v-for="tool in state.tools" :key="tool">{{ toolLabel(tool) }}</span>
-          </div>
-        </section>
-
-        <ol class="agent-step-list">
+        <ol class="agent-step-list" aria-label="多 Agent 协作轨迹">
           <li v-for="step in displaySteps" :key="step.id" :class="`is-${step.status}`">
             <span class="agent-step-icon" aria-hidden="true">{{ statusIcon(step.status) }}</span>
             <div>
@@ -65,12 +53,30 @@
           </li>
         </ol>
 
+        <details class="agent-technical-details">
+          <summary>查看工作记录与数据来源</summary>
+          <div class="student-agent-source" aria-label="当前 Agent 生成来源">
+            <strong>{{ sourceLabel }}</strong>
+            <small>{{ sourceDetail }}</small>
+          </div>
+          <section v-if="state.runCode" class="agent-task-brief" aria-label="本次智能体任务理解">
+            <div><strong>任务编号</strong><code>{{ state.runCode }}</code></div>
+            <p>{{ state.intentSummary || '等待服务端返回结构化任务摘要' }}</p>
+            <div v-if="activeRoles.length" class="agent-role-row" aria-label="已核验协作角色">
+              <span v-for="role in activeRoles" :key="role">{{ role }}</span>
+            </div>
+            <div v-if="state.tools?.length" class="agent-tool-row" aria-label="实际调用工具">
+              <span v-for="tool in state.tools" :key="tool">{{ toolLabel(tool) }}</span>
+            </div>
+          </section>
+          <p class="agent-boundary">只展示可核验的工作步骤与结果摘要，不展示模型私有思维过程；情绪整理不等于心理诊断。</p>
+        </details>
+
         <footer class="agent-rail-footer">
-          <span>本轮安全检查上下文 {{ state.messageCount }} 条表达</span>
-          <span>{{ riskLabel }}</span>
+          <span>{{ state.messageCount ? `已核对 ${state.messageCount} 条表达` : '等待本轮表达' }}</span>
+          <strong>{{ riskLabel }}</strong>
         </footer>
-        <button v-if="state.runCode && state.status !== 'running'" class="agent-delete-run" type="button" @click="$emit('delete-run')">删除本次 Agent 轨迹</button>
-        <p class="agent-boundary">只展示可核验的工作步骤与结果摘要，不展示模型私有思维过程；情绪整理不等于心理诊断。</p>
+        <button v-if="state.runCode && state.status !== 'running'" class="agent-delete-run" type="button" @click="$emit('delete-run')">删除本次记录</button>
       </aside>
     </Transition>
   </section>
@@ -130,11 +136,23 @@ const displaySteps = computed(() => {
   if (!props.state.events?.length) return props.steps
   return props.state.events.map(event => ({
     id: `${event.sequence}-${event.agent}`,
-    label: event.agent,
+    label: agentLabel(event.agent),
     summary: event.summary,
     status: event.status === 'failed' ? 'error' : event.status,
   }))
 })
+
+function agentLabel(agent) {
+  return ({
+    ConversationObserver: '理解表达',
+    StudentSafetyGate: '安全检查',
+    EmotionSynthesizer: '情绪整理',
+    ResourceNavigator: '匹配支持资源',
+    ResponseAgent: '生成回应',
+    StudentResponseReviewer: '输出复核',
+    StudentCoordinator: '完成交付',
+  })[agent] || agent
+}
 
 const riskLabel = computed(() => {
   const labels = {
@@ -148,7 +166,7 @@ const riskLabel = computed(() => {
 })
 
 const sourceLabel = computed(() => ({
-  xunfei_constrained: '讯飞受约束生成',
+  xunfei_constrained: '讯飞策略协作',
   safety_override: '安全规则强制覆盖',
   degraded: '规则安全降级',
   deterministic: '本地确定性规则',
@@ -157,7 +175,7 @@ const sourceLabel = computed(() => ({
 })[props.state.source] || '来源未确认')
 
 const sourceDetail = computed(() => props.state.source === 'xunfei_constrained'
-  ? '模型只选择受约束的情绪、支持需要、回应风格与追问焦点；最终话术由后端安全实现'
+  ? '模型依据去标识化结构线索选择情绪、支持需要与回应策略；学生可见文字由后端审核话术库实现，聊天原文不外发'
   : props.state.source === 'safety_override'
     ? '普通生成已停止，当前只执行确定性安全路径'
     : props.state.source === 'degraded'
@@ -182,6 +200,7 @@ function toolLabel(tool) {
     deterministic_safety_rules: '安全规则',
     emotion_feature_synthesizer: '情绪综合',
     local_support_resource_registry: '本地审计资源库',
+    xunfei_response_strategy_selector: '讯飞回应策略选择',
     xunfei_structured_synthesizer: '讯飞结构化综合',
     deterministic_response_template: '本地回应模板',
     generated_content_validator: '输出安全校验',
@@ -199,51 +218,61 @@ watch(() => props.open, async (value, previous) => {
 
 <style scoped>
 .student-agent-shell {
-  --agent-ink: oklch(94% .015 76);
-  --agent-muted: oklch(76% .018 70);
-  --agent-subtle: oklch(62% .018 60);
-  --agent-accent: oklch(79% .09 72);
-  --agent-success: oklch(77% .085 153);
-  --agent-warning: oklch(80% .11 82);
-  --agent-danger: oklch(72% .13 32);
-  --agent-base: oklch(17% .014 48);
-  --agent-raised: oklch(21% .017 48);
-  --agent-hover: oklch(25% .02 52);
-  --agent-line: oklch(42% .025 58);
+  --agent-ink: oklch(96% .012 76);
+  --agent-muted: oklch(79% .019 68);
+  --agent-subtle: oklch(66% .018 60);
+  --agent-accent: oklch(82% .09 76);
+  --agent-success: oklch(79% .08 154);
+  --agent-warning: oklch(83% .105 82);
+  --agent-danger: oklch(73% .13 31);
+  --agent-base: oklch(17% .013 43);
+  --agent-raised: oklch(23% .017 47);
+  --agent-hover: oklch(27% .02 51);
+  --agent-line: oklch(45% .026 59 / .62);
   position: fixed;
-  top: 82px;
-  right: 22px;
+  top: 88px;
+  right: 24px;
   z-index: 230;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
   color: var(--agent-ink);
   font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
   pointer-events: none;
 }
 .student-agent-toggle,
 .student-agent-rail { pointer-events: auto; }
+.agent-toggle-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .student-agent-toggle {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 18px;
+  grid-template-columns: 8px minmax(0, 1fr) 16px;
   align-items: center;
-  gap: 10px;
-  width: min(320px, calc(100vw - 44px));
-  min-height: 62px;
-  padding: 9px 12px;
+  gap: 9px;
+  width: min(270px, calc(100vw - 48px));
+  min-height: 54px;
+  padding: 8px 11px;
   border: 1px solid var(--agent-line);
-  border-radius: 14px;
+  border-radius: 13px;
   color: var(--agent-ink);
-  background: oklch(18% .015 48 / .93);
-  backdrop-filter: blur(18px) saturate(1.08);
+  background: linear-gradient(135deg, oklch(20% .017 46 / .94), oklch(16% .012 38 / .96));
+  backdrop-filter: blur(20px) saturate(1.08);
   cursor: pointer;
   text-align: left;
   transition: background .18s ease, border-color .18s ease, transform .18s cubic-bezier(.22, 1, .36, 1);
 }
-.student-agent-toggle:hover { background: oklch(22% .019 50 / .96); border-color: oklch(55% .045 65); transform: translateY(-1px); }
+.student-agent-toggle:hover { background: oklch(23% .02 49 / .97); border-color: oklch(62% .045 68 / .8); transform: translateY(-1px); }
 .agent-toggle-mark {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--agent-subtle);
@@ -251,79 +280,86 @@ watch(() => props.open, async (value, previous) => {
 .agent-toggle-mark.is-running { background: var(--agent-warning); animation: agent-pulse 1.2s ease-in-out infinite; }
 .agent-toggle-mark.is-ready { background: var(--agent-success); }
 .agent-toggle-mark.is-urgent, .agent-toggle-mark.is-error { background: var(--agent-danger); }
-.agent-toggle-copy { display: grid; gap: 4px; min-width: 0; }
-.agent-toggle-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.agent-toggle-heading strong { color: var(--agent-ink); font-size: 12px; line-height: 1.2; }
-.agent-toggle-heading small { color: var(--agent-accent); font-size: 10px; }
-.agent-toggle-latest { overflow: hidden; color: var(--agent-muted); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.agent-toggle-chevron { color: var(--agent-accent); font-size: 22px; line-height: 1; transition: transform .18s ease; }
-.student-agent-toggle:hover .agent-toggle-chevron { transform: translateX(2px); }
+.agent-toggle-copy { display: grid; gap: 3px; min-width: 0; }
+.agent-toggle-heading { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.agent-toggle-heading strong { color: var(--agent-ink); font-size: 11px; line-height: 1.2; }
+.agent-toggle-heading small { color: var(--agent-accent); font-size: 9px; }
+.agent-toggle-latest { overflow: hidden; color: var(--agent-muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.agent-toggle-chevron { color: var(--agent-accent); font-size: 16px; line-height: 1; transition: transform .18s ease; }
+.student-agent-toggle:hover .agent-toggle-chevron { transform: translateY(-2px); }
 .student-agent-rail {
-  width: min(380px, calc(100vw - 44px));
-  max-height: calc(100vh - 116px);
+  width: min(336px, calc(100vw - 48px));
+  max-height: calc(100vh - 120px);
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--agent-line);
-  border-radius: 16px;
-  background: oklch(17% .014 48 / .97);
-  backdrop-filter: blur(24px) saturate(1.06);
+  border-radius: 15px;
+  background: linear-gradient(155deg, oklch(20% .017 47 / .975), oklch(15% .011 39 / .985));
+  backdrop-filter: blur(26px) saturate(1.06);
   scrollbar-color: var(--agent-line) transparent;
 }
-.agent-rail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-.agent-rail-header p { margin: 0 0 4px; color: var(--agent-accent); font-size: 11px; font-weight: 700; }
-.agent-rail-header h2 { margin: 0; color: var(--agent-ink); font-size: 18px; line-height: 1.35; letter-spacing: -.02em; text-wrap: balance; }
+.agent-rail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.agent-rail-header h2 { margin: 0; color: var(--agent-ink); font-size: 16px; line-height: 1.3; letter-spacing: -.02em; }
+.agent-rail-header p { margin: 3px 0 0; color: var(--agent-muted); font-size: 10px; line-height: 1.4; }
 .agent-rail-close {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--agent-line);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--agent-ink);
   background: var(--agent-raised);
-  font-size: 20px;
+  font-size: 17px;
   cursor: pointer;
 }
-.agent-rail-close:hover { background: var(--agent-hover); border-color: oklch(55% .045 65); }
+.agent-rail-close:hover { background: var(--agent-hover); border-color: oklch(62% .045 68 / .8); }
 .agent-rail-event {
-  display: flex;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  margin: 18px 0 14px;
-  padding: 11px 12px;
-  border-radius: 12px;
+  column-gap: 9px;
+  margin: 14px 0 10px;
+  padding: 10px 11px;
+  border-radius: 11px;
   color: var(--agent-ink);
   background: var(--agent-raised);
-  font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .agent-rail-event span { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--agent-subtle); }
 .agent-rail-event span.is-running { background: var(--agent-warning); }
 .agent-rail-event span.is-ready { background: var(--agent-success); }
 .agent-rail-event span.is-urgent, .agent-rail-event span.is-error { background: var(--agent-danger); }
-.agent-role-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
-.agent-role-row span { padding: 5px 7px; border: 1px solid var(--agent-line); border-radius: 7px; color: var(--agent-muted); background: var(--agent-raised); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.student-agent-source { display: none; }
-.agent-task-brief { margin: 0 0 12px; padding: 12px 0; border-top: 1px solid var(--agent-line); border-bottom: 1px solid var(--agent-line); }
+.agent-rail-event strong,
+.agent-rail-event small { grid-column: 2; display: block; }
+.agent-rail-event strong { font-size: 11px; }
+.agent-rail-event small { margin-top: 2px; color: var(--agent-muted); font-size: 10px; }
+.agent-role-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 0; }
+.agent-role-row span { padding: 4px 6px; border-radius: 6px; color: var(--agent-muted); background: var(--agent-raised); font: 650 8px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.student-agent-source { display: grid; gap: 3px; margin-top: 10px; }
+.student-agent-source strong { color: var(--agent-accent); font-size: 10px; }
+.student-agent-source small { color: var(--agent-muted); font-size: 10px; line-height: 1.5; }
+.agent-task-brief { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--agent-line); }
 .agent-task-brief > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .agent-task-brief strong { color: var(--agent-accent); font-size: 11px; }
 .agent-task-brief code { overflow: hidden; color: var(--agent-subtle); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.agent-task-brief p { margin: 7px 0 9px; color: var(--agent-muted); font-size: 11px; line-height: 1.55; }
+.agent-task-brief p { margin: 7px 0 0; color: var(--agent-muted); font-size: 10px; line-height: 1.55; }
 .agent-tool-row { display: flex; flex-wrap: wrap; gap: 5px; }
-.agent-tool-row span { padding: 4px 7px; border-radius: 6px; color: var(--agent-muted); background: var(--agent-raised); font-size: 9px; }
+.agent-tool-row { margin-top: 8px; }
+.agent-tool-row span { padding: 4px 6px; border-radius: 6px; color: var(--agent-muted); background: var(--agent-raised); font-size: 8px; }
 .agent-step-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .agent-step-list li {
   display: grid;
-  grid-template-columns: 25px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   gap: 9px;
   align-items: start;
-  padding: 9px 4px;
+  padding: 9px 2px;
   border-bottom: 1px solid var(--agent-line);
 }
 .agent-step-list li:last-child { border-bottom: 0; }
 .agent-step-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   color: var(--agent-muted);
   background: var(--agent-raised);
@@ -337,12 +373,17 @@ watch(() => props.open, async (value, previous) => {
 .agent-step-list li.is-blocked { opacity: .6; }
 .agent-step-list strong,
 .agent-step-list small { display: block; }
-.agent-step-list strong { color: var(--agent-ink); font-size: 12px; line-height: 1.4; }
-.agent-step-list small { margin-top: 2px; color: var(--agent-muted); font-size: 12px; line-height: 1.45; }
-.agent-step-list em { color: var(--agent-muted); font-size: 10px; font-style: normal; white-space: nowrap; }
-.agent-rail-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: var(--agent-accent); font-size: 10px; }
-.agent-boundary { margin: 11px 0 0; color: var(--agent-subtle); font-size: 11px; line-height: 1.55; }
-.agent-delete-run { width:100%; min-height:40px; margin-top:11px; padding:8px 10px; border:1px solid var(--agent-line); border-radius:10px; color:var(--agent-muted); background:transparent; cursor:pointer; }
+.agent-step-list strong { color: var(--agent-ink); font-size: 11px; line-height: 1.4; }
+.agent-step-list small { margin-top: 2px; color: var(--agent-muted); font-size: 10px; line-height: 1.45; }
+.agent-step-list em { color: var(--agent-subtle); font-size: 9px; font-style: normal; white-space: nowrap; }
+.agent-technical-details { margin-top: 10px; border-top: 1px solid var(--agent-line); }
+.agent-technical-details summary { min-height: 40px; padding: 11px 1px 8px; color: var(--agent-muted); font-size: 10px; cursor: pointer; }
+.agent-technical-details summary:hover { color: var(--agent-ink); }
+.agent-technical-details summary:focus-visible { outline: 3px solid var(--agent-accent); outline-offset: 3px; border-radius: 6px; }
+.agent-boundary { margin: 10px 0 0; color: var(--agent-subtle); font-size: 10px; line-height: 1.55; }
+.agent-rail-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; color: var(--agent-muted); font-size: 9px; }
+.agent-rail-footer strong { color: var(--agent-accent); font-weight: 650; }
+.agent-delete-run { width:100%; min-height:36px; margin-top:10px; padding:7px 9px; border:1px solid var(--agent-line); border-radius:9px; color:var(--agent-muted); background:transparent; font-size:10px; cursor:pointer; }
 .agent-delete-run:hover { color:var(--agent-ink); border-color:oklch(55% .045 65); background:var(--agent-raised); }
 .student-agent-toggle:focus-visible,
 .student-agent-rail button:focus-visible { outline: 3px solid var(--agent-accent); outline-offset: 3px; }
@@ -356,15 +397,9 @@ watch(() => props.open, async (value, previous) => {
   .student-agent-shell.is-open .student-agent-toggle { display: none; }
 }
 
-@media (min-width: 1024px) {
-  .student-agent-source { display:grid; gap:3px; margin:0 0 12px; padding:10px 11px; border:1px solid var(--agent-line); border-radius:10px; background:var(--agent-raised); }
-  .student-agent-source strong { color:var(--agent-accent); font-size:10px; }
-  .student-agent-source small { color:var(--agent-muted); font-size:10px; line-height:1.45; }
-}
-
 @media (min-width: 900px) and (max-width: 1163px) {
-  .student-agent-toggle { width: 200px; }
-  .student-agent-shell.is-open .student-agent-rail { width: min(340px, calc(100vw - 92px)); }
+  .student-agent-toggle { width: 220px; }
+  .student-agent-shell.is-open .student-agent-rail { width: min(320px, calc(100vw - 92px)); }
 }
 
 @media (max-width: 899px) {

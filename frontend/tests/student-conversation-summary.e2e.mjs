@@ -12,19 +12,34 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
   { skip: shouldRun ? false : 'set RUN_STUDENT_E2E=1 with local frontend/backend running' }, async () => {
     const browser = await chromium.launch({ executablePath: edgePath, headless: true })
     const context = await browser.newContext({ viewport: { width: 1280, height: 820 } })
+    const registration = await context.request.post(new URL('/api/user/register', baseURL).toString(), {
+      data: {
+        username: `student_e2e_${Date.now()}`,
+        password: 'E2eOnly_Alpha28_Strong!',
+        nickname: '小岛访客',
+      },
+    })
+    assert.equal(registration.ok(), true, `student session setup failed: ${registration.status()}`)
+    const registeredStudent = await registration.json()
     const page = await context.newPage()
     const pageErrors = []
     page.on('pageerror', error => pageErrors.push(error.message))
     page.on('dialog', dialog => dialog.accept())
-    await page.addInitScript(() => {
-      localStorage.setItem('shengyu_first_run_guide_completed_version', '4.3.0')
-    })
+    await page.addInitScript(({ userId }) => {
+      localStorage.setItem(`shengyu_first_run_guide_completed_version:${userId}`, '4.3.0')
+    }, { userId: registeredStudent.user_id })
 
     try {
       await page.goto(baseURL, { waitUntil: 'networkidle' })
       const splash = page.locator('.splash')
       if (await splash.isVisible().catch(() => false)) await splash.click()
-      await page.waitForFunction(() => Boolean(localStorage.getItem('shengyu_user_id')))
+      await page.waitForFunction(async () => {
+        try {
+          return (await fetch('/api/user/me', { credentials: 'include' })).ok
+        } catch {
+          return false
+        }
+      })
       await page.evaluate(async () => {
         const latest = await fetch('/api/chat/sessions/latest-summary').then(response => response.json())
         if (latest.status === 'ready' && latest.session_id) {
@@ -41,7 +56,7 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
       }
       const agentToggle = page.locator('.student-agent-toggle')
       await agentToggle.waitFor({ state: 'visible' })
-      assert.equal(await agentToggle.getAttribute('aria-label'), '展开咕哝智能体进度')
+      assert.ok((await agentToggle.getAttribute('aria-label')).startsWith('展开咕哝智能体进度，最新状态：'))
       if (screenshotDir) {
         await page.screenshot({ path: path.join(screenshotDir, '.codex-alpha52-room-desktop.png') })
         await page.setViewportSize({ width: 390, height: 844 })
@@ -109,9 +124,11 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
       const panel = page.locator('.chat-panel')
       await panel.waitFor({ state: 'visible' })
       const chatClose = panel.getByRole('button', { name: '关闭倾诉面板' })
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '关闭倾诉面板')
       assert.equal(await chatClose.evaluate(element => document.activeElement === element), true)
       await page.keyboard.press('Escape')
       await panel.waitFor({ state: 'detached' })
+      await page.waitForFunction(() => document.activeElement?.classList.contains('zone-monitor'))
       assert.equal(await monitorHotspot.evaluate(element => document.activeElement === element), true)
       await page.keyboard.press('Enter')
       await roomActionBar.waitFor({ state: 'visible' })

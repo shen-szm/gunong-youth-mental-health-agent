@@ -46,7 +46,7 @@ test('backend uses whole-session strict non-clinical summary workflow', () => {
 
 test('student emotion report combines constrained conversation signals and explicit activity feedback', () => {
   assert.match(room, /externalAiConsent/)
-  assert.match(room, /受约束模型对话已启用/)
+  assert.match(room, /讯飞策略协作已启用/)
   assert.doesNotMatch(room, /student-ai-v1/)
   assert.match(room, /emotion_intensity/)
   assert.match(room, /emotion_basis/)

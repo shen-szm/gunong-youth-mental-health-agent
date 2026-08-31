@@ -11,7 +11,7 @@ test('student chat returns a persisted auditable orchestrator run', () => {
   for (const name of ['StudentSupportRun', 'StudentSupportEvent']) assert.match(models, new RegExp(`class ${name}`))
   for (const tool of [
     'derived_feature_extractor', 'deterministic_safety_rules', 'emotion_feature_synthesizer',
-    'local_support_resource_registry', 'xunfei_structured_synthesizer', 'generated_content_validator',
+    'local_support_resource_registry', 'xunfei_response_strategy_selector', 'generated_content_validator',
     'student_delivery_formatter', 'urgent_support_router',
   ]) assert.match(engine, new RegExp(tool))
   assert.match(chat, /agent_run: ChatAgentRun/)
