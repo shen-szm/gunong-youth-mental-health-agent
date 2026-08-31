@@ -183,7 +183,7 @@
     </button>
 
     <!-- 交互热区 — 窗户（悬浮提示） -->
-    <button type="button" :class="['hot-zone zone-window', { 'is-selected': selectedRoomFeatureId === 'window' }]" :aria-pressed="selectedRoomFeatureId === 'window'" aria-label="窗户：看看窗外" @click.stop="selectRoomFeature('window', $event)">
+    <button type="button" class="hot-zone zone-window" aria-haspopup="dialog" aria-label="窗户：打开窗外漫游" @click.stop="openWindowJourney($event)">
       <span class="window-label">窗边 · 看看窗外</span>
     </button>
 
@@ -472,26 +472,28 @@
     <!-- ══ 出去看看 — 交通工具选择 ══ -->
     <Transition name="panel-slide">
       <div v-if="showTransportPanel" class="profile-overlay" @click.self="closeWorkspacePanel('transport')">
-        <div class="profile-panel transport-panel" data-workspace="transport" @click.stop @keydown.esc="closeWorkspacePanel('transport')">
+        <div ref="transportPanelRoot" class="profile-panel transport-panel" data-workspace="transport" role="dialog" aria-modal="true" aria-labelledby="window-journey-title" @click.stop @keydown="handleTransportPanelKeydown">
           <button type="button" class="panel-close" aria-label="关闭出发方式" @click="closeWorkspacePanel('transport')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           <div class="trend-header">
-            <h2>🚪 选择出发方式</h2>
-            <p>请选择你的交通工具</p>
+            <span class="window-journey-kicker">从房间出发</span>
+            <h2 id="window-journey-title">窗外漫游</h2>
+            <p>选一段路线，去城市里完成一件具体的小事。</p>
           </div>
-          <div class="transport-list">
-            <button class="transport-item" @click="openCityPanel('subway')">
-              <span class="transport-icon">🚇</span>
-              <span class="transport-name">地铁</span>
-              <span class="transport-arrow">›</span>
+          <div class="window-route-list" aria-label="可前往的城市">
+            <button class="window-route-item is-xian" type="button" @click="startWindowJourney('西安')">
+              <span class="window-route-mark" aria-hidden="true">影</span>
+              <span class="window-route-copy"><strong>去西安</strong><small>坐上地铁，完成一件皮影作品</small></span>
+              <span class="window-route-meta">皮影工坊 · 约 6 分钟</span>
             </button>
-            <button class="transport-item" @click="openCityPanel('bus')">
-              <span class="transport-icon">🚌</span>
-              <span class="transport-name">巴士</span>
-              <span class="transport-arrow">›</span>
+            <button class="window-route-item is-luoyang" type="button" @click="startWindowJourney('洛阳')">
+              <span class="window-route-mark" aria-hidden="true">拓</span>
+              <span class="window-route-copy"><strong>去洛阳</strong><small>穿过古城，亲手完成一次拓印</small></span>
+              <span class="window-route-meta">拓印工坊 · 约 5 分钟</span>
             </button>
           </div>
+          <p class="window-journey-note">旅程只提供休闲体验，不根据选择推断你的情绪。</p>
         </div>
       </div>
     </Transition>
@@ -555,7 +557,7 @@
 
         <!-- 顶部导航栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="closeXianPanel(); showCityPanel = true">
+          <button ref="xianBackButton" class="xian-back-btn" @click="closeXianPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -750,7 +752,7 @@
 
         <!-- 顶部返回栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="closeLuoyangPanel(); showCityPanel = true">
+          <button ref="luoyangBackButton" class="xian-back-btn" @click="closeLuoyangPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -1686,6 +1688,9 @@ const summaryUnread = ref(false)
 const conversationSummary = ref(null)
 const showAgentRail = ref(false)
 const selectedRoomFeatureId = ref('')
+const transportPanelRoot = ref(null)
+const xianBackButton = ref(null)
+const luoyangBackButton = ref(null)
 let roomFeatureTrigger = null
 let workspaceTrigger = null
 let activeWorkspaceKey = ''
@@ -1949,6 +1954,28 @@ function handleChatPanelKeydown(event) {
     event.stopPropagation()
     closeWorkspacePanel('chat')
     return
+  }
+}
+
+function handleTransportPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeWorkspacePanel('transport')
+    return
+  }
+  if (event.key !== 'Tab' || !transportPanelRoot.value) return
+  const focusable = [...transportPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
   }
 }
 
@@ -2354,6 +2381,11 @@ function selectRoomFeature(id, event) {
   selectedRoomFeatureId.value = id
 }
 
+function openWindowJourney(event) {
+  roomFeatureTrigger = event?.currentTarget || roomFeatureTrigger
+  openWorkspacePanel('transport', roomFeatureTrigger)
+}
+
 function clearRoomFeature(restoreFocus = true) {
   selectedRoomFeatureId.value = ''
   if (restoreFocus) nextTick(() => focusWithoutScroll(roomFeatureTrigger))
@@ -2672,6 +2704,15 @@ function openCityPanel(type) {
   showCityPanel.value = true
 }
 
+function startWindowJourney(cityName) {
+  selectedTransport.value = 'subway'
+  const city = cityData.subway.find(item => item.name === cityName)
+  if (!city) return
+  showTransportPanel.value = false
+  if (activeWorkspaceKey === 'transport') activeWorkspaceKey = ''
+  selectCity(city)
+}
+
 function selectCity(city) {
   if (city.name === '西安') {
     startXianTransition()
@@ -2744,8 +2785,21 @@ function stopMetroAudio() {
   }
 }
 
+function enterXianCity() {
+  showXianTransition.value = false
+  showXianPanel.value = true
+  xianPhase.value = 0
+  stopMetroAudio()
+  playXianCityMusic()
+  nextTick(() => focusWithoutScroll(xianBackButton.value))
+}
+
 function startXianTransition() {
   showCityPanel.value = false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    enterXianCity()
+    return
+  }
   showXianTransition.value = true
   xianPhase.value = 0
 
@@ -2755,14 +2809,7 @@ function startXianTransition() {
   setTimeout(() => { xianPhase.value = 1 }, 1500)
   setTimeout(() => { xianPhase.value = 2 }, 3200)
   setTimeout(() => { xianPhase.value = 3 }, 4800)
-  setTimeout(() => {
-    showXianTransition.value = false
-    showXianPanel.value = true
-    xianPhase.value = 0
-    // 转场结束，停止地铁音乐，开始播放西安城市音乐
-    stopMetroAudio()
-    playXianCityMusic()
-  }, 6200)
+  setTimeout(enterXianCity, 6200)
 }
 
 const showPuppetPopup = ref(false)
@@ -2954,8 +3001,21 @@ function stopLuoyangCityMusic() {
   }
 }
 
+function enterLuoyangCity() {
+  showLuoyangTransition.value = false
+  showLuoyangPanel.value = true
+  luoyangPhase.value = 0
+  stopMetroAudio()
+  playLuoyangCityMusic()
+  nextTick(() => focusWithoutScroll(luoyangBackButton.value))
+}
+
 function startLuoyangTransition() {
   showCityPanel.value = false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    enterLuoyangCity()
+    return
+  }
   showLuoyangTransition.value = true
   luoyangPhase.value = 0
 
@@ -2966,14 +3026,7 @@ function startLuoyangTransition() {
   setTimeout(() => { luoyangPhase.value = 1 }, 1500)   // 启动运动感
   setTimeout(() => { luoyangPhase.value = 2 }, 3200)   // 开始模糊
   setTimeout(() => { luoyangPhase.value = 3 }, 4800)   // 白屏
-  setTimeout(() => {
-    showLuoyangTransition.value = false
-    showLuoyangPanel.value = true
-    luoyangPhase.value = 0
-    // 转场结束，停止地铁音乐，播放洛阳城市音乐
-    stopMetroAudio()
-    playLuoyangCityMusic()
-  }, 6200)                                              // 显示洛阳
+  setTimeout(enterLuoyangCity, 6200)                    // 显示洛阳
 }
 
 function openLuoyangPanel() {
@@ -5082,6 +5135,48 @@ onUnmounted(() => {
 .transport-icon { font-size: 28px; }
 .transport-name { flex: 1; text-align: left; font-weight: 500; }
 .transport-arrow { font-size: 20px; color: rgba(200,200,200,0.3); }
+.transport-panel { width: min(640px, calc(100vw - 32px)); }
+.window-journey-kicker { display: block; margin-bottom: 5px; color: #d8c58f; font-size: 11px; font-weight: 700; }
+.window-route-list { display: grid; gap: 10px; margin-top: 18px; }
+.window-route-item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 84px;
+  padding: 13px 15px;
+  border: 0;
+  border-radius: 14px;
+  color: #f7f1e5;
+  background: rgba(255, 255, 255, .07);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .18s ease, transform .18s cubic-bezier(.22, 1, .36, 1);
+}
+.window-route-item:hover { background: rgba(255, 255, 255, .12); transform: translateY(-2px); }
+.window-route-item:active { transform: translateY(0); }
+.window-route-item:focus-visible { outline: 3px solid #f0d58e; outline-offset: 2px; }
+.window-route-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  color: #2b241c;
+  background: #e1c77e;
+  font-size: 18px;
+  font-weight: 900;
+}
+.window-route-item.is-luoyang .window-route-mark { color: #20302a; background: #aacbb9; }
+.window-route-copy { min-width: 0; }
+.window-route-copy strong,
+.window-route-copy small { display: block; }
+.window-route-copy strong { font-size: 15px; }
+.window-route-copy small { margin-top: 5px; color: rgba(247, 241, 229, .74); font-size: 12px; line-height: 1.45; }
+.window-route-meta { color: rgba(247, 241, 229, .58); font-size: 11px; white-space: nowrap; }
+.window-journey-note { margin: 14px 2px 0; color: rgba(247, 241, 229, .58); font-size: 11px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .window-route-item { transition: none; } }
 
 .city-list { display: flex; flex-direction: column; gap: 10px; padding: 0 4px; }
 .city-item {

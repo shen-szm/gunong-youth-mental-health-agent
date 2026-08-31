@@ -16,13 +16,23 @@ test('student room uses one scene action system instead of stacked home cards', 
   assert.doesNotMatch(template, /weather-float/)
 })
 
-test('room hotspots share keyboard and selection behavior', () => {
-  for (const id of ['chat', 'trend', 'window', 'music', 'pet', 'daily']) {
+test('room hotspots share keyboard behavior and the window opens its real journey directly', () => {
+  for (const id of ['chat', 'trend', 'music', 'pet', 'daily']) {
     assert.match(room, new RegExp(`selectRoomFeature\\('${id}'`))
   }
   assert.match(room, /<button type="button" :class="\['hot-zone zone-monitor'/)
   assert.match(room, /aria-label="床头：回顾近期情绪"/)
-  assert.match(room, /aria-label="窗户：看看窗外"/)
+  assert.match(room, /aria-label="窗户：打开窗外漫游"/)
+  assert.match(room, /function openWindowJourney[\s\S]*?openWorkspacePanel\('transport'/)
+  assert.match(room, /function startWindowJourney[\s\S]*?selectCity\(city\)/)
+  assert.match(room, /function startWindowJourney[\s\S]*?showTransportPanel\.value = false/)
+  assert.match(room, /去西安[\s\S]*?皮影工坊/)
+  assert.match(room, /去洛阳[\s\S]*?拓印工坊/)
+  assert.match(room, /function handleTransportPanelKeydown[\s\S]*?event\.key !== 'Tab'/)
+  assert.match(room, /function startXianTransition[\s\S]*?prefers-reduced-motion/)
+  assert.match(room, /function startLuoyangTransition[\s\S]*?prefers-reduced-motion/)
+  assert.match(room, /focusWithoutScroll\(xianBackButton\.value\)/)
+  assert.match(room, /focusWithoutScroll\(luoyangBackButton\.value\)/)
   assert.match(room, /function runSelectedRoomFeature/)
   assert.match(actionBar, /@keydown\.esc/)
   assert.match(actionBar, /focus\(\{ preventScroll: true \}\)/)

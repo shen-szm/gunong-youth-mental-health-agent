@@ -18,7 +18,7 @@
         <small>后端危机标记</small>
       </div>
       <div>
-        <dt>待处理预警</dt>
+        <dt>待跟进提醒</dt>
         <dd>{{ pendingWarnings.length }}</dd>
         <small>尚未记录跟进</small>
       </div>
@@ -67,7 +67,7 @@
         </div>
         <div v-else class="queue-empty">
           <strong>当前队列已清空</strong>
-          <p>暂时没有需要立即处理的预警或审批。可以进入支持工单查看近期记录。</p>
+          <p>暂时没有需要立即处理的安全提醒或审批。可以进入支持工单查看近期记录。</p>
         </div>
       </section>
 
@@ -141,7 +141,7 @@ const queueItems = computed(() => {
     mark: item.urgent === true ? '!' : '•',
     title: cleanName(item.student_name || item.nickname || `学生 ${item.student_id}`),
     description: item.reason || item.summary || '出现需要教师核对的近期记录',
-    action: item.urgent === true ? '立即核实安全' : item.risk_level === 'high' ? '尽快关注' : '处理预警',
+    action: item.urgent === true ? '立即核实安全' : item.risk_level === 'high' ? '尽快核实' : '持续关注',
   }))
   const approvalItems = props.superAdmin
     ? pendingApprovals.value.slice(0, 3).map(item => ({
@@ -201,7 +201,7 @@ const agentSteps = computed(() => [
 ])
 
 function cleanName(value) {
-  return String(value || '').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '未命名'
+  return String(value || '').trim() || '未命名'
 }
 
 function riskRank(level) {

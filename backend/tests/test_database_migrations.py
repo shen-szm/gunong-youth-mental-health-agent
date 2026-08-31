@@ -9,10 +9,37 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from database import _migrate_legacy_sensitive_access_logs
+from database import _migrate_assessment_created_at_to_china_time, _migrate_legacy_sensitive_access_logs
 
 
 class DatabaseMigrationTests(unittest.TestCase):
+    def test_assessment_utc_created_at_is_shifted_once_to_china_time(self):
+        engine = create_engine("sqlite:///:memory:")
+        with engine.begin() as connection:
+            connection.execute(text("""
+                CREATE TABLE student_wellbeing_assessments (
+                    id INTEGER PRIMARY KEY,
+                    created_at DATETIME
+                )
+            """))
+            connection.execute(text("""
+                INSERT INTO student_wellbeing_assessments (id, created_at)
+                VALUES (1, '2026-08-30 16:30:00')
+            """))
+
+        _migrate_assessment_created_at_to_china_time(engine)
+        _migrate_assessment_created_at_to_china_time(engine)
+
+        with engine.connect() as connection:
+            created_at = connection.execute(text(
+                "SELECT created_at FROM student_wellbeing_assessments WHERE id = 1"
+            )).scalar_one()
+            migration_count = connection.execute(text(
+                "SELECT COUNT(*) FROM app_data_migrations WHERE migration_key = 'alpha29_assessment_created_at_china_time'"
+            )).scalar_one()
+        self.assertEqual(str(created_at), "2026-08-31 00:30:00")
+        self.assertEqual(migration_count, 1)
+
     def test_legacy_sensitive_access_log_is_preserved_in_new_schema(self):
         engine = create_engine("sqlite:///:memory:")
         with engine.begin() as connection:

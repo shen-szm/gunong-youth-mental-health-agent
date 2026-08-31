@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from agents.wellbeing_assessment import ALLOWED_EMOTIONS, ITEM_LABELS, WellbeingAssessmentOrchestrator
+from app_time import china_now_naive
 from auth import get_current_user
 from config import settings
 from database import get_db
@@ -84,7 +85,7 @@ def _audit(db: Session, user_id: int, action: str, resource_id: str, result: str
 
 
 def _cleanup(db: Session, user_id: int) -> None:
-    now = datetime.now()
+    now = china_now_naive()
     expired = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.user_id == user_id,
         StudentWellbeingAssessment.expires_at <= now,
@@ -165,7 +166,8 @@ async def submit_assessment(
         and settings.ALLOW_STUDENT_EXTERNAL_AI
         and student_external_ai_allowed(db, current_user.id)
     )
-    assessment_code = f"ASSESS-{datetime.now():%Y%m%d}-{secrets.token_hex(4).upper()}"
+    now = china_now_naive()
+    assessment_code = f"ASSESS-{now:%Y%m%d}-{secrets.token_hex(4).upper()}"
     result = await WellbeingAssessmentOrchestrator().run(
         answers=answers,
         emotions=payload.emotions,
@@ -187,7 +189,8 @@ async def submit_assessment(
         model_name=result.model_name,
         prompt_version=result.prompt_version,
         degraded=int(result.degraded),
-        expires_at=datetime.now() + timedelta(days=RETENTION_DAYS),
+        created_at=now,
+        expires_at=now + timedelta(days=RETENTION_DAYS),
     )
     db.add(row)
     db.flush()
@@ -216,7 +219,7 @@ def latest_assessment(db: Session = Depends(get_db), current_user: User = Depend
     row = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.user_id == current_user.id,
         StudentWellbeingAssessment.deleted_at.is_(None),
-        StudentWellbeingAssessment.expires_at > datetime.now(),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).order_by(StudentWellbeingAssessment.created_at.desc(), StudentWellbeingAssessment.id.desc()).first()
     db.commit()
     return {"assessment": _response(row, db) if row else None}
@@ -235,7 +238,7 @@ def delete_assessment(
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="评估不存在或已删除")
-    row.deleted_at = datetime.now()
+    row.deleted_at = china_now_naive()
     row.answers_json = "{}"
     row.result_json = "{}"
     _audit(db, current_user.id, "delete_self_assessment", assessment_code, "deleted")

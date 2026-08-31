@@ -11,10 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth import require_admin_teacher, require_teacher
+from app_time import china_day_start_naive, china_now_naive
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
 from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
-from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload, student_external_ai_allowed
+from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload, student_ai_authorization_payloads, student_external_ai_allowed
 from teacher_review_engine import build_teacher_review_report
 from teacher_review_pdf import generate_teacher_review_pdf
 
@@ -87,7 +88,7 @@ def _audit(db: Session, actor: User, action: str, resource_type: str, resource_i
         resource_type=resource_type,
         resource_id=resource_id,
         result=result,
-        created_at=datetime.now(),
+        created_at=china_now_naive(),
     ))
     db.commit()
 
@@ -119,7 +120,7 @@ def _latest_approved_request(db: Session, teacher_id: int, student_id: int) -> S
             StudentCaseAccessRequest.teacher_user_id == teacher_id,
             StudentCaseAccessRequest.student_user_id == student_id,
             StudentCaseAccessRequest.status == "approved",
-            StudentCaseAccessRequest.expires_at > datetime.now(),
+            StudentCaseAccessRequest.expires_at > china_now_naive(),
         )
         .order_by(StudentCaseAccessRequest.reviewed_at.desc())
         .first()
@@ -144,7 +145,7 @@ def _require_student_access(db: Session, teacher: User, student_id: int, request
         StudentCaseAccessRequest.teacher_user_id == teacher.id,
         StudentCaseAccessRequest.student_user_id == student_id,
         StudentCaseAccessRequest.status == "approved",
-        StudentCaseAccessRequest.expires_at > datetime.now(),
+        StudentCaseAccessRequest.expires_at > china_now_naive(),
     )
     if request_id is not None:
         query = query.filter(StudentCaseAccessRequest.id == request_id)
@@ -156,27 +157,64 @@ def _require_student_access(db: Session, teacher: User, student_id: int, request
 
 
 def _student_access_state(db: Session, teacher: User, student_id: int) -> dict:
+    return _student_access_states(db, teacher, [student_id])[student_id]
+
+
+def _student_access_states(db: Session, teacher: User, student_ids: list[int]) -> dict[int, dict]:
     if _is_admin_teacher(teacher):
-        return {"status": "direct", "request_id": None, "label": "管理员教师可直接查看"}
-    row = (
-        db.query(StudentCaseAccessRequest)
-        .filter(
-            StudentCaseAccessRequest.teacher_user_id == teacher.id,
-            StudentCaseAccessRequest.student_user_id == student_id,
-        )
-        .order_by(StudentCaseAccessRequest.created_at.desc())
-        .first()
-    )
-    if not row:
-        return {"status": "not_requested", "request_id": None, "label": "需要提交查看申请"}
-    if row.status == "approved" and (not row.expires_at or row.expires_at <= datetime.now()):
-        return {"status": "expired", "request_id": row.id, "label": "授权已到期，需重新申请"}
+        return {
+            student_id: {"status": "direct", "request_id": None, "label": "管理员教师可直接查看"}
+            for student_id in student_ids
+        }
+    rows = db.query(StudentCaseAccessRequest).filter(
+        StudentCaseAccessRequest.teacher_user_id == teacher.id,
+        StudentCaseAccessRequest.student_user_id.in_(student_ids),
+    ).order_by(StudentCaseAccessRequest.created_at.desc()).all() if student_ids else []
+    latest = {}
+    for row in rows:
+        latest.setdefault(row.student_user_id, row)
     labels = {"pending": "等待管理员教师审批", "approved": "已获批，可查看", "rejected": "申请未通过", "revoked": "授权已撤销，需重新申请"}
-    return {"status": row.status, "request_id": row.id, "label": labels.get(row.status, row.status)}
+    states = {}
+    now = china_now_naive()
+    for student_id in student_ids:
+        row = latest.get(student_id)
+        if not row:
+            states[student_id] = {"status": "not_requested", "request_id": None, "label": "需要提交查看申请"}
+        elif row.status == "approved" and (not row.expires_at or row.expires_at <= now):
+            states[student_id] = {"status": "expired", "request_id": row.id, "label": "授权已到期，需重新申请"}
+        else:
+            states[student_id] = {"status": row.status, "request_id": row.id, "label": labels.get(row.status, row.status)}
+    return states
+
+
+def _warning_statuses(
+    db: Session,
+    teacher: User,
+    risk_summaries: dict[int, tuple[str, int, bool, datetime | None]],
+) -> dict[int, str]:
+    student_ids = list(risk_summaries)
+    resource_ids = [str(student_id) for student_id in student_ids]
+    rows = db.query(SensitiveAccessLog).filter(
+        SensitiveAccessLog.actor_user_id == teacher.id,
+        SensitiveAccessLog.action == "record_warning_followup",
+        SensitiveAccessLog.resource_type == "student",
+        SensitiveAccessLog.resource_id.in_(resource_ids),
+        SensitiveAccessLog.result == "allowed",
+    ).order_by(SensitiveAccessLog.created_at.desc()).all() if resource_ids else []
+    latest_followups = {}
+    for row in rows:
+        latest_followups.setdefault(row.resource_id, row.created_at)
+    return {
+        student_id: "handled"
+        if latest_followups.get(str(student_id))
+        and (risk_summaries[student_id][3] is None or latest_followups[str(student_id)] >= risk_summaries[student_id][3])
+        else "pending"
+        for student_id in student_ids
+    }
 
 
 def _has_urgent_signal(db: Session, student_id: int, since: datetime | None = None) -> bool:
-    since = since or datetime.now() - timedelta(days=30)
+    since = since or china_now_naive() - timedelta(days=30)
     mood_texts = db.query(MoodRecord.content).filter(MoodRecord.user_id == student_id, MoodRecord.created_at >= since).all()
     chat_texts = db.query(ChatMessage.content).filter(
         ChatMessage.user_id == student_id,
@@ -188,7 +226,7 @@ def _has_urgent_signal(db: Session, student_id: int, since: datetime | None = No
         StudentWellbeingAssessment.created_at >= since,
         StudentWellbeingAssessment.risk_level == "urgent",
         StudentWellbeingAssessment.deleted_at.is_(None),
-        StudentWellbeingAssessment.expires_at > datetime.now(),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).first()
     return bool(urgent_assessment) or any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
 
@@ -203,7 +241,7 @@ def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tupl
     latest_assessment = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.user_id == student_id,
         StudentWellbeingAssessment.deleted_at.is_(None),
-        StudentWellbeingAssessment.expires_at > datetime.now(),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).order_by(StudentWellbeingAssessment.created_at.desc()).first()
     signal_times = [item.created_at for item in (latest_mood, latest_chat, latest_assessment) if item and item.created_at]
     latest_signal_at = max(signal_times) if signal_times else None
@@ -219,13 +257,13 @@ def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tupl
 
 
 def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
-    since = datetime.now() - timedelta(days=30)
+    since = china_now_naive() - timedelta(days=30)
     moods = db.query(MoodRecord).filter(MoodRecord.user_id == student_id, MoodRecord.created_at >= since).all()
     latest_assessment = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.user_id == student_id,
         StudentWellbeingAssessment.created_at >= since,
         StudentWellbeingAssessment.deleted_at.is_(None),
-        StudentWellbeingAssessment.expires_at > datetime.now(),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).order_by(StudentWellbeingAssessment.created_at.desc()).first()
     if latest_assessment and latest_assessment.risk_level in {"urgent", "professional"}:
         return "high", 0.0, len(moods)
@@ -239,6 +277,109 @@ def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
     return ("high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"), 0.0, len(moods)
 
 
+def _risk_summaries_for_students(db: Session, student_ids: list[int]) -> dict[int, tuple[str, int, bool, datetime | None]]:
+    """批量计算概览分流，避免教师首页按学生执行多轮查询。"""
+    if not student_ids:
+        return {}
+    since = china_now_naive() - timedelta(days=30)
+    now = china_now_naive()
+    mood_rows = db.query(MoodRecord.user_id, MoodRecord.mood_label, MoodRecord.content, MoodRecord.created_at).filter(
+        MoodRecord.user_id.in_(student_ids),
+        MoodRecord.created_at >= since,
+    ).all()
+    chat_rows = db.query(ChatMessage.user_id, ChatMessage.content, ChatMessage.created_at).filter(
+        ChatMessage.user_id.in_(student_ids),
+        ChatMessage.role == "user",
+        ChatMessage.created_at >= since,
+    ).all()
+    assessment_rows = db.query(
+        StudentWellbeingAssessment.user_id,
+        StudentWellbeingAssessment.risk_level,
+        StudentWellbeingAssessment.created_at,
+    ).filter(
+        StudentWellbeingAssessment.user_id.in_(student_ids),
+        StudentWellbeingAssessment.created_at >= since,
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > now,
+    ).order_by(StudentWellbeingAssessment.user_id, StudentWellbeingAssessment.created_at).all()
+
+    mood_counts = {student_id: 0 for student_id in student_ids}
+    negative_counts = {student_id: 0 for student_id in student_ids}
+    urgent_text_ids: set[int] = set()
+    latest_assessment = {}
+    urgent_assessment_ids: set[int] = set()
+    immediate_assessment_ids: set[int] = set()
+    latest_signal_at: dict[int, datetime] = {}
+    for student_id, label, content, created_at in mood_rows:
+        mood_counts[student_id] += 1
+        negative_counts[student_id] += int(label in {"难过", "焦虑", "愤怒"})
+        if _context_has_urgent_meaning(content or ""):
+            urgent_text_ids.add(student_id)
+        if created_at and (student_id not in latest_signal_at or created_at > latest_signal_at[student_id]):
+            latest_signal_at[student_id] = created_at
+    for student_id, content, created_at in chat_rows:
+        if _context_has_urgent_meaning(content or ""):
+            urgent_text_ids.add(student_id)
+        if created_at and (student_id not in latest_signal_at or created_at > latest_signal_at[student_id]):
+            latest_signal_at[student_id] = created_at
+    for student_id, risk_level, created_at in assessment_rows:
+        latest_assessment[student_id] = risk_level
+        if risk_level in {"urgent", "professional"}:
+            urgent_assessment_ids.add(student_id)
+        if risk_level == "urgent":
+            immediate_assessment_ids.add(student_id)
+        if created_at and (student_id not in latest_signal_at or created_at > latest_signal_at[student_id]):
+            latest_signal_at[student_id] = created_at
+
+    summaries = {}
+    for student_id in student_ids:
+        latest_level = latest_assessment.get(student_id)
+        if student_id in urgent_assessment_ids or student_id in urgent_text_ids:
+            level = "high"
+        elif latest_level == "watch":
+            level = "middle"
+        elif negative_counts[student_id] >= 4:
+            level = "high"
+        elif negative_counts[student_id] >= 1:
+            level = "middle"
+        else:
+            level = "low"
+        urgent = student_id in immediate_assessment_ids or student_id in urgent_text_ids
+        summaries[student_id] = (level, mood_counts[student_id], urgent, latest_signal_at.get(student_id))
+    return summaries
+
+
+def _activity_student_ids(db: Session, since: datetime | None = None) -> set[int]:
+    """固定三次集合查询，避免按学生逐个探测记录造成 N+1。"""
+    mood_query = db.query(MoodRecord.user_id)
+    chat_query = db.query(ChatMessage.user_id).filter(ChatMessage.role == "user")
+    assessment_query = db.query(StudentWellbeingAssessment.user_id).filter(
+        StudentWellbeingAssessment.deleted_at.is_(None),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
+    )
+    if since is not None:
+        mood_query = mood_query.filter(MoodRecord.created_at >= since)
+        chat_query = chat_query.filter(ChatMessage.created_at >= since)
+        assessment_query = assessment_query.filter(StudentWellbeingAssessment.created_at >= since)
+    return {
+        int(row[0])
+        for query in (mood_query, chat_query, assessment_query)
+        for row in query.distinct().all()
+    }
+
+
+def _visible_roster_students(db: Session, query, activity_ids: set[int] | None = None) -> list[User]:
+    """隐藏从未产生交互的临时访客；一旦有记录就进入教师职责视图。"""
+    active_ids = activity_ids if activity_ids is not None else _activity_student_ids(db)
+    return [
+        student for student in query.order_by(User.id).all()
+        if not (
+            str(student.username or "").lower().startswith(("guest_", "demo_"))
+            and student.id not in active_ids
+        )
+    ]
+
+
 @router.get("/class-overview")
 def class_overview(db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
     student_query = db.query(User).filter(User.is_admin == 0)
@@ -248,20 +389,14 @@ def class_overview(db: Session = Depends(get_db), teacher: User = Depends(requir
             TeacherStudentAssignment.active == 1,
         )
         student_query = student_query.filter(User.id.in_(assigned_ids))
-    students = [
-        item for item in student_query.all()
-        if not (
-            item.username.startswith("demo_")
-            and item.username != "demo_student_case"
-            and db.query(MoodRecord).filter(MoodRecord.user_id == item.id).count() == 0
-            and db.query(ChatMessage).filter(ChatMessage.user_id == item.id, ChatMessage.role == "user").count() == 0
-        )
-    ]
-    risks = [_risk_for_student(db, item.id)[0] for item in students]
+    students = _visible_roster_students(db, student_query)
+    risk_summaries = _risk_summaries_for_students(db, [item.id for item in students])
+    risks = [risk_summaries[item.id][0] for item in students]
+    today_active_ids = _activity_student_ids(db, china_day_start_naive())
     pending = db.query(StudentCaseAccessRequest).filter(StudentCaseAccessRequest.status == "pending").count()
     return {
         "total_students": len(students),
-        "today_active": 0,
+        "today_active": sum(item.id in today_active_ids for item in students),
         "pending_warnings": sum(level in {"high", "middle"} for level in risks),
         "pending_access_requests": pending if _is_admin_teacher(teacher) else 0,
         "risk_counts": {level: risks.count(level) for level in ("low", "middle", "high")},
@@ -279,18 +414,20 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
             TeacherStudentAssignment.active == 1,
         )
         student_query = student_query.filter(User.id.in_(assigned_ids))
-    for student in student_query.order_by(User.id).all():
-        risk, _, count = _risk_for_student(db, student.id)
-        chat_count = db.query(ChatMessage).filter(ChatMessage.user_id == student.id, ChatMessage.role == "user").count()
-        if student.username.startswith("demo_") and student.username != "demo_student_case" and count + chat_count == 0:
-            continue
+    students = _visible_roster_students(db, student_query)
+    student_ids = [student.id for student in students]
+    risk_summaries = _risk_summaries_for_students(db, student_ids)
+    access_states = _student_access_states(db, teacher, student_ids)
+    authorization_payloads = student_ai_authorization_payloads(db, student_ids)
+    for student in students:
+        risk, count, _urgent, _latest_signal_at = risk_summaries[student.id]
         items.append({
             "id": student.id,
             "nickname": student.nickname or f"学生{student.id}",
             "risk_level": risk,
             "mood_count": count,
-            "access": _student_access_state(db, teacher, student.id),
-            "external_ai_authorization": student_ai_authorization_payload(db, student.id),
+            "access": access_states[student.id],
+            "external_ai_authorization": authorization_payloads[student.id],
         })
     return {"students": items}
 
@@ -312,7 +449,7 @@ def set_external_ai_authorization(
     _require_student_responsibility(db, teacher, student_id)
     if payload.active and not payload.authority_confirmed:
         raise HTTPException(status_code=400, detail="启用前必须确认已核验学校或监护人的有效授权依据")
-    now = datetime.now()
+    now = china_now_naive()
     row = get_student_ai_authorization(db, student_id)
     if not row:
         row = StudentExternalAiAuthorization(
@@ -355,21 +492,27 @@ def warning_list(db: Session = Depends(get_db), teacher: User = Depends(require_
             TeacherStudentAssignment.active == 1,
         )
         student_query = student_query.filter(User.id.in_(assigned_ids))
-    for student in student_query.all():
-        risk, _, count = _risk_for_student(db, student.id)
+    students = _visible_roster_students(db, student_query)
+    student_ids = [student.id for student in students]
+    risk_summaries = _risk_summaries_for_students(db, student_ids)
+    access_states = _student_access_states(db, teacher, student_ids)
+    statuses = _warning_statuses(db, teacher, risk_summaries)
+    for student in students:
+        risk, count, urgent, latest_signal_at = risk_summaries[student.id]
         if risk in {"high", "middle"}:
-            urgent = _has_urgent_signal(db, student.id)
-            status, latest_signal_at = _warning_followup_state(db, teacher, student.id)
             rows.append({
                 "id": student.id,
                 "student_id": student.id,
                 "student_name": student.nickname or f"学生{student.id}",
                 "risk_level": risk,
-                "reason": "检测到需要立即核实安全的危机表达" if urgent else f"近30天自愿情绪记录呈{('明显' if risk == 'high' else '一定')}波动（{count}条）",
+                "reason": "检测到需要立即核实安全的危机表达" if urgent else (
+                    f"近30天记录显示需要尽快核实支持需求（{count}条）"
+                    if risk == "high" else f"近30天有需要持续关注的自愿记录（{count}条）"
+                ),
                 "urgent": urgent,
-                "status": status,
+                "status": statuses[student.id],
                 "updated_at": latest_signal_at.isoformat() if latest_signal_at else None,
-                "access": _student_access_state(db, teacher, student.id),
+                "access": access_states[student.id],
             })
     return {"warnings": rows}
 
@@ -418,7 +561,7 @@ def create_access_request(student_id: int, payload: AccessRequestInput, db: Sess
     if duplicate:
         return {"status": duplicate.status, "request_id": duplicate.id, "idempotent": True}
     row = StudentCaseAccessRequest(
-        request_code=f"ACCESS-{datetime.now():%Y%m%d}-{secrets.token_hex(3).upper()}",
+        request_code=f"ACCESS-{china_now_naive():%Y%m%d}-{secrets.token_hex(3).upper()}",
         teacher_user_id=teacher.id,
         student_user_id=student_id,
         reason=payload.reason.strip(),
@@ -469,15 +612,15 @@ def decide_access_request(request_id: int, payload: AccessDecisionInput, db: Ses
         row.status = "revoked"
         row.review_note = "教师角色或学生职责范围已变化，申请自动失效"
         row.reviewer_user_id = reviewer.id
-        row.reviewed_at = datetime.now()
+        row.reviewed_at = china_now_naive()
         db.commit()
         _audit(db, reviewer, "revoke_stale_case_access_request", "access_request", str(row.id), "allowed")
         raise HTTPException(status_code=409, detail="申请人的教师角色或学生职责范围已失效")
     row.status = payload.decision
     row.review_note = payload.note.strip()
     row.reviewer_user_id = reviewer.id
-    row.reviewed_at = datetime.now()
-    row.expires_at = datetime.now() + timedelta(days=7) if payload.decision == "approved" else None
+    row.reviewed_at = china_now_naive()
+    row.expires_at = china_now_naive() + timedelta(days=7) if payload.decision == "approved" else None
     db.commit()
     _audit(db, reviewer, f"{payload.decision}_case_access_request", "access_request", str(row.id), "allowed")
     return {"status": row.status, "idempotent": False}
@@ -486,7 +629,7 @@ def decide_access_request(request_id: int, payload: AccessDecisionInput, db: Ses
 @router.get("/students/{student_id}/case-context")
 def student_case_context(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
     approved = _require_student_access(db, teacher, student_id, request_id)
-    cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    cutoff = approved.reviewed_at if approved and approved.reviewed_at else china_now_naive()
     return _case_context_payload(db, teacher, student_id, approved, cutoff)
 
 
@@ -521,7 +664,7 @@ def student_work_product(
 ):
     """在同一授权边界内，把原始记录整理成教师可审核的工作成果。"""
     approved = _require_student_access(db, teacher, student_id, request_id)
-    cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    cutoff = approved.reviewed_at if approved and approved.reviewed_at else china_now_naive()
     redacted_safety_revision: dict | None = None
     if approved is None:
         day_start = cutoff.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -537,7 +680,7 @@ def student_work_product(
             TeacherWorkProductSnapshot.content_cutoff <= cutoff,
         ).order_by(TeacherWorkProductSnapshot.content_cutoff.desc()).first()
         if existing_direct_snapshot:
-            incremental_cutoff = datetime.now()
+            incremental_cutoff = china_now_naive()
             new_moods = db.query(MoodRecord).filter(
                 MoodRecord.user_id == student_id,
                 MoodRecord.created_at > existing_direct_snapshot.content_cutoff,
@@ -555,19 +698,19 @@ def student_work_product(
                 StudentWellbeingAssessment.created_at <= incremental_cutoff,
                 StudentWellbeingAssessment.risk_level == "urgent",
                 StudentWellbeingAssessment.deleted_at.is_(None),
-                StudentWellbeingAssessment.expires_at > datetime.now(),
+                StudentWellbeingAssessment.expires_at > china_now_naive(),
             ).first()
             has_new_assessment = db.query(StudentWellbeingAssessment.id).filter(
                 StudentWellbeingAssessment.user_id == student_id,
                 StudentWellbeingAssessment.created_at > existing_direct_snapshot.content_cutoff,
                 StudentWellbeingAssessment.created_at <= incremental_cutoff,
                 StudentWellbeingAssessment.deleted_at.is_(None),
-                StudentWellbeingAssessment.expires_at > datetime.now(),
+                StudentWellbeingAssessment.expires_at > china_now_naive(),
             ).first()
             has_new_record = bool(new_moods or new_chats or has_new_assessment or new_urgent_assessment)
             cutoff = incremental_cutoff if has_new_record else existing_direct_snapshot.content_cutoff
     elif approved is not None:
-        safety_check_at = datetime.now()
+        safety_check_at = china_now_naive()
         post_approval_moods = db.query(MoodRecord).filter(
             MoodRecord.user_id == student_id,
             MoodRecord.created_at > cutoff,
@@ -585,7 +728,7 @@ def student_work_product(
             StudentWellbeingAssessment.created_at <= safety_check_at,
             StudentWellbeingAssessment.risk_level == "urgent",
             StudentWellbeingAssessment.deleted_at.is_(None),
-            StudentWellbeingAssessment.expires_at > datetime.now(),
+            StudentWellbeingAssessment.expires_at > china_now_naive(),
         ).all()
         urgent_after_approval = [item for item in [*post_approval_moods, *post_approval_chats] if _context_has_urgent_meaning(item.content or "")]
         urgent_after_approval.extend(post_approval_assessments)
@@ -622,7 +765,7 @@ def student_work_product(
         StudentWellbeingAssessment.created_at >= scoped_since,
         StudentWellbeingAssessment.created_at <= scoped_cutoff,
         StudentWellbeingAssessment.deleted_at.is_(None),
-        StudentWellbeingAssessment.expires_at > datetime.now(),
+        StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).order_by(StudentWellbeingAssessment.created_at.desc()).all()
     assessment_records = []
     for row in assessments:
@@ -719,7 +862,7 @@ def student_work_product(
     return {
         "case_id": product_id,
         "version": "teacher-work-product-v1",
-        "generated_at": datetime.now().isoformat(),
+        "generated_at": china_now_naive().isoformat(),
         "risk": risk,
         "access_basis": context["access_basis"],
         "request_id": context.get("request_id"),
@@ -846,7 +989,7 @@ async def generate_teacher_review_report(
     generation = report.get("generation") or {}
     if generation.get("external_transfer_attempted"):
         _audit(db, teacher, "external_ai_transfer_attempt", "teacher_review_report", snapshot.product_id, "succeeded" if generation.get("external_transfer_succeeded") else "failed_safe_degrade")
-    report_id = f"TR-{student_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
+    report_id = f"TR-{student_id}-{china_now_naive().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
     report["report_id"] = report_id
     serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
     row = TeacherReviewReport(
@@ -953,7 +1096,7 @@ def decide_teacher_review_report(
     stored_note = payload.note.strip()
     if payload.decision == "reviewed" and evidence_status == "partial":
         stored_note = f"[已确认证据缺口] {stored_note}"
-    reviewed_at = datetime.now()
+    reviewed_at = china_now_naive()
     updated = db.query(TeacherReviewReport).filter(
         TeacherReviewReport.id == row.id,
         TeacherReviewReport.status == "draft",
@@ -1022,7 +1165,7 @@ def download_teacher_review_report(
 @router.get("/students/{student_id}/profile")
 def student_profile(student_id: int, request_id: int | None = None, db: Session = Depends(get_db), teacher: User = Depends(require_teacher)):
     approved = _require_student_access(db, teacher, student_id, request_id)
-    cutoff = approved.reviewed_at if approved and approved.reviewed_at else datetime.now()
+    cutoff = approved.reviewed_at if approved and approved.reviewed_at else china_now_naive()
     since = cutoff - timedelta(days=30)
     moods = db.query(MoodRecord).filter(
         MoodRecord.user_id == student_id,
@@ -1066,7 +1209,13 @@ def generate_lesson(payload: LessonPlanInput, teacher: User = Depends(require_te
 
 @router.get("/accounts")
 def teacher_accounts(db: Session = Depends(get_db), admin: User = Depends(require_admin_teacher)):
-    users = db.query(User).order_by(User.id).all()
+    active_ids = _activity_student_ids(db)
+    users = [
+        user for user in db.query(User).order_by(User.id).all()
+        if int(user.is_admin or 0) > 0
+        or not str(user.username or "").lower().startswith(("guest_", "demo_"))
+        or user.id in active_ids
+    ]
     return {"accounts": [{"id": u.id, "username": u.username, "nickname": u.nickname, "is_admin": int(u.is_admin or 0) >= 1, "role": "admin_teacher" if int(u.is_admin or 0) >= 2 else "teacher" if int(u.is_admin or 0) == 1 else "student"} for u in users]}
 
 

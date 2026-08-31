@@ -1,13 +1,13 @@
 import sys
 import unittest
 from unittest.mock import AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import sleep
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -21,6 +21,7 @@ from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
 from config import settings
+from app_time import china_day_start_naive, china_now_naive
 from database import Base, get_db
 from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
@@ -287,6 +288,175 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         item = next(row for row in response.json()["students"] if row["id"] == self.student_id)
         self.assertNotIn("avg_mood_score", item)
+
+    def test_admin_roster_hides_only_inactive_ephemeral_accounts_and_counts_real_activity(self):
+        china_day_start = china_day_start_naive()
+        local_now = china_now_naive()
+        db = self.Session()
+        try:
+            hidden_guest = User(username="guest_empty", password_hash=get_password_hash("StudentPassword12"), nickname="新朋友", is_admin=0)
+            hidden_demo = User(username="demo_empty", password_hash=get_password_hash("StudentPassword12"), nickname="访客", is_admin=0)
+            active_guest = User(username="guest_active", password_hash=get_password_hash("StudentPassword12"), nickname="青禾", is_admin=0)
+            chat_guest = User(username="guest_chat_active", password_hash=get_password_hash("StudentPassword12"), nickname="听雨", is_admin=0)
+            assessment_guest = User(username="guest_assessment_active", password_hash=get_password_hash("StudentPassword12"), nickname="晨光", is_admin=0)
+            previous_day_guest = User(username="guest_previous_day", password_hash=get_password_hash("StudentPassword12"), nickname="晚风", is_admin=0)
+            expired_assessment_guest = User(username="guest_expired_assessment", password_hash=get_password_hash("StudentPassword12"), nickname="旧记录", is_admin=0)
+            db.add_all([
+                hidden_guest,
+                hidden_demo,
+                active_guest,
+                chat_guest,
+                assessment_guest,
+                previous_day_guest,
+                expired_assessment_guest,
+            ])
+            db.flush()
+            db.add(MoodRecord(user_id=active_guest.id, mood_score=6, mood_label="平静", content="今天完成了一次主动记录"))
+            db.add(ChatMessage(
+                user_id=chat_guest.id,
+                role="user",
+                content="今天只通过倾诉产生记录",
+                created_at=local_now,
+            ))
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-ROSTER-ACTIVE",
+                user_id=assessment_guest.id,
+                answers_json="{}",
+                result_json="{}",
+                created_at=local_now,
+                expires_at=local_now + timedelta(days=1),
+            ))
+            db.add(MoodRecord(
+                user_id=previous_day_guest.id,
+                mood_score=6,
+                mood_label="平静",
+                content="昨天产生的主动记录",
+                created_at=china_day_start - timedelta(minutes=1),
+            ))
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-ROSTER-EXPIRED",
+                user_id=expired_assessment_guest.id,
+                answers_json="{}",
+                result_json="{}",
+                created_at=local_now,
+                expires_at=local_now - timedelta(minutes=1),
+            ))
+            db.commit()
+            hidden_ids = {hidden_guest.id, hidden_demo.id, expired_assessment_guest.id}
+            active_ids = {active_guest.id, chat_guest.id, assessment_guest.id, previous_day_guest.id}
+        finally:
+            db.close()
+
+        roster = self.admin_client.get("/api/teacher/student-list")
+        self.assertEqual(roster.status_code, 200)
+        listed_ids = {item["id"] for item in roster.json()["students"]}
+        self.assertTrue(hidden_ids.isdisjoint(listed_ids))
+        self.assertTrue(active_ids.issubset(listed_ids))
+        self.assertIn(self.unassigned_student_id, listed_ids)
+
+        accounts = self.admin_client.get("/api/teacher/accounts")
+        self.assertEqual(accounts.status_code, 200)
+        account_ids = {item["id"] for item in accounts.json()["accounts"]}
+        self.assertTrue(hidden_ids.isdisjoint(account_ids))
+        self.assertTrue(active_ids.issubset(account_ids))
+
+        overview = self.admin_client.get("/api/teacher/class-overview")
+        self.assertEqual(overview.status_code, 200)
+        payload = overview.json()
+        self.assertEqual(payload["total_students"], 6)
+        self.assertEqual(payload["today_active"], 4)
+
+    def test_china_day_boundary_is_independent_of_host_timezone(self):
+        for utc_reference, expected_start in (
+            (datetime(2026, 8, 30, 16, 30, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),  # 北京 00:30
+            (datetime(2026, 8, 30, 23, 59, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),  # 北京 07:59
+            (datetime(2026, 8, 31, 0, 1, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),   # 北京 08:01
+            (datetime(2026, 8, 30, 15, 59, tzinfo=timezone.utc), datetime(2026, 8, 30, 0, 0)), # 北京前一日 23:59
+        ):
+            self.assertEqual(china_day_start_naive(utc_reference), expected_start)
+
+    def test_ephemeral_account_filter_uses_constant_query_count(self):
+        db = self.Session()
+        try:
+            password_hash = get_password_hash("StudentPassword12")
+            db.add_all([
+                User(
+                    username=f"guest_query_scale_{index}",
+                    password_hash=password_hash,
+                    nickname="新朋友",
+                    is_admin=0,
+                )
+                for index in range(100)
+            ])
+            db.add_all([
+                User(
+                    username=f"student_query_scale_{index}",
+                    password_hash=password_hash,
+                    nickname=f"学生{index}",
+                    is_admin=0,
+                )
+                for index in range(100)
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        statement_count = 0
+
+        def count_statement(*_args, **_kwargs):
+            nonlocal statement_count
+            statement_count += 1
+
+        event.listen(self.engine, "before_cursor_execute", count_statement)
+        try:
+            response = self.admin_client.get("/api/teacher/accounts")
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_statement)
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(statement_count, 10)
+
+        statement_count = 0
+        event.listen(self.engine, "before_cursor_execute", count_statement)
+        try:
+            overview = self.admin_client.get("/api/teacher/class-overview")
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_statement)
+        self.assertEqual(overview.status_code, 200)
+        self.assertLessEqual(statement_count, 20)
+
+        for endpoint in ("/api/teacher/student-list", "/api/teacher/warning-list"):
+            statement_count = 0
+            event.listen(self.engine, "before_cursor_execute", count_statement)
+            try:
+                scaled_response = self.admin_client.get(endpoint)
+            finally:
+                event.remove(self.engine, "before_cursor_execute", count_statement)
+            self.assertEqual(scaled_response.status_code, 200)
+            self.assertLessEqual(statement_count, 20, endpoint)
+
+    def test_regular_teacher_roster_keeps_assignment_scope_after_ephemeral_filtering(self):
+        db = self.Session()
+        try:
+            inactive = User(username="guest_assigned_empty", password_hash=get_password_hash("StudentPassword12"), nickname="新朋友", is_admin=0)
+            active = User(username="guest_assigned_chat", password_hash=get_password_hash("StudentPassword12"), nickname="听风", is_admin=0)
+            db.add_all([inactive, active])
+            db.flush()
+            db.add_all([
+                TeacherStudentAssignment(teacher_user_id=self.teacher_id, student_user_id=inactive.id, assigned_by_user_id=self.admin_id, active=1),
+                TeacherStudentAssignment(teacher_user_id=self.teacher_id, student_user_id=active.id, assigned_by_user_id=self.admin_id, active=1),
+                ChatMessage(user_id=active.id, role="user", content="由倾诉产生的有效记录"),
+            ])
+            db.commit()
+            inactive_id, active_id = inactive.id, active.id
+        finally:
+            db.close()
+
+        response = self.teacher_client.get("/api/teacher/student-list")
+        self.assertEqual(response.status_code, 200)
+        listed_ids = {item["id"] for item in response.json()["students"]}
+        self.assertNotIn(inactive_id, listed_ids)
+        self.assertIn(active_id, listed_ids)
+        self.assertNotIn(self.unassigned_student_id, listed_ids)
 
     def test_work_product_is_audited_traceable_and_requires_same_access(self):
         self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/work-product").status_code, 403)

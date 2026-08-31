@@ -75,6 +75,36 @@ def _migrate_student_support_runs(target_engine):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_student_support_runs_input_message_id ON student_support_runs (input_message_id)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_student_support_runs_expires_at ON student_support_runs (expires_at)"))
 
+
+def _migrate_assessment_created_at_to_china_time(target_engine):
+    """将旧版 SQLite CURRENT_TIMESTAMP 生成的 UTC 自评时间一次性转为北京时间。"""
+    inspector = inspect(target_engine)
+    if "student_wellbeing_assessments" not in inspector.get_table_names():
+        return
+    migration_key = "alpha29_assessment_created_at_china_time"
+    with target_engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS app_data_migrations (
+                migration_key VARCHAR(120) NOT NULL PRIMARY KEY,
+                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        applied = connection.execute(
+            text("SELECT 1 FROM app_data_migrations WHERE migration_key = :key"),
+            {"key": migration_key},
+        ).first()
+        if applied:
+            return
+        connection.execute(text("""
+            UPDATE student_wellbeing_assessments
+            SET created_at = datetime(created_at, '+8 hours')
+            WHERE created_at IS NOT NULL
+        """))
+        connection.execute(
+            text("INSERT INTO app_data_migrations (migration_key) VALUES (:key)"),
+            {"key": migration_key},
+        )
+
 def get_db():
     db = SessionLocal()
     try:
@@ -89,6 +119,7 @@ def init_db():
     if DATABASE_URL.startswith("sqlite"):
         _migrate_legacy_sensitive_access_logs(engine)
         _migrate_student_support_runs(engine)
+        _migrate_assessment_created_at_to_china_time(engine)
         inspector = inspect(engine)
         columns = {item["name"] for item in inspector.get_columns("student_case_access_requests")}
         if "expires_at" not in columns:

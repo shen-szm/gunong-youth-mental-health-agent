@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from database import get_db
 from models import ChatMessage, MoodRecord, StudentConversationSummary, User
 from auth import ensure_user_scope, get_current_user
+from app_time import china_day_start_naive, china_now_naive
 from config import settings
 
 router = APIRouter(prefix="/api/mood", tags=["mood"])
@@ -45,7 +46,7 @@ async def record_activity_reflection(data: ActivityReflectionInput,
     if data.note.strip():
         content += f"：{data.note.strip()}"
     row = MoodRecord(user_id=current_user.id, mood_label=label, mood_score=score,
-                     content=content, input_type="activity", created_at=datetime.now())
+                     content=content, input_type="activity", created_at=china_now_naive())
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -57,7 +58,7 @@ async def get_emotion_report(days: int = 30, db: Session = Depends(get_db),
                              current_user: User = Depends(get_current_user)):
     """汇总学生主动记录、受约束对话识别和倾诉小结，不输出诊断或虚假精度。"""
     days = min(max(days, 7), 30)
-    since = datetime.now() - timedelta(days=days)
+    since = china_now_naive() - timedelta(days=days)
     moods = db.query(MoodRecord).filter(
         MoodRecord.user_id == current_user.id, MoodRecord.created_at >= since
     ).order_by(MoodRecord.created_at.asc()).all()
@@ -111,7 +112,7 @@ async def get_emotion_report(days: int = 30, db: Session = Depends(get_db),
         next_steps = ["记录此刻最接近的感受，也可以选择暂不确定"]
     return {
         "period_days": days,
-        "generated_at": datetime.now().isoformat(),
+        "generated_at": china_now_naive().isoformat(),
         "sources": {
             "self_records": len(moods),
             "conversation_signals": len([row for row in chats if row.emotion]),
@@ -136,7 +137,7 @@ async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), curr
         mood_label=data.label,
         mood_score=data.score,
         content=data.content,
-        created_at=datetime.now(),
+        created_at=china_now_naive(),
     )
     db.add(record)
     db.commit()
@@ -148,7 +149,7 @@ async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), curr
 async def get_today_mood(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ensure_user_scope(user_id, current_user)
     """获取今日情绪记录"""
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = china_day_start_naive()
     record = db.query(MoodRecord).filter(
         MoodRecord.user_id == user_id,
         MoodRecord.created_at >= today_start
@@ -163,7 +164,7 @@ async def get_today_mood(user_id: int, db: Session = Depends(get_db), current_us
 async def get_mood_list(user_id: int, days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ensure_user_scope(user_id, current_user)
     """获取情绪记录列表"""
-    since = datetime.now() - timedelta(days=days)
+    since = china_now_naive() - timedelta(days=days)
     records = db.query(MoodRecord).filter(
         MoodRecord.user_id == user_id,
         MoodRecord.created_at >= since
@@ -182,7 +183,7 @@ async def get_mood_list(user_id: int, days: int = 30, db: Session = Depends(get_
 async def get_mood_stats(user_id: int, days: int = 7, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ensure_user_scope(user_id, current_user)
     """获取情绪统计数据"""
-    since = datetime.now() - timedelta(days=days)
+    since = china_now_naive() - timedelta(days=days)
     records = db.query(MoodRecord).filter(
         MoodRecord.user_id == user_id,
         MoodRecord.created_at >= since
@@ -216,7 +217,7 @@ async def get_ai_insight(user_id: int, db: Session = Depends(get_db), current_us
     """生成基于主动标签的描述性洞察，不把自由文本未经同意发送给外部模型。"""
 
     # 获取最近7天情绪记录
-    since = datetime.now() - timedelta(days=7)
+    since = china_now_naive() - timedelta(days=7)
     records = db.query(MoodRecord).filter(
         MoodRecord.user_id == user_id,
         MoodRecord.created_at >= since

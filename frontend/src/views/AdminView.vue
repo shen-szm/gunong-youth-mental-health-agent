@@ -200,10 +200,10 @@
         <section v-if="tab === 'warnings'" class="panel warning-panel" data-guide="warning-list">
           <div class="panel-title">
             <div>
-              <h3>情绪预警</h3>
-              <p>按风险等级和更新时间排序，建议先处理高风险与未处理记录。</p>
+              <h3>支持提醒</h3>
+              <p>按行动优先级和更新时间排序，先核实明确安全信号与尚未跟进的记录。这里是规则分流，不是诊断或概率。</p>
             </div>
-            <button class="ghost-btn" @click="loadWarnings">刷新预警</button>
+            <button class="ghost-btn" @click="loadWarnings">刷新提醒</button>
           </div>
 
           <div class="split-layout">
@@ -221,15 +221,15 @@
                 </span>
                 <em>{{ riskText(item.risk_level) }}</em>
               </button>
-              <p v-if="!filteredWarnings.length" class="empty-state">当前筛选下暂无预警。</p>
+              <p v-if="!filteredWarnings.length" class="empty-state">当前筛选下暂无支持提醒。</p>
             </div>
 
-            <aside class="detail-card" data-guide="warning-detail"><span class="section-kicker">预警详情</span>
+            <aside class="detail-card" data-guide="warning-detail"><span class="section-kicker">提醒详情</span>
               <template v-if="selectedWarning">
                 <div class="detail-head">
                   <div>
                     <span class="status-pill">{{ riskText(selectedWarning.risk_level) }}</span>
-                    <h4>{{ cleanDisplayName(selectedWarning.student_name || selectedWarning.nickname || '学生预警') }}</h4>
+                    <h4>{{ cleanDisplayName(selectedWarning.student_name || selectedWarning.nickname || '学生支持提醒') }}</h4>
                   </div>
                   <small>{{ selectedWarning.created_at?.slice?.(0, 16) || '刚刚更新' }}</small>
                 </div>
@@ -247,7 +247,7 @@
                   <button class="ghost-btn" @click="openStudentFromWarning">进入学生记录</button>
                 </div>
               </template>
-              <div v-else class="empty-state tall">点击左侧任意预警，查看详情与处理建议。</div>
+              <div v-else class="empty-state tall">点击左侧任意提醒，查看详情与处理建议。</div>
             </aside>
           </div>
         </section>
@@ -466,7 +466,7 @@ const lessonForm = ref({ template: '', topic: '考前减压与情绪调节', con
 const teacherNavItems = [
   { id: 'today', label: '今日工作台', icon: '⌂', group: '工作' },
   { id: 'cases', label: '支持工单', icon: '▣', group: '工作' },
-  { id: 'warnings', label: '情绪预警', icon: '!', group: '工作' },
+  { id: 'warnings', label: '支持提醒', icon: '!', group: '工作' },
   { id: 'students', label: '学生记录', icon: '◎', group: '工作', adminOnly: true },
   { id: 'lesson', label: 'AI 班会', icon: '◇', group: '工具' },
   { id: 'approvals', label: '权限审批', icon: '✓', group: '管理', adminOnly: true },
@@ -542,7 +542,7 @@ function normalizeObject(payload, fallback = {}) {
 }
 
 function cleanDisplayName(value) {
-  return String(value || '').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '未命名'
+  return String(value || '').trim() || '未命名'
 }
 
 function studentName(student) {
@@ -995,7 +995,13 @@ function getMoodColor(label) {
 }
 
 function riskText(level = 'low') {
-  return { high: '高风险', middle: '中风险', medium: '中风险', low: '低风险', handled: '已处理' }[level] || '待关注'
+  return {
+    high: '建议尽快核实',
+    middle: '建议持续关注',
+    medium: '建议持续关注',
+    low: '常规关怀',
+    handled: '已完成跟进',
+  }[level] || '待核实'
 }
 
 onMounted(() => {

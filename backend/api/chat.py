@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from auth import ensure_user_scope, get_current_user
+from app_time import china_now_naive
 from config import settings
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning, generated_content_violations
@@ -266,7 +267,7 @@ def _replay_chat_run(db: Session, run: StudentSupportRun, fingerprint: str) -> C
 def _new_session(db: Session, user_id: int, continued_from_id: int | None = None,
                  consent_version: str | None = None) -> StudentChatSession:
     row = StudentChatSession(
-        session_code=f"SC-{datetime.now():%Y%m%d}-{secrets.token_hex(4).upper()}",
+        session_code=f"SC-{china_now_naive():%Y%m%d}-{secrets.token_hex(4).upper()}",
         user_id=user_id, continued_from_session_id=continued_from_id,
         external_ai_consent_version=consent_version,
         status="active", risk_level="routine")
@@ -370,7 +371,7 @@ def create_safety_handoff(payload: SafetyHandoffRequest, db: Session = Depends(g
         active.status = "abandoned"
         active.ended_at = datetime.utcnow()
     row = StudentChatSession(
-        session_code=f"SC-{datetime.now():%Y%m%d}-{secrets.token_hex(4).upper()}",
+        session_code=f"SC-{china_now_naive():%Y%m%d}-{secrets.token_hex(4).upper()}",
         user_id=current_user.id,
         status="urgent",
         risk_level="urgent",
@@ -414,7 +415,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
     if message_count >= MAX_SESSION_USER_MESSAGES:
         raise HTTPException(status_code=429, detail="本次倾诉内容较多，请先结束并整理后再继续")
     user_message = ChatMessage(user_id=current_user.id, session_id=session.id, role="user",
-                               content=req.message, created_at=datetime.now())
+                               content=req.message, created_at=china_now_naive())
     db.add(user_message)
     db.flush()
 
@@ -449,7 +450,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
         session.risk_level = "urgent"
         session.status = "urgent"
         assistant_message = ChatMessage(user_id=current_user.id, session_id=session.id, role="assistant",
-                           content=reply, emotion="需要立即协助", created_at=datetime.now())
+                           content=reply, emotion="需要立即协助", created_at=china_now_naive())
         db.add(assistant_message)
         db.flush()
         try:
@@ -528,7 +529,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
             db.commit()
     user_message.emotion = emotion
     assistant_message = ChatMessage(user_id=current_user.id, session_id=session.id, role="assistant",
-                       content=reply, emotion=emotion, created_at=datetime.now())
+                       content=reply, emotion=emotion, created_at=china_now_naive())
     db.add(assistant_message)
     db.flush()
     conversation_signal = "end_candidate" if _detect_end_candidate(req.message) else "continue"
