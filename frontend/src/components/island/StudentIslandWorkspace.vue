@@ -84,8 +84,8 @@
 
         <div v-if="loading" class="island-loading" role="status">
           <span aria-hidden="true"></span>
-          <strong>正在铺开心岛</strong>
-          <small>地图、咕团与光景正在准备</small>
+          <strong>正在铺开心岛 · {{ loadProgress }}%</strong>
+          <small>{{ liveStatus }}</small>
         </div>
         <div v-else-if="loadError" class="island-error" role="alert">
           <strong>心岛暂时没有展开</strong>
@@ -191,6 +191,7 @@ const gameHost = ref(null)
 const gameSurface = ref(null)
 const urgentSupport = ref(null)
 const loading = ref(true)
+const loadProgress = ref(5)
 const loadError = ref(false)
 const agentPhase = ref('ready')
 const agentText = ref('正在听懂你想去的方向')
@@ -270,6 +271,7 @@ let gameGeneration = 0
 let startingPromise = null
 let phaseTimer = null
 let commandPollTimer = null
+let gameStartTimeout = null
 let agentTriggered = false
 let movementSource = 'none'
 let arrivalCooldown = false
@@ -294,6 +296,9 @@ function bindBridge(activeBridge, generation, scope) {
   disposers = [
     activeBridge.on('ready', event => {
       if (!isCurrentGeneration(generation, scope)) return
+      if (gameStartTimeout) window.clearTimeout(gameStartTimeout)
+      gameStartTimeout = null
+      loadProgress.value = 100
       loading.value = false
       const restoredPlace = places.find(place => place.id === event.place)?.label || '星灯小径'
       timePhase.value = event.timePhase || timePhase.value
@@ -303,6 +308,11 @@ function bindBridge(activeBridge, generation, scope) {
           gameSurface.value?.focus({ preventScroll: true })
         }
       })
+    }),
+    activeBridge.on('loading', event => {
+      if (!isCurrentGeneration(generation, scope)) return
+      loadProgress.value = Math.max(loadProgress.value, Number(event.progress) || 5)
+      liveStatus.value = event.text || '正在准备心岛资源。'
     }),
     activeBridge.on('agent', event => {
       if (!isCurrentGeneration(generation, scope)) return
@@ -355,19 +365,31 @@ async function startGame() {
   const scope = normalizeScope(props.storageScope)
   const activeBridge = bridge
   loading.value = true
+  loadProgress.value = 5
   loadError.value = false
+  liveStatus.value = '正在加载心岛运行组件。'
+  if (gameStartTimeout) window.clearTimeout(gameStartTimeout)
+  gameStartTimeout = window.setTimeout(() => {
+    if (!isCurrentGeneration(generation, scope) || !loading.value) return
+    loading.value = false
+    loadError.value = true
+    liveStatus.value = '网络加载时间过长，可以重试；已经下载的资源会继续保留在浏览器缓存中。'
+    game?.destroy(true)
+    game = null
+  }, 15_000)
   bindBridge(activeBridge, generation, scope)
   const promise = (async () => {
     try {
       const { createIslandGame } = await import('../../game/island/createIslandGame.js')
-      if (!isCurrentGeneration(generation, scope) || !gameHost.value) return
+      loadProgress.value = Math.max(loadProgress.value, 18)
+      if (!isCurrentGeneration(generation, scope) || !gameHost.value || !loading.value) return
       const createdGame = await createIslandGame({
         parent: gameHost.value,
         bridge: activeBridge,
         initialState: currentState.value,
         reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       })
-      if (!isCurrentGeneration(generation, scope) || activeBridge !== bridge) {
+      if (!isCurrentGeneration(generation, scope) || activeBridge !== bridge || !loading.value) {
         createdGame?.destroy(true)
         return
       }
@@ -375,6 +397,8 @@ async function startGame() {
     } catch (error) {
       if (!isCurrentGeneration(generation, scope)) return
       console.error('Heart Island failed to start', error)
+      if (gameStartTimeout) window.clearTimeout(gameStartTimeout)
+      gameStartTimeout = null
       loading.value = false
       loadError.value = true
       liveStatus.value = '心岛加载失败，可以重试或先返回房间。'
@@ -696,6 +720,8 @@ watch(() => props.storageScope, async (nextScope, previousScope) => {
   if (String(nextScope || '') === String(previousScope || '')) return
   gameGeneration += 1
   startingPromise = null
+  if (gameStartTimeout) window.clearTimeout(gameStartTimeout)
+  gameStartTimeout = null
   stopMoving()
   disposers.forEach(dispose => dispose())
   disposers = []
@@ -718,6 +744,7 @@ watch(() => props.storageScope, async (nextScope, previousScope) => {
   storageError.value = false
   timePhase.value = currentState.value.timePhase
   loading.value = true
+  loadProgress.value = 5
   loadError.value = false
   liveStatus.value = '学生身份已切换，正在重新铺开心岛。'
   await nextTick()
@@ -755,6 +782,8 @@ onBeforeUnmount(() => {
   phaseTimer = null
   if (commandPollTimer) clearInterval(commandPollTimer)
   commandPollTimer = null
+  if (gameStartTimeout) window.clearTimeout(gameStartTimeout)
+  gameStartTimeout = null
   disposers.forEach(dispose => dispose())
   disposers = []
   game?.destroy(true)

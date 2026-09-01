@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import test from 'node:test'
 
 const roomUrl = new URL('../src/views/RoomHomeView.vue', import.meta.url)
@@ -9,6 +9,7 @@ const gameUrl = new URL('../src/game/island/createIslandGame.js', import.meta.ur
 const stateUrl = new URL('../src/game/island/islandState.js', import.meta.url)
 const navigationUrl = new URL('../src/game/island/islandNavigation.js', import.meta.url)
 const packageUrl = new URL('../package.json', import.meta.url)
+const publicImagesUrl = new URL('../public/images/', import.meta.url)
 
 test('heart island is lazy loaded and Phaser is not imported by the student room', async () => {
   const [room, workspace, state, pkgText] = await Promise.all([
@@ -27,6 +28,11 @@ test('heart island is lazy loaded and Phaser is not imported by the student room
   assert.match(workspace, /aria-modal="true"/)
   assert.match(workspace, /aria-hidden="true"/)
   assert.match(workspace, /role="status"/)
+  assert.match(workspace, /loadProgress/)
+  assert.match(workspace, /activeBridge\.on\('loading'/)
+  assert.match(workspace, /gameStartTimeout/)
+  assert.match(workspace, /15_000/)
+  assert.match(workspace, /网络加载时间过长，可以重试/)
   assert.doesNotMatch(workspace, /经典休闲角/)
   assert.match(workspace, /心岛光景随本地时间自动变化/)
   assert.match(workspace, /schedulePhaseSync/)
@@ -70,8 +76,10 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.match(game, /this\.input\.on\('pointerdown'/)
   assert.doesNotMatch(game, /createCursorKeys|addKeys\('W,A,S,D'\)/)
   assert.match(game, /Phaser\.Scale\.FIT/)
-  assert.match(game, /heart-island-base\.png/)
-  assert.match(game, /guguan-idle\.png/)
+  assert.match(game, /heart-island-base\.webp/)
+  assert.match(game, /guguan-idle\.webp/)
+  assert.match(game, /student-back\.webp/)
+  assert.match(game, /this\.load\.on\('progress'/)
   assert.match(game, /PHASE_LIGHTING/)
   assert.match(game, /findIslandPath/)
   assert.match(game, /resolveIslandMovement/)
@@ -100,6 +108,21 @@ test('island provides real movement, destinations and non-diagnostic agent bound
   assert.match(petHome, /source: 'pet_talk_offline'/)
   assert.match(workspace, /aria-label="心岛地图控制区"/)
   assert.doesNotMatch(workspace + game, /抑郁评分|焦虑评分|量表分数|心理概率/)
+})
+
+test('heart island and room critical images stay within the performance budget', async () => {
+  const budgets = new Map([
+    ['island/heart-island-base.webp', 250_000],
+    ['island/student-back.webp', 20_000],
+    ['guguan/guguan-idle.webp', 50_000],
+    ['电脑端-白天.webp', 250_000],
+    ['电脑端-傍晚.webp', 250_000],
+    ['电脑端-夜晚.webp', 250_000],
+  ])
+  for (const [asset, budget] of budgets) {
+    const metadata = await stat(new URL(asset, publicImagesUrl))
+    assert.ok(metadata.size < budget, `${asset} is ${metadata.size} bytes and exceeds ${budget}`)
+  }
 })
 
 test('legacy room panels retain focusable dialog boundaries', async () => {

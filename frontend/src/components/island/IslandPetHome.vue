@@ -97,10 +97,10 @@ const bgImage = computed(() => ({
 }[currentPhase.value] || homeDay))
 
 const petImage = computed(() => {
-  if (eating.value) return '/images/guguan/guguan-eating.png'
-  if (petMood.value === 'happy') return '/images/guguan/guguan-happy.png'
-  if (petMood.value === 'sleepy') return '/images/guguan/guguan-sleeping.png'
-  return '/images/guguan/guguan-idle.png'
+  if (eating.value) return '/images/guguan/guguan-eating.webp'
+  if (petMood.value === 'happy') return '/images/guguan/guguan-happy.webp'
+  if (petMood.value === 'sleepy') return '/images/guguan/guguan-sleeping.webp'
+  return '/images/guguan/guguan-idle.webp'
 })
 
 const moodLabel = computed(() => ({

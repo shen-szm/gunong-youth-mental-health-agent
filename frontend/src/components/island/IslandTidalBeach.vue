@@ -108,10 +108,10 @@ let targetPos = null
 
 const petImage = computed(() => {
   const map = {
-    idle: '/images/guguan/guguan-idle.png',
-    happy: '/images/guguan/guguan-happy.png',
-    eating: '/images/guguan/guguan-eating.png',
-    sleeping: '/images/guguan/guguan-sleeping.png',
+    idle: '/images/guguan/guguan-idle.webp',
+    happy: '/images/guguan/guguan-happy.webp',
+    eating: '/images/guguan/guguan-eating.webp',
+    sleeping: '/images/guguan/guguan-sleeping.webp',
   }
   return map[petMood.value] || map.idle
 })

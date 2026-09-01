@@ -29,8 +29,8 @@ test('summary orb exposes complete, restore, delete and accessible states', () =
   assert.match(room, /prefers-reduced-motion: reduce/)
   assert.match(api, /completeChatSession/)
   assert.match(api, /latest-summary/)
-  assert.match(room, /return '\/images\/白天\.png'/)
-  assert.match(room, /return '\/images\/夜晚\.png'/)
+  assert.match(room, /return '\/images\/白天\.webp'/)
+  assert.match(room, /return '\/images\/夜晚\.webp'/)
   assert.doesNotMatch(room, /手机版-(?:白天|傍晚|夜晚)\.jpg/)
 })
 

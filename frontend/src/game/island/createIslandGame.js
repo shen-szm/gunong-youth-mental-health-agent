@@ -24,9 +24,14 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     }
 
     preload() {
-      this.load.image('heart-island-base', '/images/island/heart-island-base.png')
-      this.load.image('guguan-companion', '/images/guguan/guguan-idle.png')
-      this.load.image('island-student-back', '/images/island/student-back.png')
+      this.load.on('progress', value => bridge.emit('loading', {
+        progress: 20 + Math.round(value * 75),
+        text: value < 0.55 ? '正在加载心岛地图' : '正在准备咕团与角色',
+      }))
+      this.load.once('complete', () => bridge.emit('loading', { progress: 96, text: '正在点亮心岛' }))
+      this.load.image('heart-island-base', '/images/island/heart-island-base.webp')
+      this.load.image('guguan-companion', '/images/guguan/guguan-idle.webp')
+      this.load.image('island-student-back', '/images/island/student-back.webp')
     }
 
     create() {

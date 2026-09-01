@@ -2040,10 +2040,10 @@ const petCompanionState = reactive(loadPetCompanionState())
 const showPetCompanionPanel = ref(false)
 const petPanelRoot = ref(null)
 const GUGUAN_ASSETS = Object.freeze({
-  idle: '/images/guguan/guguan-idle.png',
-  happy: '/images/guguan/guguan-happy.png',
-  eating: '/images/guguan/guguan-eating.png',
-  sleeping: '/images/guguan/guguan-sleeping.png',
+  idle: '/images/guguan/guguan-idle.webp',
+  happy: '/images/guguan/guguan-happy.webp',
+  eating: '/images/guguan/guguan-eating.webp',
+  sleeping: '/images/guguan/guguan-sleeping.webp',
 })
 const petVisualState = ref('idle')
 const petHideAndSeekActive = ref(false)
@@ -3831,12 +3831,12 @@ function onResize() { isDesktop.value = window.innerWidth >= 768 }
 // ─── 昼夜背景图 ───
 const bgImage = computed(() => {
   if (isDesktop.value) {
-    if (timeOfDay.value === 'day') return '/images/电脑端-白天.jpg'
-    if (timeOfDay.value === 'evening') return '/images/电脑端-傍晚.jpg'
-    return '/images/电脑端-夜晚.jpg'
+    if (timeOfDay.value === 'day') return '/images/电脑端-白天.webp'
+    if (timeOfDay.value === 'evening') return '/images/电脑端-傍晚.webp'
+    return '/images/电脑端-夜晚.webp'
   }
-  if (timeOfDay.value === 'day') return '/images/白天.png'
-  return '/images/夜晚.png'
+  if (timeOfDay.value === 'day') return '/images/白天.webp'
+  return '/images/夜晚.webp'
 })
 
 const greeting = computed(() => {

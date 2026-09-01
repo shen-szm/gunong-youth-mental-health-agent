@@ -6,9 +6,14 @@ $FrontendDir = Join-Path $PSScriptRoot "frontend"
 $ReleaseStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $RemoteNext = "/opt/shengyu/frontend/dist-next-$ReleaseStamp"
 $RemoteBackup = "/opt/shengyu/backups/frontend-dist-$ReleaseStamp"
+$RemoteNginxBackup = "/opt/shengyu/backups/nginx-shengyu-performance-$ReleaseStamp.conf"
+$NginxPerformance = Join-Path $PSScriptRoot "deploy\nginx-shengyu-performance.conf"
 
 if (-not (Test-Path -LiteralPath $FrontendDir)) {
   throw "Frontend directory not found: $FrontendDir"
+}
+if (-not (Test-Path -LiteralPath $NginxPerformance)) {
+  throw "Nginx performance config not found: $NginxPerformance"
 }
 
 Push-Location $FrontendDir
@@ -24,7 +29,8 @@ try {
 
   ssh $Server "mkdir -p '$RemoteNext'"
   scp -r ".\dist\*" "${Server}:$RemoteNext/"
-  ssh $Server "test -f '$RemoteNext/index.html' && sudo mkdir -p /opt/shengyu/backups && if [ -d '$RemoteDist' ]; then sudo mv '$RemoteDist' '$RemoteBackup'; fi && sudo mv '$RemoteNext' '$RemoteDist' && sudo nginx -t && sudo systemctl reload nginx"
+  scp $NginxPerformance "${Server}:/tmp/nginx-shengyu-performance.conf"
+  ssh $Server "test -f '$RemoteNext/index.html' && sudo mkdir -p /opt/shengyu/backups && if [ -f /etc/nginx/conf.d/shengyu-performance.conf ]; then sudo cp /etc/nginx/conf.d/shengyu-performance.conf '$RemoteNginxBackup'; fi && sudo install -m 0644 /tmp/nginx-shengyu-performance.conf /etc/nginx/conf.d/shengyu-performance.conf && sudo nginx -t && if [ -d '$RemoteDist' ]; then sudo mv '$RemoteDist' '$RemoteBackup'; fi && sudo mv '$RemoteNext' '$RemoteDist' && sudo systemctl reload nginx"
 
   Write-Host "Frontend deployed to ${Server}:$RemoteDist"
   Write-Host "Previous frontend backup: $RemoteBackup"
