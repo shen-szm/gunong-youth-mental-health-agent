@@ -18,6 +18,7 @@ from api.companion import (
     router as companion_router,
 )
 from api.chat import router as chat_router
+from api.island import router as island_router
 from api.user import router as user_router
 from database import Base, get_db
 from models import CompanionSafetyState, SensitiveAccessLog, StudentChatSession
@@ -34,6 +35,7 @@ class PetCompanionApiTests(unittest.TestCase):
         app.include_router(user_router)
         app.include_router(companion_router)
         app.include_router(chat_router)
+        app.include_router(island_router)
 
         def override_db():
             db = self.Session()
@@ -78,6 +80,18 @@ class PetCompanionApiTests(unittest.TestCase):
             rendered = " ".join(f"{row.action} {row.resource_id} {row.result}" for row in rows)
             self.assertNotIn("吞", rendered)
             self.assertNotIn("楼顶", rendered)
+
+    def test_island_pet_talk_propagates_urgent_safety_result(self):
+        response = self.client.post(
+            "/api/island/pet/interact",
+            json={"action": "talk", "message": "我想死"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["risk_level"], "urgent")
+        self.assertEqual(payload["mode"], "urgent")
+        self.assertTrue(payload["handoff_required"])
+        self.assertIn("110", payload["reply"])
 
     def test_family_harm_uses_safeguarding_route(self):
         payload = self.client.post(

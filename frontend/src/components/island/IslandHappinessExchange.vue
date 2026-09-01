@@ -152,5 +152,40 @@ function clearAll() {
 .activity-status { min-height: 20px; margin: 0; color: #f5d9bd; font-size: 13px; }
 .storage-warning { margin: 0; padding: 10px 12px; border: 1px solid #e7a087; border-radius: 11px; color: #fff0e5; background: #743b35; font-size: 12px; line-height: 1.5; }
 button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
+@media (min-width: 901px) {
+  .happiness-exchange button:focus-visible, .happiness-exchange textarea:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .happiness-game { max-width: 1120px; margin: 0 auto; gap: 18px; color: var(--island-ink, #fff8ea); }
+  .activity-copy { align-items: end; }
+  .activity-copy small { color: var(--island-accent, #efb96f); font-size: 11px; letter-spacing: 0; }
+  .activity-copy h3 { margin-top: 5px; font-size: 22px; letter-spacing: -.02em; text-wrap: balance; }
+  .activity-copy p { margin-top: 6px; color: var(--island-muted, #d9c9b5); font-size: 13px; }
+  .activity-copy dl { gap: 20px; padding-bottom: 2px; }
+  .activity-copy dl div { min-width: 72px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .activity-copy dt { color: var(--island-muted, #d9c9b5); }
+  .activity-copy dd { color: var(--island-accent, #efb96f); font-size: 20px; }
+  .exchange-layout { grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); gap: 24px; }
+  .exchange-form { padding: 20px; border: 0; border-radius: 14px; background: rgba(255,255,255,.05); }
+  .exchange-form label { font-size: 14px; }
+  .exchange-form textarea { min-height: 150px; padding: 14px; border: 0; border-radius: 10px; color: #30251e; background: #f5e3c6; box-shadow: inset 0 0 0 1px rgba(72,48,33,.18); }
+  .exchange-form textarea:focus { box-shadow: inset 0 0 0 2px var(--island-accent-strong, #d9914f); }
+  .privacy-copy { color: var(--island-muted, #d9c9b5); }
+  .exchange-form > button { min-height: 46px; border-radius: 9px; color: #2d241c; background: var(--island-accent, #efb96f); transition: background .18s ease, transform .18s ease; }
+  .exchange-form > button:hover:not(:disabled) { background: #f3c789; }
+  .exchange-form > button:active:not(:disabled) { transform: scale(.99); }
+  .card-stage { padding: 20px 34px; border: 0; border-radius: 14px; background: rgba(255,255,255,.035); }
+  .card-stage :deep(.swiper) { width: min(100%, 350px); height: 210px; }
+  .card-stage :deep(.swiper-slide) { border-radius: 12px; }
+  .happiness-card, .empty-card { padding: 25px; border: 0; border-radius: 12px; color: #30251e; background: #f2c982; box-shadow: 0 6px 8px rgba(20,14,12,.2); }
+  .happiness-card p { font-size: 17px; }
+  .empty-card { color: var(--island-muted, #d9c9b5); background: rgba(255,255,255,.06); box-shadow: none; }
+  .empty-card > span { border: 0; border-radius: 9px; color: #30251e; background: var(--island-accent, #efb96f); }
+  .system-card-note { color: rgba(255,248,234,.58); }
+  .happiness-book { padding-top: 16px; border-top-color: rgba(255,248,234,.1); }
+  .happiness-book header small { color: var(--island-muted, #d9c9b5); }
+  .happiness-book header button, .happiness-book li button { color: #efc389; }
+  .happiness-book ul { gap: 8px; }
+  .happiness-book li { border-radius: 9px; background: rgba(255,255,255,.05); }
+  .happiness-safety, .storage-warning { border: 0; border-radius: 10px; background: #653b34; }
+}
 @media (max-width: 900px) { .activity-copy dl { display: none; } .exchange-layout { grid-template-columns: 1fr; } .happiness-book ul { grid-template-columns: 1fr; } }
 </style>

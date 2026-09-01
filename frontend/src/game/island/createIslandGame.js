@@ -88,11 +88,11 @@ export async function createIslandGame({ parent, bridge, initialState, reducedMo
     createPlaces() {
       this.placeMarkers = new Map()
       for (const place of ISLAND_PLACES) {
-        const marker = this.add.circle(place.x, place.y, 19, 0xf2cf83, 0.12).setDepth(5)
-        marker.setStrokeStyle(2, 0xffdf98, 0.82)
-        const label = this.add.text(place.x, place.y + 27, place.label, {
-          fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '13px', color: '#fff8e8',
-          backgroundColor: '#6b3f36dd', padding: { x: 8, y: 5 },
+        const marker = this.add.circle(place.x, place.y, 16, 0xefb96f, 0.1).setDepth(5)
+        marker.setStrokeStyle(2, 0xf4cf98, 0.72)
+        const label = this.add.text(place.x, place.y + 24, place.label, {
+          fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '11px', color: '#fff8ea',
+          backgroundColor: '#18201fdd', padding: { x: 7, y: 4 },
         }).setOrigin(0.5).setDepth(6)
         this.placeMarkers.set(place.id, { marker, label })
       }

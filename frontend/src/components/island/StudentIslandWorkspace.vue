@@ -10,10 +10,10 @@
     @pointerdown.stop
     @keydown="handleDialogKeydown"
   >
-    <header class="island-header">
+    <header class="island-header" :inert="Boolean(activeActivity || safetyLocked)" :aria-hidden="activeActivity || safetyLocked ? 'true' : undefined">
       <div class="island-brand">
-        <small>咕哝 · 心岛</small>
-        <h2 id="island-title">走进一座会陪你生活、游戏和交换微光的小岛</h2>
+        <small>咕哝心岛</small>
+        <h2 id="island-title">今天想在岛上做什么？</h2>
       </div>
 
       <div class="island-phase-status" role="status" aria-live="polite" aria-label="心岛光景随本地时间自动变化">
@@ -32,6 +32,8 @@
       <div
         ref="gameSurface"
         class="island-game-surface"
+        :inert="Boolean(activeActivity || safetyLocked)"
+        :aria-hidden="activeActivity || safetyLocked ? 'true' : undefined"
         tabindex="0"
         aria-label="心岛地图控制区"
         aria-describedby="island-instructions island-live-status"
@@ -51,8 +53,8 @@
         <aside :class="['island-agent-rail', { 'is-expanded': agentExpanded }]" aria-label="心岛陪伴 Agent 工作进度">
           <button type="button" class="agent-rail-toggle" :aria-expanded="agentExpanded" aria-controls="island-agent-rail-body" @click.stop="agentExpanded = !agentExpanded">
             <span :class="['agent-state-dot', `is-${agentPhase}`]" aria-hidden="true"></span>
-            <strong>心岛陪伴 Agent</strong>
-            <small>{{ agentExpanded ? '收起' : '进度' }}</small>
+            <span class="agent-rail-copy"><strong>心岛陪伴 Agent</strong><span>{{ agentText }}</span></span>
+            <small>{{ agentExpanded ? '收起' : '查看' }}</small>
           </button>
           <p class="sr-only" role="status" aria-live="polite">{{ agentText }}</p>
           <div id="island-agent-rail-body" class="agent-rail-body">
@@ -68,7 +70,7 @@
                 <div><strong>{{ step.title }}</strong><span class="sr-only">{{ agentStepStatusLabel(index) }}：</span><small>{{ step.detail }}</small></div>
               </li>
             </ol>
-            <small class="agent-boundary">Agent 只使用你的主动选择和回看反馈，不从游戏成绩推断情绪，不进行心理诊断。</small>
+            <small class="agent-boundary">Agent 使用你主动选择的标签、主观回看、活动偏好与使用节律来安排功能；不会依据游戏成绩或使用行为判断情绪，也不进行心理诊断。</small>
           </div>
         </aside>
 
@@ -95,7 +97,7 @@
         </div>
       </div>
 
-      <section v-if="activeActivity" ref="activityPanel" class="island-activity-panel" :aria-label="`${activeActivityLabel}玩法`">
+      <section v-if="activeActivity" ref="activityPanel" :class="['island-activity-panel', `is-${activeActivity}`]" :inert="safetyLocked" :aria-hidden="safetyLocked ? 'true' : undefined" :aria-label="`${activeActivityLabel}玩法`">
         <header class="activity-panel-header">
           <button ref="activityBack" type="button" :disabled="safetyLocked" @click="closeActivity">返回岛上</button>
           <nav aria-label="切换心岛玩法">
@@ -104,7 +106,7 @@
         </header>
         <div class="activity-panel-body">
           <IslandGardenGame v-if="activeActivity === 'garden'" :garden="activityState.garden" @update:garden="updateGarden" @played="handleActivityPlayed" />
-          <IslandFishingGame v-else-if="activeActivity === 'fishing'" @played="handleActivityPlayed" />
+          <IslandFishingGame v-else-if="activeActivity === 'fishing'" :fishing="activityState.fishing" @update:fishing="updateFishing" @played="handleActivityPlayed" />
           <IslandTidalBeach v-else-if="activeActivity === 'beach'" :time-phase="timePhase" @played="handleActivityPlayed" />
           <IslandBreathingRoom v-else-if="activeActivity === 'breathing'" :time-phase="timePhase" @played="handleActivityPlayed" />
           <IslandPetHome v-else-if="activeActivity === 'pet'" :time-phase="timePhase" @played="handleActivityPlayed" />
@@ -118,7 +120,19 @@
         </div>
       </section>
 
-      <nav v-if="!activeActivity" class="island-place-dock" aria-label="心岛地点快捷导航">
+      <section v-if="safetyLocked" ref="urgentSupport" class="island-urgent-support" role="alert" tabindex="-1" aria-labelledby="island-urgent-title">
+        <small>安全优先 · 普通玩法已暂停</small>
+        <strong id="island-urgent-title">现在先和可信任的人待在一起</strong>
+        <p>不要独处，远离可能伤害自己的物品，马上联系可信老师或其他安全成年人。如果照顾你的成年人可能让你受伤，请联系其他可信成年人或报警。</p>
+        <div>
+          <a href="tel:12356">拨打 12356</a>
+          <a href="tel:110">危险迫近拨打 110</a>
+          <a href="tel:120">需要急救拨打 120</a>
+          <button type="button" @click="$emit('open-chat')">打开安全支持</button>
+        </div>
+      </section>
+
+      <nav v-if="!activeActivity" class="island-place-dock" :inert="safetyLocked" :aria-hidden="safetyLocked ? 'true' : undefined" aria-label="心岛地点快捷导航">
         <button
           v-for="place in places"
           :key="place.id"
@@ -136,7 +150,7 @@
       </p>
       <p id="island-live-status" class="sr-only" role="status" aria-live="polite">{{ liveStatus }}</p>
 
-      <div class="island-mobile-controls" aria-label="心岛移动控制">
+      <div class="island-mobile-controls" :inert="Boolean(activeActivity || safetyLocked)" :aria-hidden="activeActivity || safetyLocked ? 'true' : undefined" aria-label="心岛移动控制">
         <button type="button" aria-label="向左上移动" @pointerdown="startPointerMove($event, -1, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↖</button>
         <button type="button" aria-label="向上移动" @pointerdown="startPointerMove($event, 0, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↑</button>
         <button type="button" aria-label="向右上移动" @pointerdown="startPointerMove($event, 1, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↗</button>
@@ -175,6 +189,7 @@ const activityBack = ref(null)
 const activityPanel = ref(null)
 const gameHost = ref(null)
 const gameSurface = ref(null)
+const urgentSupport = ref(null)
 const loading = ref(true)
 const loadError = ref(false)
 const agentPhase = ref('ready')
@@ -183,7 +198,7 @@ const agentSource = ref('deterministic')
 const agentSafetyAction = ref('')
 const viewportQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 900px)') : null
 const compactViewport = !!viewportQuery?.matches
-const agentExpanded = ref(!compactViewport)
+const agentExpanded = ref(false)
 const liveStatus = ref('心岛地图正在准备')
 const nearby = ref('星灯小径')
 const targetPlaceLabel = ref('')
@@ -413,6 +428,7 @@ async function triggerIslandAgent(trigger = 'login') {
       agentText.value = data.message || '检测到需要立即关注的信号'
       agentSource.value = 'safety_override'
       emit('safety', { source: 'island_agent' })
+      nextTick(() => urgentSupport.value?.focus({ preventScroll: true }))
       return
     }
     const supportAction = data?.plan?.data?.plan?.support_action || ''
@@ -505,6 +521,7 @@ function agentStepStatusLabel(index) {
 
 function focusGameSurface() { gameSurface.value?.focus({ preventScroll: true }) }
 function startMoving(x, y, source = 'keyboard') {
+  if (safetyLocked.value || activeActivity.value) return
   movementSource = source
   targetPlaceLabel.value = ''
   bridge.emit('command', { type: 'move', direction: { x, y } })
@@ -523,7 +540,10 @@ function stopKeyboardMoving() {
   if (movementSource === 'keyboard') stopMoving()
 }
 function stopPointerMoving() { if (movementSource === 'pointer') stopMoving() }
-function interact() { bridge.emit('command', { type: 'interact' }) }
+function interact() {
+  if (safetyLocked.value || activeActivity.value) return
+  bridge.emit('command', { type: 'interact' })
+}
 function openArrivalActivity() {
   if (!arrivalCard.value?.place) return
   const place = arrivalCard.value.place
@@ -586,7 +606,8 @@ function handleActivityPlayed(event) {
     agentPhase.value = 'urgent'
     agentText.value = '普通玩法已暂停，当前优先连接真人安全支持'
     liveStatus.value = '检测到需要立即协助的安全信号，普通玩法和回看已经暂停。'
-    emit('safety', { source: 'happiness_exchange' })
+    emit('safety', { source: event?.source || 'happiness_exchange' })
+    nextTick(() => urgentSupport.value?.focus({ preventScroll: true }))
     return
   }
   activityPlayed.value = true
@@ -610,6 +631,7 @@ function dismissArrival() {
   nextTick(focusGameSurface)
 }
 function visitPlace(place) {
+  if (safetyLocked.value || activeActivity.value) return
   arrivalCard.value = null
   targetPlaceLabel.value = place.label
   bridge.emit('command', { type: 'visit', placeId: place.id })
@@ -656,8 +678,8 @@ function handleDialogKeydown(event) {
     return
   }
   if (event.key !== 'Tab') return
-  const focusable = [...dialog.value.querySelectorAll('button:not([disabled]), a[href], textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]')]
-    .filter(element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
+  const focusable = [...dialog.value.querySelectorAll('button:not([disabled]), a[href], textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"], [tabindex="-1"]')]
+    .filter(element => !element.closest('[inert]') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
   if (!focusable.length) return
   const first = focusable[0]
   const last = focusable[focusable.length - 1]
@@ -743,9 +765,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .island-workspace {
-  --island-ink: #fff4df;
-  --island-muted: #f1ccb2;
-  --island-glass: rgba(111, 59, 48, .84);
+  --island-ink: #fff8ea;
+  --island-muted: #d9c9b5;
+  --island-accent: #efb96f;
+  --island-accent-strong: #d9914f;
+  --island-surface: rgba(24, 31, 30, .88);
+  --island-surface-soft: rgba(24, 31, 30, .72);
+  --island-line: rgba(255, 248, 234, .14);
   position: fixed;
   inset: 0;
   z-index: 410;
@@ -807,6 +833,9 @@ onBeforeUnmount(() => {
 .island-agent-rail { position: absolute; top: 16px; right: 16px; z-index: 15; width: 232px; border: 0; border-radius: 16px; color: #fff; background: rgba(0,0,0,.4); box-shadow: 0 8px 24px rgba(0,0,0,.2); backdrop-filter: blur(14px); }
 .agent-rail-toggle { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 8px; width: 100%; min-height: 46px; padding: 8px 11px; border: 0; border-radius: inherit; color: inherit; background: transparent; text-align: left; cursor: pointer; }
 .agent-rail-toggle small { color: var(--island-muted); font-size: 9px; }
+.agent-rail-copy { display: grid; min-width: 0; gap: 2px; }
+.agent-rail-copy strong, .agent-rail-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-rail-copy > span { color: var(--island-muted); font-size: 9px; line-height: 1.35; }
 .agent-state-dot { width: 8px; height: 8px; border-radius: 3px; background: #ffd083; }
 .agent-state-dot.is-arrived { background: #a8c38b; }
 .agent-rail-body { display: none; padding: 0 12px 12px; }
@@ -831,6 +860,14 @@ onBeforeUnmount(() => {
 }
 
 .island-arrival-card { position: absolute; right: 16px; bottom: 16px; z-index: 12; width: min(300px, calc(100% - 32px)); padding: 14px; border: 1px solid #fff0bd; border-radius: 15px; color: #4a2b22; background: rgba(255, 224, 169, .95); box-shadow: 0 16px 34px rgba(67,30,27,.28); backdrop-filter: blur(18px); }
+.island-urgent-support { position: absolute; z-index: 60; top: 50%; left: 50%; display: grid; width: min(620px, calc(100% - 40px)); gap: 10px; padding: 22px; border: 2px solid rgba(255,199,154,.72); border-radius: 14px; color: #fff6e8; background: rgba(70,29,27,.96); box-shadow: 0 12px 20px rgba(0,0,0,.36); transform: translate(-50%, -50%); }
+.island-urgent-support small { color: #ffc9b7; font-weight: 800; letter-spacing: .06em; }
+.island-urgent-support strong { font-size: 20px; }
+.island-urgent-support p { margin: 0; color: rgba(255,246,232,.86); font-size: 13px; line-height: 1.7; }
+.island-urgent-support div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.island-urgent-support a, .island-urgent-support button { display: grid; min-height: 44px; place-items: center; padding: 8px 10px; border: 0; border-radius: 9px; color: #321914; background: #ffd0c0; font: inherit; font-size: 11px; font-weight: 800; text-align: center; text-decoration: none; cursor: pointer; }
+.island-urgent-support button { color: #fff4ef; background: rgba(255,255,255,.14); }
+.island-urgent-support a:focus-visible, .island-urgent-support button:focus-visible { outline: 3px solid #fff3c8; outline-offset: 3px; }
 .island-arrival-card small, .island-arrival-card strong { display: block; }
 .island-arrival-card small { color: #765337; font-size: 9px; font-weight: 800; }
 .island-arrival-card strong { margin-top: 3px; font-size: 16px; }
@@ -938,6 +975,197 @@ onBeforeUnmount(() => {
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @keyframes island-spin { to { transform: rotate(360deg); } }
 
+@media (min-width: 901px) {
+  .island-workspace {
+    color: var(--island-ink);
+    background: #18201f;
+  }
+  .island-header {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    grid-template-columns: minmax(260px, 1fr) auto auto;
+    gap: 10px;
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+  .island-brand {
+    width: fit-content;
+    max-width: 460px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--island-surface-soft);
+    box-shadow: 0 4px 8px rgba(8, 13, 12, .2);
+    backdrop-filter: blur(16px) saturate(115%);
+  }
+  .island-brand small { color: var(--island-accent); font-size: 10px; letter-spacing: .02em; }
+  .island-brand h2 { margin-top: 2px; font-size: 16px; letter-spacing: -.015em; }
+  .island-phase-status {
+    min-width: 154px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: var(--island-surface-soft);
+    box-shadow: 0 4px 8px rgba(8, 13, 12, .18);
+    backdrop-filter: blur(16px) saturate(115%);
+  }
+  .island-phase-status > span { color: var(--island-muted); }
+  .island-phase-status strong { color: var(--island-accent); }
+  .island-header-actions { align-items: center; }
+  .island-version { padding: 5px 8px; border-radius: 7px; color: rgba(255,248,234,.72); background: rgba(19,25,24,.42); }
+  .island-close {
+    width: 44px;
+    min-height: 44px;
+    border-radius: 12px;
+    background: var(--island-surface);
+    box-shadow: 0 4px 8px rgba(8, 13, 12, .2);
+    backdrop-filter: blur(16px);
+    transition: background .18s ease, transform .18s ease;
+  }
+  .island-close:hover { background: rgba(64, 56, 48, .94); }
+  .island-close:active { transform: scale(.97); }
+
+  .island-mission-glass {
+    bottom: 18px;
+    left: 18px;
+    width: 246px;
+    padding: 11px 13px;
+    border-radius: 12px;
+    background: var(--island-surface-soft);
+    box-shadow: 0 4px 8px rgba(8,13,12,.2);
+    backdrop-filter: blur(16px) saturate(115%);
+  }
+  .island-mission-glass small { color: var(--island-accent); }
+  .island-mission-glass p { color: var(--island-muted); }
+
+  .island-agent-rail {
+    top: 82px;
+    right: 16px;
+    width: 308px;
+    border-radius: 12px;
+    background: var(--island-surface);
+    box-shadow: 0 6px 8px rgba(8,13,12,.24);
+    backdrop-filter: blur(18px) saturate(115%);
+    transition: width .18s ease, background .18s ease;
+  }
+  .island-agent-rail:not(.is-expanded) { background: rgba(24,31,30,.78); }
+  .agent-rail-toggle { min-height: 58px; padding: 9px 12px; border-radius: 12px; }
+  .agent-rail-toggle:hover { background: rgba(255,255,255,.055); }
+  .agent-state-dot { border-radius: 50%; background: var(--island-accent); }
+  .agent-rail-copy { gap: 3px; }
+  .agent-rail-copy strong { font-size: 12px; }
+  .agent-rail-copy > span { color: rgba(255,248,234,.68); font-size: 10px; }
+  .agent-rail-toggle small { color: var(--island-accent); font-size: 10px; font-weight: 700; }
+  .agent-rail-body { padding: 2px 13px 13px; }
+  .agent-rail-body > p { color: rgba(255,248,234,.78); font-size: 11px; }
+  .agent-source-row { border: 0; border-radius: 9px; background: rgba(239,185,111,.1); }
+  .agent-source-row span { color: #f5c98f; font-size: 11px; }
+  .agent-source-row small { font-size: 10px; }
+  .agent-rail-body li { grid-template-columns: 24px 1fr; padding: 8px 0; border-top-color: var(--island-line); }
+  .agent-rail-body li > span { border-radius: 7px; }
+  .agent-rail-body li.is-complete > span { background: #a9cbb1; }
+  .agent-rail-body li.is-running > span { background: var(--island-accent); }
+  .agent-rail-body strong { font-size: 11px; }
+  .agent-rail-body li small, .agent-boundary { color: rgba(255,248,234,.62); font-size: 9px; }
+  .agent-safety-action { border-left: 0 !important; border-radius: 9px !important; background: rgba(154,70,53,.45) !important; }
+
+  .island-place-dock {
+    bottom: 18px;
+    width: min(650px, calc(100% - 600px));
+    padding: 5px;
+    border-radius: 14px;
+    background: var(--island-surface-soft);
+    box-shadow: 0 4px 8px rgba(8,13,12,.22);
+    backdrop-filter: blur(16px) saturate(115%);
+  }
+  .island-place-dock button {
+    min-height: 50px;
+    border-radius: 10px;
+    color: rgba(255,248,234,.72);
+    transition: color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .island-place-dock button:hover { color: var(--island-ink); background: rgba(255,255,255,.07); }
+  .island-place-dock button:active { transform: scale(.98); }
+  .island-place-dock button.is-current { color: #2d241c; background: var(--island-accent); }
+  .island-place-dock strong { font-size: 11px; }
+  .island-place-dock small { color: inherit; font-size: 9px; opacity: .72; }
+  .island-instructions { display: none; }
+  .island-mobile-controls { right: 18px; bottom: 18px; grid-template-columns: repeat(3, 42px); width: 134px; gap: 4px; }
+  .island-mobile-controls button {
+    min-height: 42px;
+    border-radius: 9px;
+    color: rgba(255,248,234,.84);
+    background: var(--island-surface-soft);
+    backdrop-filter: blur(14px);
+  }
+  .island-mobile-controls button:hover { background: rgba(52,61,57,.9); }
+  .island-mobile-controls .is-interact { color: #2d241c; background: var(--island-accent); }
+
+  .island-arrival-card {
+    right: 18px;
+    bottom: 170px;
+    width: 286px;
+    border: 0;
+    border-radius: 12px;
+    color: #30251e;
+    background: #f4d09c;
+    box-shadow: 0 6px 8px rgba(39,26,20,.24);
+  }
+  .arrival-primary { border-radius: 9px; background: #4c4835; }
+
+  .island-activity-panel { color: var(--island-ink); background: #18201f; }
+  .activity-panel-header {
+    top: 0;
+    right: 0;
+    left: 0;
+    min-height: 60px;
+    padding: 8px 16px;
+    background: rgba(20,27,26,.92);
+    box-shadow: 0 1px 0 rgba(255,255,255,.08);
+    backdrop-filter: blur(18px) saturate(115%);
+  }
+  .activity-panel-header > button {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 10px;
+    color: var(--island-ink);
+    background: rgba(255,255,255,.07);
+    text-shadow: none;
+  }
+  .activity-panel-header > button:hover { background: rgba(255,255,255,.12); }
+  .activity-panel-header nav { gap: 2px; padding: 3px; border-radius: 11px; background: rgba(255,255,255,.055); backdrop-filter: none; }
+  .activity-panel-header nav button { min-height: 34px; padding: 0 12px; border-radius: 8px; color: rgba(255,248,234,.7); text-shadow: none; }
+  .activity-panel-header nav button:hover { color: var(--island-ink); background: rgba(255,255,255,.055); }
+  .activity-panel-header nav button.active { color: #2d241c; background: var(--island-accent); box-shadow: none; }
+  .activity-panel-body { height: 100%; }
+  .island-activity-panel.is-fishing .activity-panel-body,
+  .island-activity-panel.is-garden .activity-panel-body,
+      .island-activity-panel.is-exchange .activity-panel-body {
+    box-sizing: border-box;
+    overflow-y: auto;
+        padding: 86px 42px 150px;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(217,145,79,.13), transparent 32%),
+      linear-gradient(145deg, #22322e, #171f1f 60%);
+  }
+  .island-reflection {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    left: 18px;
+    z-index: 8;
+    margin: 0;
+    padding: 12px;
+    border: 0;
+    border-radius: 12px;
+    background: rgba(24,31,30,.92);
+    box-shadow: 0 4px 8px rgba(8,13,12,.22);
+    backdrop-filter: blur(16px);
+  }
+  .island-reflection button { min-height: 38px; border: 0; border-radius: 8px; color: var(--island-ink); background: rgba(255,255,255,.08); }
+  .island-reflection button.active { color: #2d241c; background: var(--island-accent); }
+}
+
 @media (max-width: 900px) {
   .island-header { grid-template-columns: 1fr auto; gap: 8px; padding: 8px 10px; }
   .island-brand h2 { max-width: 56vw; font-size: 12px; }
@@ -949,9 +1177,12 @@ onBeforeUnmount(() => {
   .island-agent-rail.is-expanded { width: min(220px, calc(100% - 16px)); }
   .agent-rail-toggle { grid-template-columns: 8px 1fr; padding: 6px 8px; }
   .agent-rail-toggle small { display: none; }
+  .island-agent-rail:not(.is-expanded) .agent-rail-copy > span { display: none; }
   .island-agent-rail:not(.is-expanded) .agent-rail-toggle strong { font-size: 0; }
   .island-agent-rail:not(.is-expanded) .agent-rail-toggle strong::after { content: 'AI'; font-size: 10px; }
   .island-arrival-card { right: 8px; bottom: 80px; }
+  .island-urgent-support { width: calc(100% - 24px); padding: 16px; }
+  .island-urgent-support div { grid-template-columns: 1fr; }
   .island-place-dock { bottom: 8px; width: calc(100% - 180px); }
   .island-place-dock button { min-height: 42px; }
   .island-instructions { display: none; }

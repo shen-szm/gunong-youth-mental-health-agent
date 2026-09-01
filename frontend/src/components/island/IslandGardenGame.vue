@@ -339,6 +339,36 @@ function logAction(action, detail = '') {
 .pet-help-btn:hover:not(:disabled) { background: #b8ddb9; }
 .pet-help-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+@media (min-width: 901px) {
+  .garden-simple button:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .garden-simple { max-width: 1120px; margin: 0 auto; color: var(--island-ink, #fff8ea); }
+  .garden-header { margin-bottom: 18px; }
+  .garden-header small { color: var(--island-accent, #efb96f); font-size: 11px; }
+  .garden-header h3 { margin-top: 5px; font-size: 22px; letter-spacing: -.02em; }
+  .garden-header p { max-width: 64ch; margin-top: 6px; color: var(--island-muted, #d9c9b5); font-size: 13px; }
+  .garden-body { grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 12px 20px; }
+  .garden-tools { grid-column: 1; grid-row: 1 / span 2; display: grid; align-content: start; gap: 6px; padding: 8px; border-radius: 12px; background: rgba(255,255,255,.045); }
+  .garden-tools button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 9px; color: rgba(255,248,234,.76); background: transparent; transition: color .18s ease, background .18s ease, transform .18s ease; }
+  .garden-tools button:hover { color: var(--island-ink, #fff8ea); background: rgba(255,255,255,.07); }
+  .garden-tools button:active { transform: scale(.98); }
+  .garden-tools button.active { color: #2d241c; background: var(--island-accent, #efb96f); }
+  .tool-icon { display: grid; width: 24px; height: 24px; place-items: center; font-size: 15px; }
+  .seed-selector { grid-column: 2; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.045); }
+  .seed-selector > span { color: var(--island-muted, #d9c9b5); }
+  .seed-selector button { min-height: 34px; border: 0; border-radius: 8px; color: rgba(255,248,234,.76); background: rgba(255,255,255,.055); }
+  .seed-selector button.active { color: #2d241c; background: var(--island-accent, #efb96f); }
+  .garden-plots { grid-column: 2; grid-row: 2; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .plot { min-height: 124px; border: 0; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255,248,234,.08); transition: transform .18s ease, box-shadow .18s ease; }
+  .plot:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(239,185,111,.48), 0 5px 8px rgba(8,13,12,.18); }
+  .plot.watered { box-shadow: inset 0 0 0 2px #76a7aa; }
+  .plot.mature { box-shadow: inset 0 0 0 2px var(--island-accent, #efb96f); }
+  .plot > small { padding: 7px; background: rgba(29,24,20,.7); font-size: 10px; }
+  .garden-message { grid-column: 2; padding: 9px 11px; border-radius: 9px; color: var(--island-muted, #d9c9b5); background: rgba(255,255,255,.045); }
+  .pet-help-btn { grid-column: 1; justify-self: stretch; min-height: 42px; border-radius: 9px; color: #20382d; background: #a9cbb1; transition: background .18s ease, transform .18s ease; }
+  .pet-help-btn:hover:not(:disabled) { background: #b9d9c0; }
+  .pet-help-btn:active:not(:disabled) { transform: scale(.98); }
+}
+
 @media (max-width: 600px) {
   .garden-plots { grid-template-columns: repeat(2, 1fr); }
 }

@@ -27,6 +27,7 @@
           <em>{{ mode.desc }}</em>
         </button>
       </div>
+      <p class="breath-safety-note">如果出现头晕、胸闷或呼吸不适，请立即停止并恢复自然呼吸；已有呼吸或心血管不适时，不选择含屏息的练习。</p>
       <button type="button" class="start-btn" @click="startBreathing">
         开始呼吸
       </button>
@@ -64,7 +65,7 @@
           </div>
           <strong>做得很好</strong>
           <p>刚才的{{ completedCycles }}次呼吸，是你给自己的一小段安静时间。</p>
-          <p class="complete-sub">不用记录什么，这份轻松已经留在你身上了。</p>
+          <p class="complete-sub">不用记录什么，你刚刚为自己留出了一段暂停时间。</p>
           <button type="button" class="complete-btn" @click="reset">
             回到小屋
           </button>
@@ -85,8 +86,8 @@ const emit = defineEmits(['played'])
 
 const modes = [
   { id: 'box', name: '星灯呼吸', icon: '✦', pattern: '吸4秒 · 屏4秒 · 呼4秒 · 屏4秒', desc: '日常放松，稳定心神' },
-  { id: '478', name: '深海呼吸', icon: '🌊', pattern: '吸4秒 · 屏7秒 · 呼8秒', desc: '焦虑或睡前，帮助平静' },
-  { id: 'coherent', name: '海浪呼吸', icon: '〜', pattern: '吸5秒 · 呼5秒', desc: '快速平静，节奏简单' },
+  { id: '478', name: '深海呼吸', icon: '🌊', pattern: '吸4秒 · 屏7秒 · 呼8秒', desc: '节奏较慢，可按舒适程度练习' },
+  { id: 'coherent', name: '海浪呼吸', icon: '〜', pattern: '吸5秒 · 呼5秒', desc: '不含屏息，节奏简单' },
 ]
 
 const currentPhase = ref('night')
@@ -364,6 +365,7 @@ onBeforeUnmount(() => {
 .complete-card strong { display: block; font-size: 18px; margin-bottom: 10px; }
 .complete-card p { margin: 6px 0; font-size: 13px; line-height: 1.6; color: #5A5A4A; }
 .complete-sub { font-size: 11px !important; opacity: .65; }
+.breath-safety-note { max-width: 720px; margin: 0; color: rgba(255,255,255,.72); font-size: 11px; line-height: 1.55; text-align: center; }
 .complete-btn {
   margin-top: 18px;
   min-height: 40px; padding: 0 28px;
@@ -376,4 +378,37 @@ onBeforeUnmount(() => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity .4s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media (min-width: 901px) {
+  .breathing-room button:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .room-overlay { background: linear-gradient(180deg, rgba(16,22,22,.34), rgba(16,22,22,.04) 34%, rgba(16,22,22,.16) 64%, rgba(16,22,22,.58)); }
+  .breath-header { top: 78px; left: 28px; padding: 10px 13px; border-radius: 11px; background: rgba(24,31,30,.7); backdrop-filter: blur(14px); text-shadow: none; }
+  .breath-header strong { font-size: 15px; }
+  .breath-header small { color: var(--island-muted, #d9c9b5); font-size: 10px; }
+  .mode-selector { align-items: flex-start; justify-content: flex-end; padding: 128px 32px 34px; }
+  .mode-hint { max-width: 440px; margin: 0 0 14px; color: rgba(255,248,234,.78); text-align: left; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+  .mode-cards { justify-content: flex-start; max-width: 660px; margin-bottom: 16px; }
+  .mode-card { width: 190px; min-height: 116px; align-items: flex-start; gap: 3px; padding: 15px; border-radius: 12px; color: var(--island-ink, #fff8ea); background: rgba(24,31,30,.72); backdrop-filter: blur(14px); text-align: left; text-shadow: none; transition: background .18s ease, transform .18s ease; }
+  .mode-card:hover { background: rgba(39,49,47,.86); transform: translateY(-2px); }
+  .mode-card.active { background: rgba(239,185,111,.92); color: #2d241c; box-shadow: none; }
+  .mode-icon { display: grid; width: 28px; height: 28px; margin-bottom: 5px; place-items: center; border-radius: 8px; background: rgba(255,255,255,.1); font-size: 17px; }
+  .mode-card.active .mode-icon { background: rgba(45,36,28,.1); }
+  .mode-card em { margin-top: 3px; }
+  .start-btn { min-height: 44px; padding: 0 24px; border-radius: 9px; color: #2d241c; background: var(--island-accent, #efb96f); box-shadow: none; transition: background .18s ease, transform .18s ease; }
+  .start-btn:hover { background: #f3c789; transform: translateY(-1px); }
+  .start-btn:active { transform: scale(.98); }
+  .breathing-area { padding-top: 36px; }
+  .breath-circle-wrap { width: 250px; height: 250px; margin-bottom: 24px; }
+  .breath-circle { border-color: rgba(239,185,111,.56); background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.24), rgba(239,185,111,.2)); backdrop-filter: blur(8px); }
+  .breath-glow { background: radial-gradient(circle, rgba(239,185,111,.24), transparent 70%); }
+  .breath-ring { border-color: rgba(239,185,111,.24); }
+  .stop-btn { min-height: 40px; padding: 0 18px; border-radius: 9px; background: rgba(24,31,30,.72); text-shadow: none; }
+  .stop-btn:hover { background: rgba(39,49,47,.88); }
+  .complete-card { border-radius: 14px; color: #30251e; background: #f4eadb; box-shadow: 0 6px 8px rgba(0,0,0,.24); }
+  .complete-btn { border-radius: 9px; color: #2d241c; background: var(--island-accent, #efb96f); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing-room *, .complete-icon { animation: none !important; transition-duration: .01ms !important; }
+}
 </style>

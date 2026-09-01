@@ -274,8 +274,11 @@ async def pet_interact(
         db.add(pet)
 
     # 更新状态
-    pet.intimacy = min(1000, pet.intimacy + 3)
+    pet.intimacy = min(1000, (pet.intimacy or 0) + 3)
     pet.last_interaction = datetime.now()
+    risk_level = "routine"
+    mode = "structured"
+    handoff_required = False
     if payload.action == "feed":
         pet.today_fed = min(5, pet.today_fed + 1)
         pet.mood = "happy"
@@ -298,6 +301,9 @@ async def pet_interact(
                 current_user=current_user,
             )
             reply = companion.reply
+            risk_level = companion.risk_level
+            mode = companion.mode
+            handoff_required = companion.handoff_required
             if companion.risk_level in {"professional", "urgent"}:
                 pet.mood = "concerned"
         else:
@@ -308,6 +314,9 @@ async def pet_interact(
         "ok": True,
         "action": payload.action,
         "reply": reply,
+        "risk_level": risk_level,
+        "mode": mode,
+        "handoff_required": handoff_required,
         "pet_state": {
             "intimacy": pet.intimacy,
             "mood": pet.mood,

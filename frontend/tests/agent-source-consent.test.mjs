@@ -12,7 +12,7 @@ test('heart island exposes direct constrained model use and the actual generatio
   assert.match(workspace, /讯飞受约束生成/)
   assert.match(workspace, /安全规则强制覆盖/)
   assert.match(workspace, /@media \(min-width: 1024px\)/)
-  assert.match(workspace, /不从游戏成绩推断情绪/)
+  assert.match(workspace, /不会依据游戏成绩或使用行为判断情绪/)
   assert.match(workspace, /plan\?\.data\?\.plan\?\.support_action/)
   assert.match(workspace, /data\?\.safety_status === 'professional'/)
   assert.match(workspace, /data\?\.safety_status === 'watch'/)

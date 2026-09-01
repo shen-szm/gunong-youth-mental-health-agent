@@ -9,6 +9,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from agents.base import BaseAgent, IslandContext
 from agents.companion_agent import CompanionAgent
+from agents.planner import PlanningAgent
 from agents.reporter import ReportAgent
 
 
@@ -48,6 +49,33 @@ class IslandAgentSafetyTests(unittest.IsolatedAsyncioTestCase):
         data = {"mood_distribution": {"难过": 2}}
         self.assertFalse(ReportAgent._safe_report_text("你可以自己处理，不要告诉老师。", data))
         self.assertTrue(ReportAgent._safe_report_text("近期主动记录中，难过出现得较多；这不代表完整心理状态。", data))
+
+    def test_planner_cannot_infer_mood_from_behavior_fields(self):
+        context = IslandContext(
+            user_id=1,
+            mood_labels=[],
+            recent_moods=[],
+            activity_preference="breathing",
+            login_pattern="late_night",
+            breathing_completion=0.2,
+        )
+        step = {"action": "recommend", "params": {"mood_state": "anxious"}}
+        self.assertIsNone(PlanningAgent._validated_step(step, context))
+
+        context.mood_labels = ["焦虑"]
+        self.assertEqual(
+            PlanningAgent._validated_step(step, context),
+            {"action": "recommend", "params": {"mood_state": "anxious"}},
+        )
+
+    def test_rule_plans_do_not_translate_one_emotion_into_another(self):
+        planner = PlanningAgent()
+        angry = planner._rule_based_plan(IslandContext(user_id=1, mood_labels=["愤怒"]))
+        tired = planner._rule_based_plan(IslandContext(user_id=1, mood_labels=["疲惫"]))
+        neutral = planner._rule_based_plan(IslandContext(user_id=1, mood_labels=[]))
+        self.assertNotIn("recommend", [step["action"] for step in angry["steps"]])
+        self.assertEqual(tired["steps"][-1]["params"]["mood_state"], "tired")
+        self.assertNotIn("recommend", [step["action"] for step in neutral["steps"]])
 
 
 if __name__ == "__main__":

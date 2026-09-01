@@ -72,6 +72,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getPetState, interactWithPet, logIslandBehavior } from '../../api/island.js'
+import { isOfflineCompanionUrgent } from '../../utils/companionSafety.js'
 import homeDay from '../../assets/island/home-day.png'
 import homeDusk from '../../assets/island/home-dusk.png'
 import homeNight from '../../assets/island/home-night.png'
@@ -108,7 +109,7 @@ const moodLabel = computed(() => ({
 })[petMood.value] || '安静')
 
 const intimacyLabel = computed(() => {
-  if (intimacy.value >= 500) return '咕团跟你很熟了，会一直陪着你。'
+  if (intimacy.value >= 500) return '咕团跟你很熟了，想互动时可以再回来看看它。'
   if (intimacy.value >= 200) return '咕团越来越喜欢你了。'
   if (intimacy.value >= 50) return '咕团开始认识你了。'
   return '咕团在慢慢熟悉你。'
@@ -193,7 +194,20 @@ async function sendTalk() {
     intimacy.value = res.data?.pet_state?.intimacy || intimacy.value + 2
     showMessage(reply, 4000)
     petMood.value = res.data?.pet_state?.mood || 'content'
+    if (res.data?.risk_level === 'urgent') {
+      talking.value = false
+      emit('played', { action: 'safety', source: 'pet_talk', riskLevel: 'urgent' })
+      busy.value = false
+      return
+    }
   } catch {
+    if (isOfflineCompanionUrgent(text)) {
+      talkHistory.value.push({ role: 'pet', text: '现在先不要独处，请马上联系可信成年人；危险迫近时拨打110或120，也可以拨打12356。' })
+      talking.value = false
+      emit('played', { action: 'safety', source: 'pet_talk_offline', riskLevel: 'urgent' })
+      busy.value = false
+      return
+    }
     talkHistory.value.push({ role: 'pet', text: '咕，我在听。' })
   }
   logIslandBehavior('pet_interaction', 'home', 'talk', { message_length: text.length }).catch(() => {})
@@ -425,4 +439,38 @@ onBeforeUnmount(() => {
 .bubble-enter-from, .bubble-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 .slide-enter-active, .slide-leave-active { transition: all .3s; }
 .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateX(-50%) translateY(20px); }
+
+@media (min-width: 901px) {
+  .pet-home button:focus-visible, .pet-home input:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .home-overlay { background: linear-gradient(180deg, rgba(18,23,22,.32), transparent 35%, rgba(18,23,22,.12) 62%, rgba(18,23,22,.56)); }
+  .pet-header { top: 78px; left: 28px; padding: 10px 13px; border-radius: 11px; background: rgba(24,31,30,.72); backdrop-filter: blur(14px); text-shadow: none; }
+  .pet-header strong { font-size: 15px; }
+  .pet-header small { color: var(--island-muted, #d9c9b5); font-size: 10px; }
+  .pet-stage { top: 49%; left: 42%; }
+  .pet-sprite { width: 146px; height: 146px; filter: drop-shadow(0 7px 8px rgba(0,0,0,.24)); }
+  .pet-shadow { width: 96px; height: 12px; }
+  .pet-bubble { top: -98px; min-width: 170px; max-width: 280px; padding: 11px 14px; border-radius: 11px; color: #30251e; background: #f4eadb; box-shadow: 0 5px 8px rgba(0,0,0,.2); }
+  .pet-bubble::after { border-top-color: #f4eadb; }
+  .pet-actions { bottom: 26px; gap: 6px; padding: 6px; border-radius: 12px; background: rgba(24,31,30,.74); backdrop-filter: blur(14px); }
+  .action-btn { flex-direction: row; min-width: 86px; min-height: 44px; gap: 7px; padding: 0 11px; border-radius: 9px; color: rgba(255,248,234,.82); background: transparent; text-shadow: none; transition: color .18s ease, background .18s ease, transform .18s ease; }
+  .action-btn:hover:not(:disabled) { color: var(--island-ink, #fff8ea); background: rgba(255,255,255,.08); transform: translateY(-1px); }
+  .action-btn:active:not(:disabled) { transform: scale(.98); }
+  .action-icon { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 7px; background: rgba(255,255,255,.08); font-size: 15px; }
+  .talk-btn { color: #2d241c; background: var(--island-accent, #efb96f); }
+  .talk-btn:hover:not(:disabled) { color: #2d241c; background: #f3c789; }
+  .talk-panel { right: 28px; bottom: 88px; left: auto; width: 340px; padding: 13px; border-radius: 12px; color: #30251e; background: #f4eadb; box-shadow: 0 6px 8px rgba(0,0,0,.22); transform: none; }
+  .talk-history { max-height: 210px; }
+  .talk-msg span { border-radius: 9px; }
+  .talk-msg.user span { color: #20382d; background: #b9d9c0; }
+  .talk-msg.pet span { color: #3d342d; background: rgba(45,36,28,.075); }
+  .talk-input input { border: 0; border-radius: 9px; color: #30251e; background: #fffaf2; box-shadow: inset 0 0 0 1px rgba(48,37,30,.18); }
+  .talk-input input:focus { box-shadow: inset 0 0 0 2px #6f927e; }
+  .talk-input button { border-radius: 9px; color: #20382d; background: #b9d9c0; }
+  .intimacy-hint { bottom: 88px; padding: 6px 9px; border-radius: 8px; color: rgba(255,248,234,.78); background: rgba(24,31,30,.62); text-shadow: none; }
+  .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-home *, .pet-sprite { animation: none !important; transition-duration: .01ms !important; }
+}
 </style>

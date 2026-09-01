@@ -451,4 +451,27 @@ onBeforeUnmount(() => {
 .pop-leave-to { opacity: 0; transform: translate(-50%, -50%) scale(.8); }
 .fade-enter-active, .fade-leave-active { transition: opacity .4s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media (min-width: 901px) {
+  .tidal-beach:focus-visible, .tidal-beach button:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .beach-overlay { background: linear-gradient(180deg, rgba(17,25,26,.3), transparent 35%, rgba(17,25,26,.08) 58%, rgba(17,25,26,.52)); }
+  .beach-header { top: 78px; left: 28px; padding: 10px 13px; border-radius: 11px; background: rgba(24,31,30,.72); backdrop-filter: blur(14px); text-shadow: none; }
+  .beach-header strong { font-size: 15px; }
+  .beach-header small { color: var(--island-muted, #d9c9b5); font-size: 10px; }
+  .shell-count { top: 78px; right: 28px; padding: 8px 11px; border-radius: 9px; color: var(--island-ink, #fff8ea); background: rgba(24,31,30,.72); text-shadow: none; backdrop-filter: blur(14px); }
+  .collect-feedback { padding: 9px 15px; border-radius: 9px; color: #30251e; background: #f4eadb; box-shadow: 0 5px 8px rgba(0,0,0,.2); }
+  .sitting-overlay { background: rgba(11,17,17,.48); backdrop-filter: blur(8px); }
+  .sitting-card { width: min(390px, 90%); padding: 28px; border-radius: 14px; color: #30251e; background: #f4eadb; box-shadow: 0 6px 8px rgba(0,0,0,.24); }
+  .sitting-close { min-height: 40px; border-radius: 9px; color: #2d241c; background: var(--island-accent, #efb96f); }
+  .beach-actions { bottom: 24px; gap: 5px; padding: 5px; border-radius: 12px; background: rgba(24,31,30,.72); backdrop-filter: blur(14px); }
+  .beach-btn { min-height: 42px; padding: 0 15px; border-radius: 9px; color: rgba(255,248,234,.82); background: transparent; text-shadow: none; transition: color .18s ease, background .18s ease, transform .18s ease; }
+  .beach-btn:hover { color: var(--island-ink, #fff8ea); background: rgba(255,255,255,.08); transform: translateY(-1px); }
+  .beach-btn:active { transform: scale(.98); }
+  .beach-btn.primary { color: #2d241c; background: var(--island-accent, #efb96f); box-shadow: none; }
+  .move-hint { bottom: 80px; padding: 5px 8px; border-radius: 7px; color: rgba(255,248,234,.72); background: rgba(24,31,30,.54); text-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tidal-beach *, .collectible-shell, .pet-sprite { animation: none !important; transition-duration: .01ms !important; }
+}
 </style>

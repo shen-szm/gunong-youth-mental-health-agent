@@ -73,7 +73,7 @@ test('leisure agent reports verifiable states and keeps psychological boundaries
   for (const step of ['理解你的选择', '确认安全边界', '组织合适玩法', '观察过程反馈', '整理下一步']) {
     assert.match(island, new RegExp(step))
   }
-  assert.match(island, /不从游戏成绩推断情绪，不进行心理诊断/)
+  assert.match(island, /不会依据游戏成绩或使用行为判断情绪，也不进行心理诊断/)
   assert.match(island, /aria-current="index === agentStepIndex \? 'step'/)
   assert.match(island, /class="sr-only" role="status" aria-live="polite">\{\{ agentText \}\}/)
   assert.match(island, /activityPlayed && !safetyLocked/)

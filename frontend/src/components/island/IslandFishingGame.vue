@@ -180,5 +180,37 @@ onBeforeUnmount(() => {
 .fish-book strong, .fish-book small { display: block; }
 .fish-book strong { font-size: 12px; }.fish-book small { margin-top: 2px; font-size: 10px; opacity: .75; }
 button:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
+@media (min-width: 901px) {
+  .fishing-game button:focus-visible { outline: 3px solid #ffdca8; outline-offset: 3px; }
+  .fishing-game {
+    grid-template-columns: minmax(0, 1.7fr) minmax(270px, .72fr);
+    grid-template-areas: 'copy copy' 'stage book' 'tools book';
+    gap: 18px 22px;
+    max-width: 1180px;
+    margin: 0 auto;
+    color: var(--island-ink, #fff8ea);
+  }
+  .activity-copy { grid-area: copy; align-items: end; }
+  .activity-copy small { color: var(--island-accent, #efb96f); font-size: 11px; letter-spacing: 0; }
+  .activity-copy h3 { margin-top: 5px; font-size: 22px; letter-spacing: -.02em; text-wrap: balance; }
+  .activity-copy p { margin-top: 6px; color: var(--island-muted, #d9c9b5); font-size: 13px; }
+  .activity-copy dl { gap: 18px; padding: 0 0 2px; }
+  .activity-copy dl div { min-width: 74px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .activity-copy dt { color: var(--island-muted, #d9c9b5); }
+  .activity-copy dd { margin-top: 1px; color: var(--island-accent, #efb96f); font-size: 20px; }
+  .fishing-stage-shell { grid-area: stage; min-height: 410px; border: 0; border-radius: 14px; background: #2f6269; box-shadow: 0 6px 8px rgba(5,20,21,.22); }
+  .fishing-stage { height: min(48vh, 440px); min-height: 410px; }
+  .fishing-tools { grid-area: tools; grid-template-columns: 154px minmax(0, 210px) 1fr; gap: 14px; }
+  .fishing-tools button { min-height: 46px; border: 0; border-radius: 10px; color: #2d241c; background: var(--island-accent, #efb96f); transition: background .18s ease, transform .18s ease; }
+  .fishing-tools button:hover { background: #f3c789; }
+  .fishing-tools button:active { transform: scale(.98); }
+  .fishing-tools button:disabled, .fishing-tools button[aria-disabled='true'] { color: var(--island-muted, #d9c9b5); background: rgba(255,255,255,.08); }
+  .meter-copy, .fishing-tools p { color: var(--island-muted, #d9c9b5); }
+  .fish-book { grid-area: book; display: flex; flex-direction: column; gap: 2px; align-self: stretch; padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.045); }
+  .fish-book article { flex: 1 1 0; min-height: 54px; padding: 8px; border: 0; border-radius: 9px; color: rgba(255,248,234,.56); background: transparent; }
+  .fish-book article + article { box-shadow: inset 0 1px rgba(255,255,255,.07); }
+  .fish-book article.discovered { color: var(--island-ink, #fff8ea); background: rgba(239,185,111,.1); }
+  .fish-book article > span { border-radius: 7px; background: rgba(255,255,255,.075); }
+}
 @media (max-width: 900px) { .activity-copy dl { display: none; } .fishing-tools { grid-template-columns: 1fr; } }
 </style>
