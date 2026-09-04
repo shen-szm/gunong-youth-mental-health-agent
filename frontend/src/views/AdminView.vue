@@ -126,6 +126,32 @@
                       <span>{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ step.name }}</strong><small>{{ step.result }}</small></div><em>{{ pipelineStatusText(step.status) }}</em>
                     </article>
                   </div>
+                  <section v-if="agentHandoff" class="agent-handoff-ledger" aria-labelledby="teacher-agent-handoff-title">
+                    <header>
+                      <div><span class="section-kicker">结构化 Agent 接力</span><h4 id="teacher-agent-handoff-title">最近任务与核验结果</h4></div>
+                      <p aria-label="Agent 任务核验汇总"><strong>{{ agentHandoff.verified_count || 0 }}</strong><span>/ {{ agentHandoff.run_count || 0 }} 次通过核验</span></p>
+                    </header>
+                    <p class="agent-handoff-boundary">仅展示授权截止时间内的去标识化任务成果；结构化接力不等于心理诊断，也不表示教师已完成线下行动。</p>
+                    <ol v-if="recentAgentHandoffs.length">
+                      <li v-for="run in recentAgentHandoffs" :key="run.run_code">
+                        <div class="agent-handoff-meta">
+                          <code>{{ run.run_code }}</code>
+                          <time v-if="run.completed_at" :datetime="run.completed_at">{{ formatDateTime(run.completed_at) }}</time>
+                          <span :class="`is-${handoffVerificationTone(run.verification?.status || run.status)}`">{{ handoffVerificationLabel(run.verification?.status || run.status) }}</span>
+                        </div>
+                        <div class="agent-handoff-result">
+                          <strong>{{ run.artifact?.title || run.task_contract?.objective || '结构化支持任务' }}</strong>
+                          <p v-if="run.artifact?.outcome || run.task_contract?.objective">{{ run.artifact?.outcome || run.task_contract?.objective }}</p>
+                        </div>
+                        <dl>
+                          <div v-if="run.artifact?.next_action"><dt>建议下一步</dt><dd>{{ run.artifact.next_action }}</dd></div>
+                          <div v-if="run.artifact?.next_owner"><dt>下一责任人</dt><dd>{{ handoffOwnerLabel(run.artifact.next_owner) }}</dd></div>
+                          <div><dt>风险分流</dt><dd>{{ handoffRiskLabel(run.risk_level) }}</dd></div>
+                        </dl>
+                      </li>
+                    </ol>
+                    <p v-else class="agent-handoff-empty">授权范围内暂无可接力的已保存 Agent 任务。</p>
+                  </section>
                   <div class="work-product-grid">
                     <section class="evidence-brief"><span class="section-kicker">观察摘要</span><h4>{{ workProduct.observation.headline }}</h4><p>{{ workProduct.observation.latest_signal }}</p><div class="evidence-links"><button v-for="id in workProduct.observation.evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div></section>
                     <section class="decision-brief"><span class="section-kicker">安全裁决</span><h4>教师需要确认的下一步</h4><p>{{ workProduct.decision }}</p><div class="evidence-links"><button v-for="id in workProduct.decision_evidence_ids" :key="id" type="button" @click="scrollToEvidence(id)">{{ id }}</button></div><ul><li v-for="rule in workProduct.guardrails" :key="rule">{{ rule }}</li></ul></section>
@@ -505,6 +531,10 @@ const teacherGenerationLabel = computed(() => {
   if (generation.degraded) return '规则安全降级'
   return '本地确定性规则'
 })
+const agentHandoff = computed(() => workProduct.value?.agent_handoff && typeof workProduct.value.agent_handoff === 'object'
+  ? workProduct.value.agent_handoff
+  : null)
+const recentAgentHandoffs = computed(() => Array.isArray(agentHandoff.value?.latest) ? agentHandoff.value.latest : [])
 
 const normalizedWordCloud = computed(() => {
   const raw = Array.isArray(detail.value.word_cloud) ? detail.value.word_cloud : []
@@ -641,6 +671,39 @@ function focusTeacherSearch(event) {
     event.preventDefault()
     teacherSearchInput.value?.focus({ preventScroll: true })
   }
+}
+
+function handoffVerificationTone(status) {
+  if (['verified', 'passed', 'completed'].includes(status)) return 'verified'
+  if (['failed', 'blocked', 'rejected'].includes(status)) return 'failed'
+  if (['needs_attention', 'attention'].includes(status)) return 'attention'
+  return 'pending'
+}
+
+function handoffVerificationLabel(status) {
+  return ({ verified: '已核验', failed: '未通过', attention: '需处理', pending: '待核验' })[handoffVerificationTone(status)]
+}
+
+function handoffRiskLabel(risk) {
+  return ({
+    routine: '常规支持',
+    watch: '建议持续留意',
+    professional: '建议专业支持',
+    urgent: '立即安全协助',
+  })[risk] || '尚未分流'
+}
+
+function handoffOwnerLabel(owner) {
+  return ({
+    student: '学生自主选择',
+    student_choice: '学生自主选择',
+    student_with_trusted_adult: '学生与可信成年人共同决定',
+    teacher: '教师确认后接力',
+    counselor: '校内心理支持人员',
+    school_support: '校内支持人员',
+    trusted_adult_or_school_support: '可信成年人或校内支持人员',
+    trusted_adult_or_emergency_support: '可信成年人或紧急支持',
+  })[owner] || String(owner || '未指定').replaceAll('_', ' ')
 }
 
 function chooseCaseStudent(student) {
@@ -1192,6 +1255,7 @@ textarea { min-height: 96px; resize: vertical; }
 .agent-pipeline article em { color: #3d765f; font-style: normal; font-size: 12px; font-weight: 700; }
 .desktop-case-agent-live { display:none; }
 .agent-source-badge { display:none; }
+.agent-handoff-ledger { display: none; }
 @media (min-width:1024px) {
   .desktop-case-agent-live { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.6fr); gap:18px; margin:14px 0; padding:16px; border:1px solid #dce8e2; border-radius:14px; background:linear-gradient(145deg,#f7fbf9,#fffaf2); }
   .desktop-case-agent-live h4 { margin:4px 0 6px; color:#29483d; }
@@ -1211,6 +1275,29 @@ textarea { min-height: 96px; resize: vertical; }
   .case-processing-state small { margin-top:3px; color:#687a73; font-size:10px; }
   .case-result-badges { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
   .agent-source-badge { display:inline-flex; align-items:center; padding:6px 10px; border:1px solid #d4e2dc; border-radius:999px; color:#315e51; background:#f3f8f5; font-size:11px; font-weight:800; }
+  .agent-handoff-ledger { display: block; margin: 4px 0 16px; padding: 16px 0 0; border-top: 1px solid #dce6e1; }
+  .agent-handoff-ledger > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .agent-handoff-ledger > header h4 { margin: 4px 0 0; color: #29483d; font-size: 17px; }
+  .agent-handoff-ledger > header p { display: flex; align-items: baseline; gap: 5px; margin: 0; color: #5b7068; }
+  .agent-handoff-ledger > header p strong { color: #285b4b; font-size: 20px; }
+  .agent-handoff-ledger > header p span { font-size: 11px; }
+  .agent-handoff-boundary { max-width: 76ch; margin: 8px 0 11px; color: #586c64; font-size: 12px; line-height: 1.55; }
+  .agent-handoff-ledger ol { margin: 0; padding: 0; list-style: none; border-bottom: 1px solid #e1e9e5; }
+  .agent-handoff-ledger li { display: grid; grid-template-columns: minmax(210px, .85fr) minmax(0, 1.3fr); gap: 8px 24px; padding: 13px 0; border-top: 1px solid #e1e9e5; }
+  .agent-handoff-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+  .agent-handoff-meta code { color: #49645a; font-size: 10px; }
+  .agent-handoff-meta time { color: #677a73; font-size: 10px; }
+  .agent-handoff-meta span { padding: 3px 6px; border-radius: 999px; color: #6c571c; background: #f4e8c7; font-size: 10px; font-weight: 800; }
+  .agent-handoff-meta span.is-verified { color: #2f674f; background: #dff0e7; }
+  .agent-handoff-meta span.is-failed { color: #8b4037; background: #f7e3df; }
+  .agent-handoff-meta span.is-attention { color: #6c571c; background: #f4e8c7; }
+  .agent-handoff-result strong { color: #29483d; font-size: 13px; }
+  .agent-handoff-result p { margin: 4px 0 0; color: #53675f; font-size: 12px; line-height: 1.55; }
+  .agent-handoff-ledger dl { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(160px, .65fr) minmax(140px, .55fr); gap: 12px; margin: 2px 0 0; }
+  .agent-handoff-ledger dl > div { display: grid; gap: 2px; }
+  .agent-handoff-ledger dt { color: #697a73; font-size: 10px; }
+  .agent-handoff-ledger dd { margin: 0; color: #344c43; font-size: 11px; line-height: 1.45; }
+  .agent-handoff-empty { margin: 10px 0 0; padding: 12px 0; border-top: 1px solid #e1e9e5; color: #60726b; font-size: 12px; }
 }
 @keyframes agent-wait-pulse { 50% { opacity:.55; } }
 .work-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

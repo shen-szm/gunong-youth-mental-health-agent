@@ -9,9 +9,13 @@ test('student room exposes a truthful agent workflow rail', () => {
   assert.match(room, /StudentAgentRail/)
   assert.match(room, /studentAgentState/)
   assert.match(room, /studentAgentSteps/)
-  for (const label of ['理解本轮表达', '安全优先分流', '本轮情绪线索', '支持回应编排', '倾诉后小结']) {
+  for (const label of ['安全优先分流', '理解本轮表达', '规划受限支持', '本轮情绪线索', '支持回应编排', '倾诉后小结']) {
     assert.match(room, new RegExp(label))
   }
+  assert.ok(room.indexOf("id: 'safety'") < room.indexOf("id: 'understand'"), 'local fallback must put the deterministic safety gate first')
+  assert.match(room, /phase === 'chat' \? '安全分流进行中；通过后才进入任务理解与规划'/)
+  assert.match(room, /id: 'understand'[\s\S]{0,240}status:[^\n]*'waiting'/)
+  assert.match(room, /id: 'planning'[\s\S]{0,260}status:[^\n]*'waiting'/)
   assert.match(room, /conversation_signal/)
   assert.match(room, /res\.data\.metadata\?\.degraded/)
   assert.match(room, /res\.data\.workflow/)
@@ -27,6 +31,9 @@ test('agent rail communicates urgent, failure and accessible states', () => {
   assert.match(room, /普通分析已停止/)
   assert.match(room, /status === 'urgent'[\s\S]*?showAgentRail\.value = false/)
   assert.match(room, /studentAgentState\.status = 'error'/)
+  assert.match(room, /run\.status === 'attention' \? 'attention'/)
+  assert.match(room, /res\.data\.agent_run\?\.status === 'attention'/)
+  assert.match(rail, /attention: '需要处理'/)
   assert.match(room, /async function openSummaryDrawer\(\)[\s\S]*?closeRoomWorkspaces\('support'\)/)
   assert.match(rail, /aria-live="polite"/)
   assert.match(rail, /aria-expanded="open"/)

@@ -14,7 +14,7 @@ from auth import require_admin_teacher, require_teacher
 from app_time import china_day_start_naive, china_now_naive
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentSupportRun, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
 from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload, student_ai_authorization_payloads, student_external_ai_allowed
 from teacher_review_engine import build_teacher_review_report
 from teacher_review_pdf import generate_teacher_review_pdf
@@ -655,6 +655,147 @@ def _case_context_payload(db: Session, teacher: User, student_id: int, approved:
     }
 
 
+def _bounded_delivery_text(value: object, *, limit: int = 240) -> str:
+    return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def _verified_student_agent_entry(run: StudentSupportRun) -> tuple[bool, dict | None]:
+    """Whitelist the v2 structured handoff; never copy chat, emotion or model evidence fields."""
+    try:
+        deliverable = json.loads(run.deliverable_json or "{}")
+    except (TypeError, ValueError):
+        return False, None
+    if not isinstance(deliverable, dict):
+        return False, None
+    raw_contract = deliverable.get("task_contract")
+    raw_verification = deliverable.get("verification")
+    raw_artifact = deliverable.get("artifact")
+    if not all(isinstance(item, dict) for item in (raw_contract, raw_verification, raw_artifact)):
+        return False, None
+
+    constraints = [
+        _bounded_delivery_text(item, limit=120)
+        for item in raw_contract.get("constraints", [])[:8]
+        if _bounded_delivery_text(item, limit=120)
+    ] if isinstance(raw_contract.get("constraints"), list) else []
+    criteria = [
+        _bounded_delivery_text(item, limit=120)
+        for item in raw_contract.get("acceptance_criteria", [])[:8]
+        if _bounded_delivery_text(item, limit=120)
+    ] if isinstance(raw_contract.get("acceptance_criteria"), list) else []
+    contract = {
+        "objective": _bounded_delivery_text(raw_contract.get("objective")),
+        "constraints": constraints,
+        "acceptance_criteria": criteria,
+    }
+    artifact = {
+        "title": _bounded_delivery_text(raw_artifact.get("title"), limit=80),
+        "outcome": _bounded_delivery_text(raw_artifact.get("outcome")),
+        "next_action": _bounded_delivery_text(raw_artifact.get("next_action")),
+        "next_owner": _bounded_delivery_text(raw_artifact.get("next_owner"), limit=64),
+    }
+    raw_checks = raw_verification.get("checks")
+    check_catalog = {
+        "task_contract_complete": ("任务契约完整", "student_agent_check:task_contract_complete"),
+        "safety_gate_completed": ("安全分流已先行", "student_agent_check:safety_gate_completed"),
+        "output_linked": ("回应交付已落库", "student_agent_check:output_linked"),
+        "structured_cues_only": ("最小必要数据边界", "student_agent_check:structured_cues_only"),
+        "ordinary_generation_stopped": ("普通生成已停止", "student_agent_check:ordinary_generation_stopped"),
+        "safety_output_linked": ("安全回应交付已落库", "student_agent_check:safety_output_linked"),
+        "human_handoff_present": ("真人接力路径完整", "student_agent_check:human_handoff_present"),
+        "support_line_present": ("心理支持入口可用", "student_agent_check:support_line_present"),
+        "emergency_route_present": ("紧急求助路径完整", "student_agent_check:emergency_route_present"),
+        "responsibility_assigned": ("下一责任人明确", "student_agent_check:responsibility_assigned"),
+    }
+    checks = []
+    if isinstance(raw_checks, list):
+        for item in raw_checks[:10]:
+            if not isinstance(item, dict) or item.get("status") not in {"passed", "failed"}:
+                continue
+            check_id = _bounded_delivery_text(item.get("id"), limit=64)
+            if check_id not in check_catalog:
+                continue
+            label, evidence = check_catalog[check_id]
+            checks.append({
+                "id": check_id,
+                "label": label,
+                "status": item["status"],
+                "evidence": evidence,
+            })
+    structurally_complete = bool(
+        checks
+        and contract["objective"]
+        and contract["constraints"]
+        and contract["acceptance_criteria"]
+        and all(artifact.values())
+        and run.status in {"completed", "attention"}
+        and run.risk_level in {"routine", "watch", "professional", "urgent"}
+        and run.output_message_id is not None
+    )
+    if not structurally_complete:
+        return False, None
+    verification_status = (
+        "verified"
+        if raw_verification.get("status") == "verified" and all(item["status"] == "passed" for item in checks)
+        else "needs_attention"
+    )
+    return True, {
+        "run_code": run.run_code,
+        "completed_at": (run.completed_at + timedelta(hours=8)).isoformat() if run.completed_at else None,
+        "risk_level": run.risk_level,
+        "status": run.status,
+        "task_contract": contract,
+        "verification": {"status": verification_status, "checks": checks},
+        "artifact": artifact,
+    }
+
+
+def _student_agent_handoff(
+    db: Session,
+    *,
+    student_id: int,
+    scoped_chats: list[ChatMessage],
+    scoped_since: datetime,
+    scoped_cutoff: datetime,
+) -> dict:
+    input_message_ids = [row.id for row in scoped_chats]
+    if not input_message_ids:
+        return {"run_count": 0, "verified_count": 0, "latest": []}
+    # StudentSupportRun timestamps are UTC-naive; work-product cutoffs use
+    # Asia/Shanghai-naive values. Convert explicitly so approval deadlines
+    # cannot include up to eight hours of post-cutoff work.
+    since_utc = scoped_since - timedelta(hours=8)
+    cutoff_utc = scoped_cutoff - timedelta(hours=8)
+    runs = db.query(StudentSupportRun).filter(
+        StudentSupportRun.user_id == student_id,
+        StudentSupportRun.input_message_id.in_(input_message_ids),
+        StudentSupportRun.status.in_(["completed", "attention"]),
+        StudentSupportRun.started_at >= since_utc,
+        StudentSupportRun.started_at <= cutoff_utc,
+        StudentSupportRun.completed_at.isnot(None),
+        StudentSupportRun.completed_at <= cutoff_utc,
+        StudentSupportRun.output_message_id.isnot(None),
+        StudentSupportRun.expires_at > datetime.utcnow(),
+        StudentSupportRun.prompt_version == "student-support-orchestrator-v2",
+    ).order_by(StudentSupportRun.completed_at.desc(), StudentSupportRun.id.desc()).limit(100).all()
+    structured_count = 0
+    structured_entries = []
+    verified_count = 0
+    for run in runs:
+        structured, entry = _verified_student_agent_entry(run)
+        if structured:
+            structured_count += 1
+        if entry:
+            structured_entries.append(entry)
+            if entry["verification"]["status"] == "verified":
+                verified_count += 1
+    return {
+        "run_count": structured_count,
+        "verified_count": verified_count,
+        "latest": structured_entries[:5],
+    }
+
+
 @router.get("/students/{student_id}/work-product")
 def student_work_product(
     student_id: int,
@@ -760,6 +901,13 @@ def student_work_product(
         ChatMessage.created_at >= scoped_since,
         ChatMessage.created_at <= scoped_cutoff,
     ).all()
+    agent_handoff = _student_agent_handoff(
+        db,
+        student_id=student_id,
+        scoped_chats=all_chats,
+        scoped_since=scoped_since,
+        scoped_cutoff=scoped_cutoff,
+    )
     assessments = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.user_id == student_id,
         StudentWellbeingAssessment.created_at >= scoped_since,
@@ -842,7 +990,7 @@ def student_work_product(
             request_id=context.get("request_id"),
             generated_by_user_id=teacher.id,
             content_cutoff=scoped_cutoff,
-            version="teacher-work-product-v1",
+            version="teacher-work-product-v2",
         ))
         db.commit()
     task_decisions = db.query(TeacherWorkProductTaskDecision).filter(
@@ -855,13 +1003,13 @@ def student_work_product(
         "model_name": "deterministic",
         "degraded": False,
         "consented": False,
-        "prompt_version": "teacher-deterministic-work-product-v1",
+        "prompt_version": "teacher-deterministic-work-product-v2",
         "external_transfer": False,
     }
     _audit(db, teacher, "generate_teacher_work_product", "work_product", product_id, "allowed")
     return {
         "case_id": product_id,
-        "version": "teacher-work-product-v1",
+        "version": "teacher-work-product-v2",
         "generated_at": china_now_naive().isoformat(),
         "risk": risk,
         "access_basis": context["access_basis"],
@@ -874,6 +1022,15 @@ def student_work_product(
             {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录、{len(assessment_records)}次主动评估"},
             {"name": "证据定位", "status": "completed", "result": f"{len(evidence_ids)}条结论可回到原文"},
             {"name": "支持草案", "status": "completed", "result": "已生成，等待教师确认"},
+            {
+                "name": "Agent交付验收",
+                "status": "completed" if agent_handoff["run_count"] == agent_handoff["verified_count"] else "attention",
+                "result": (
+                    f"已验收{agent_handoff['verified_count']}/{agent_handoff['run_count']}份结构化交付"
+                    if agent_handoff["run_count"]
+                    else "授权范围内暂无可接力的学生Agent结构化交付"
+                ),
+            },
         ],
         "observation": {
             "headline": "当前需要优先确认安全" if urgent else ("近期有值得持续关注的自愿表达" if records else "当前记录不足，建议先沟通补充"),
@@ -895,6 +1052,7 @@ def student_work_product(
         "decision_evidence_ids": trigger_evidence_ids or evidence_ids,
         "tasks": [{**task, "evidence_ids": trigger_evidence_ids or evidence_ids} for task in next_tasks],
         "confirmed_task_indices": sorted(item.task_index for item in task_decisions),
+        "agent_handoff": agent_handoff,
         "generation": generation,
         "guardrails": ["不作诊断", "不把单条表达当作结论", "敏感触达前由教师确认", "仅使用本次授权范围内记录"],
     }

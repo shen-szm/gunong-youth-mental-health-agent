@@ -1,5 +1,6 @@
 import sys
 import unittest
+import json
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,7 +24,7 @@ from api.mood import router as mood_router
 from config import settings
 from app_time import china_day_start_naive, china_now_naive
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentSupportRun, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
 from teacher_review_engine import NarrativeOutput, _safe_model_narrative
 
@@ -479,7 +480,8 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertIn("12356", payload["decision"])
         self.assertIn("110", payload["decision"])
         self.assertIn("120", payload["decision"])
-        self.assertEqual([step["status"] for step in payload["pipeline"]], ["completed"] * 4)
+        self.assertEqual([step["status"] for step in payload["pipeline"]], ["completed"] * 5)
+        self.assertEqual(payload["pipeline"][-1]["name"], "Agent交付验收")
         self.assertGreaterEqual(len(payload["observation"]["evidence_ids"]), 1)
         self.assertTrue(payload["observation"]["trigger_evidence_ids"])
         self.assertTrue(any(item["content"] == "继父每天打我，我害怕回去" for item in payload["records"]))
@@ -506,6 +508,143 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="confirmed_work_product_task", actor_user_id=self.admin_id).count(), 1)
         finally:
             db.close()
+
+    def test_work_product_handoffs_only_verified_agent_delivery_before_approval_cutoff(self):
+        session = self.student_client.post("/api/chat/sessions", json={"force_new": True}).json()
+        sent = self.student_client.post("/api/chat/send", json={
+            "user_id": self.student_id,
+            "session_id": session["session_id"],
+            "message": "最近考试让我焦虑，也影响了上课",
+            "idempotency_key": "teacher_handoff_before_cutoff",
+        })
+        self.assertEqual(sent.status_code, 200, sent.text)
+        before_run_code = sent.json()["agent_run"]["run_code"]
+
+        submitted = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/access-requests",
+            json={"reason": "需要在审批截止范围内接力已验收的结构化支持交付", "scope": "recent_30_days"},
+        )
+        request_id = submitted.json()["request_id"]
+        approved = self.admin_client.post(
+            f"/api/teacher/access-requests/{request_id}/decision",
+            json={"decision": "approved", "note": "同意最小必要范围"},
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        db = self.Session()
+        try:
+            request_row = db.query(StudentCaseAccessRequest).filter_by(id=request_id).one()
+            before = db.query(StudentSupportRun).filter_by(run_code=before_run_code).one()
+            cutoff_utc = request_row.reviewed_at - timedelta(hours=8)
+            expected_completed_at = (before.completed_at + timedelta(hours=8)).isoformat()
+            needs_attention_deliverable = json.loads(before.deliverable_json)
+            needs_attention_deliverable["verification"]["status"] = "needs_attention"
+            needs_attention_deliverable["verification"]["checks"][0]["status"] = "failed"
+            db.add(StudentSupportRun(
+                run_code="SSR-NEEDS-ATTENTION",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-needs-attention",
+                request_fingerprint="synthetic-needs-attention",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="attention",
+                risk_level="urgent",
+                intent_summary="最小结构化安全接力",
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=json.dumps(needs_attention_deliverable, ensure_ascii=False),
+                emotion_basis_json="[]",
+                model_name="safety-override",
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc - timedelta(minutes=2),
+                completed_at=cutoff_utc - timedelta(minutes=1),
+                expires_at=datetime.utcnow() + timedelta(days=30),
+            ))
+            db.add(StudentSupportRun(
+                run_code="SSR-AFTER-CUTOFF-UTC",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-after-cutoff-utc",
+                request_fingerprint="synthetic-cutoff-check",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="completed",
+                risk_level=before.risk_level,
+                intent_summary=before.intent_summary,
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=before.deliverable_json,
+                emotion_basis_json="[]",
+                model_name=before.model_name,
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc + timedelta(minutes=1),
+                completed_at=cutoff_utc + timedelta(minutes=2),
+                expires_at=datetime.utcnow() + timedelta(days=30),
+            ))
+            db.add(StudentSupportRun(
+                run_code="SSR-EXPIRED-HANDOFF",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-expired",
+                request_fingerprint="synthetic-expiry-check",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="completed",
+                risk_level=before.risk_level,
+                intent_summary=before.intent_summary,
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=before.deliverable_json,
+                emotion_basis_json="[]",
+                model_name=before.model_name,
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc - timedelta(minutes=4),
+                completed_at=cutoff_utc - timedelta(minutes=3),
+                expires_at=datetime.utcnow() - timedelta(seconds=1),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        product = self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/work-product",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(product.status_code, 200, product.text)
+        handoff = product.json()["agent_handoff"]
+        self.assertEqual(handoff["run_count"], 2)
+        self.assertEqual(handoff["verified_count"], 1)
+        self.assertEqual({item["run_code"] for item in handoff["latest"]}, {before_run_code, "SSR-NEEDS-ATTENTION"})
+        self.assertNotIn("SSR-AFTER-CUTOFF-UTC", str(handoff))
+        self.assertNotIn("SSR-EXPIRED-HANDOFF", str(handoff))
+        self.assertNotIn("最近考试让我焦虑", str(handoff))
+        self.assertEqual(
+            set(handoff["latest"][0]),
+            {"run_code", "completed_at", "risk_level", "status", "task_contract", "verification", "artifact"},
+        )
+        before_entry = next(item for item in handoff["latest"] if item["run_code"] == before_run_code)
+        attention_entry = next(item for item in handoff["latest"] if item["run_code"] == "SSR-NEEDS-ATTENTION")
+        self.assertEqual(before_entry["verification"]["status"], "verified")
+        self.assertEqual(before_entry["completed_at"], expected_completed_at)
+        self.assertEqual(attention_entry["verification"]["status"], "needs_attention")
+        self.assertEqual(attention_entry["risk_level"], "urgent")
+        self.assertTrue(any(item["status"] == "failed" for item in attention_entry["verification"]["checks"]))
+        self.assertEqual(product.json()["pipeline"][-1]["name"], "Agent交付验收")
+        self.assertEqual(product.json()["pipeline"][-1]["status"], "attention")
+        self.assertIn("1/2", product.json()["pipeline"][-1]["result"])
 
     def test_direct_work_product_uses_business_cutoff_across_utc_date_boundary(self):
         first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")

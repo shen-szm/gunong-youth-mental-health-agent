@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from datetime import datetime, timedelta
@@ -21,8 +22,8 @@ from api.user import router as user_router
 from config import settings
 from database import Base, get_db
 from database import _migrate_student_support_runs
-from models import StudentSupportEvent, StudentSupportRun
-from student_support_engine import recover_stale_support_run
+from models import ChatMessage, StudentChatSession, StudentSupportEvent, StudentSupportRun
+from student_support_engine import _plan, complete_chat_support_run, recover_stale_support_run, start_chat_support_run
 
 
 class StudentSupportAgentTests(unittest.TestCase):
@@ -71,13 +72,38 @@ class StudentSupportAgentTests(unittest.TestCase):
         response = self._send("最近考试让我很焦虑，连续失眠并且已经影响上课")
         self.assertEqual(response.status_code, 200)
         run = response.json()["agent_run"]
+        public_run = self.one.get("/api/student-agent/runs/latest").json()
         self.assertEqual(run["status"], "completed")
+        self.assertEqual(public_run["plan"][0]["id"], "safety")
+        self.assertEqual(run["events"][0]["agent"], "StudentSafetyGate")
         self.assertIn("deterministic_safety_rules", run["tools"])
+        self.assertIn("bounded_support_planner", run["tools"])
+        self.assertIn("student_delivery_verifier", run["tools"])
         self.assertIn("local_support_resource_registry", run["tools"])
         self.assertNotIn("xunfei_structured_synthesizer", run["tools"])
         self.assertGreaterEqual(len(run["events"]), 6)
         self.assertNotIn("考试让我很焦虑", str(run))
         self.assertIn("非诊断性", run["deliverable"]["boundary"])
+        planner = next(step for step in public_run["plan"] if step["id"] == "task_plan")
+        self.assertEqual(planner["agent"], "StudentTaskPlanner")
+        self.assertEqual(planner["scope"]["support_theme"], "学习任务")
+        self.assertEqual(planner["scope"]["functional_impact"], ["学习", "睡眠精力"])
+        self.assertEqual(planner["scope"]["execution_mode"], "local_deterministic")
+        self.assertEqual(planner["scope"]["cue_policy"], "student_voluntary_structured_only")
+        task_contract = run["deliverable"]["task_contract"]
+        self.assertEqual(set(task_contract), {"objective", "constraints", "acceptance_criteria"})
+        self.assertIn("学习任务", task_contract["objective"])
+        self.assertIn("不从行为、活跃度或沉默推断情绪", task_contract["constraints"])
+        verification = run["deliverable"]["verification"]
+        self.assertEqual(verification["status"], "verified")
+        self.assertTrue(verification["checks"])
+        self.assertTrue(all(item["status"] == "passed" for item in verification["checks"]))
+        self.assertEqual(set(run["deliverable"]["artifact"]), {"title", "outcome", "next_action", "next_owner"})
+        event_agents = [item["agent"] for item in run["events"]]
+        self.assertLess(event_agents.index("StudentResponseReviewer"), event_agents.index("OutcomeVerifier"))
+        self.assertLess(event_agents.index("OutcomeVerifier"), event_agents.index("StudentCoordinator"))
+        planner_event = next(item for item in run["events"] if item["agent"] == "StudentTaskPlanner")
+        self.assertIn("未从行为推断情绪", planner_event["summary"])
 
         latest = self.one.get("/api/student-agent/runs/latest")
         self.assertEqual(latest.status_code, 200)
@@ -99,11 +125,102 @@ class StudentSupportAgentTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["conversation_signal"], "urgent")
         run = payload["agent_run"]
+        public_run = self.one.get("/api/student-agent/runs/latest").json()
         self.assertEqual(run["status"], "attention")
         self.assertEqual(run["model_name"], "safety-override")
+        self.assertEqual([step["id"] for step in public_run["plan"]], ["safety", "handoff", "verify"])
+        self.assertEqual(run["events"][0]["agent"], "StudentSafetyGate")
         self.assertIn("urgent_support_router", run["tools"])
+        self.assertIn("student_delivery_verifier", run["tools"])
+        self.assertNotIn("bounded_support_planner", run["tools"])
+        self.assertFalse(any(item["agent"] == "ConversationObserver" for item in run["events"]))
         self.assertNotIn("xunfei_structured_synthesizer", run["tools"])
-        self.assertEqual(run["events"][-1]["agent"], "SafetyCoordinator")
+        self.assertEqual(run["events"][-2]["agent"], "SafetyCoordinator")
+        self.assertEqual(run["events"][-1]["agent"], "OutcomeVerifier")
+        self.assertEqual(run["deliverable"]["verification"]["status"], "verified")
+        self.assertEqual(
+            {item["id"] for item in run["deliverable"]["verification"]["checks"]},
+            {
+                "ordinary_generation_stopped", "safety_output_linked", "human_handoff_present", "support_line_present",
+                "emergency_route_present", "responsibility_assigned",
+            },
+        )
+        self.assertEqual(run["deliverable"]["artifact"]["next_owner"], "trusted_adult_or_emergency_support")
+        self.assertNotIn("我现在想伤害自己", str(run["deliverable"]))
+
+    def test_bounded_planner_changes_execution_mode_without_accepting_raw_fields(self):
+        features = {
+            "support_theme": "同伴相处",
+            "functional_impact": ["同伴相处", "未知字段"],
+            "raw_text": "不应进入计划",
+        }
+        plan, tools = _plan("watch", True, features)
+        planner = next(step for step in plan if step["id"] == "task_plan")
+        self.assertEqual(plan[0]["id"], "safety")
+        self.assertEqual(planner["scope"]["execution_mode"], "constrained_model")
+        self.assertEqual(planner["scope"]["functional_impact"], ["同伴相处"])
+        self.assertNotIn("raw_text", str(planner))
+        self.assertNotIn("不应进入计划", str(plan))
+        self.assertIn("bounded_support_planner", tools)
+        self.assertLess(
+            [step["id"] for step in plan].index("review"),
+            [step["id"] for step in plan].index("verify"),
+        )
+        self.assertLess(
+            [step["id"] for step in plan].index("verify"),
+            [step["id"] for step in plan].index("coordinate"),
+        )
+
+    def test_urgent_verifier_does_not_claim_success_without_persisted_safety_output(self):
+        session_payload = self.one.post("/api/chat/sessions", json={"force_new": True}).json()
+        db = self.Session()
+        try:
+            session = db.query(StudentChatSession).filter_by(
+                user_id=self.user_one, session_code=session_payload["session_id"],
+            ).one()
+            message = ChatMessage(
+                user_id=self.user_one,
+                session_id=session.id,
+                role="user",
+                content="合成安全门验收输入",
+                created_at=datetime.now(),
+            )
+            db.add(message)
+            db.flush()
+            run = start_chat_support_run(
+                db,
+                user_id=self.user_one,
+                session=session,
+                message_id=message.id,
+                risk_level="urgent",
+                derived_features={"support_theme": "最近发生的事情", "functional_impact": []},
+                external_ai_enabled=False,
+                idempotency_key="urgent-verifier-missing-output",
+            )
+            completed = complete_chat_support_run(
+                db,
+                run=run,
+                risk_level="urgent",
+                source="safety_override",
+                emotion="需要立即协助",
+                intensity="强烈",
+                conversation_signal="urgent",
+                output_message_id=None,
+            )
+            deliverable = json.loads(completed.deliverable_json)
+            self.assertEqual(deliverable["verification"]["status"], "needs_attention")
+            output_check = next(
+                item for item in deliverable["verification"]["checks"]
+                if item["id"] == "safety_output_linked"
+            )
+            self.assertEqual(output_check["status"], "failed")
+            verifier_event = db.query(StudentSupportEvent).filter_by(
+                run_id=completed.id, agent_type="OutcomeVerifier",
+            ).one()
+            self.assertEqual(verifier_event.status, "attention")
+            self.assertIn("未通过", verifier_event.summary)
+        finally:
+            db.close()
 
     def test_timeline_combines_agent_runs_without_exposing_conversation_text(self):
         self._send("今天有一点累")

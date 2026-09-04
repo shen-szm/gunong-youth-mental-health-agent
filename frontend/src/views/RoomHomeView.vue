@@ -1707,6 +1707,7 @@ const studentAgentState = reactive({
   tools: [],
   events: [],
   modelName: '',
+  deliverable: null,
   verifiedSteps: [],
   messageCount: 0,
   lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
@@ -1718,9 +1719,11 @@ const studentAgentSteps = computed(() => {
   const chatError = phase === 'chat_error'
   const verified = new Set(studentAgentState.verifiedSteps.map(step => step.id))
   const workflowStep = id => studentAgentState.verifiedSteps.find(step => step.id === id)
+  const planningStep = workflowStep('task_plan') || workflowStep('planning') || workflowStep('plan')
   const steps = [
-    { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待后端核对本轮表达', status: chatError ? 'error' : verified.has('observation') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
-    { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || '检查危机、伤害与需要成人介入的线索', status: urgent ? 'attention' : verified.has('safety') ? 'completed' : 'waiting' },
+    { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || (phase === 'chat' ? '安全分流进行中；通过后才进入任务理解与规划' : '检查危机、伤害与需要成人介入的线索'), status: chatError ? 'error' : urgent ? 'attention' : verified.has('safety') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
+    { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待安全分流通过后核对本轮表达', status: urgent ? 'blocked' : verified.has('observation') ? 'completed' : 'waiting' },
+    { id: 'planning', label: '规划受限支持', summary: planningStep?.summary || '等待安全分流与任务理解结果，不预先执行工具', status: urgent ? 'blocked' : (verified.has('task_plan') || verified.has('planning') || verified.has('plan')) ? 'completed' : 'waiting' },
     { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '整理本轮表达中的候选情绪线索，可由你修正', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
     { id: 'next_step', label: '支持回应编排', summary: phase === 'end_candidate' ? '本轮回应已完成，等待你确认是否生成完整小结' : workflowStep('response')?.summary || '等待安全检查后生成支持回应', status: urgent ? 'blocked' : phase === 'end_candidate' ? 'attention' : verified.has('response') ? 'completed' : 'waiting' },
     { id: 'summary', label: '倾诉后小结', summary: summaryError ? '上次整理未完成，可以安全重试' : '结束后整合完整会话并进行输出审查', status: urgent ? 'blocked' : summaryError ? 'error' : phase === 'summary' ? 'running' : phase === 'complete' ? 'completed' : 'waiting' },
@@ -1744,7 +1747,7 @@ async function deleteCurrentStudentAgentRun() {
     Object.assign(studentAgentState, {
       status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed',
       signal: 'continue', emotion: '', runCode: '', intentSummary: '', tools: [], events: [],
-      modelName: '', verifiedSteps: [], messageCount: 0, lastEvent: '本次 Agent 轨迹已删除',
+      modelName: '', deliverable: null, verifiedSteps: [], messageCount: 0, lastEvent: '本次 Agent 轨迹已删除',
     })
     showAgentRail.value = false
   } catch {
@@ -1759,6 +1762,7 @@ function applyVerifiedAgentRun(run) {
   studentAgentState.tools = Array.isArray(run.tools) ? run.tools : []
   studentAgentState.events = Array.isArray(run.events) ? run.events : []
   studentAgentState.modelName = run.model_name || ''
+  studentAgentState.deliverable = run.deliverable && typeof run.deliverable === 'object' ? run.deliverable : null
   studentAgentState.messageCount = Number(run.context_message_count || 0)
 }
 
@@ -1769,10 +1773,12 @@ async function restoreLatestStudentAgentRun() {
     if (!run) return
     applyVerifiedAgentRun(run)
     studentAgentState.status = run.status === 'attention' && run.risk_level === 'urgent' ? 'urgent'
-      : run.status === 'failed' ? 'error' : run.status === 'running' ? 'running' : 'ready'
+      : run.status === 'attention' ? 'attention'
+        : run.status === 'failed' ? 'error' : run.status === 'running' ? 'running' : 'ready'
     studentAgentState.phase = run.status === 'running' ? 'chat'
       : run.status === 'failed' ? 'chat_error'
-        : run.risk_level === 'urgent' ? 'urgent' : 'responded'
+        : run.risk_level === 'urgent' ? 'urgent'
+          : run.status === 'attention' ? 'delivery_attention' : 'responded'
     studentAgentState.signal = run.deliverable?.conversation_signal || 'continue'
     studentAgentState.emotion = run.deliverable?.emotion === '不确定' ? '' : (run.deliverable?.emotion || '')
     studentAgentState.riskLevel = run.risk_level || 'unassessed'
@@ -3978,8 +3984,9 @@ async function sendChatMsg(text) {
   studentAgentState.tools = []
   studentAgentState.events = []
   studentAgentState.modelName = ''
+  studentAgentState.deliverable = null
   studentAgentState.messageCount = 0
-  studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
+  studentAgentState.lastEvent = '安全分流进行中；通过后才会理解表达并规划支持'
   await nextTick()
   scrollChatBottom()
   chatLoading.value = true
@@ -4026,6 +4033,10 @@ async function sendChatMsg(text) {
         studentAgentState.lastEvent = '普通分析已停止，当前优先显示安全协助路径'
         showAgentRail.value = false
         nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
+      } else if (res.data.agent_run?.status === 'attention') {
+        studentAgentState.status = 'attention'
+        studentAgentState.phase = 'delivery_attention'
+        studentAgentState.lastEvent = '交付验收未全部通过，本轮未宣称完成；可查看核验项后安全重试'
       } else {
         studentAgentState.status = 'ready'
         studentAgentState.phase = showEndConfirmation.value ? 'end_candidate' : 'responded'
@@ -4213,7 +4224,7 @@ function resetStudentAgentState() {
     status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed', signal: 'continue', emotion: '',
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
-    runCode: '', intentSummary: '', tools: [], events: [], modelName: '',
+    runCode: '', intentSummary: '', tools: [], events: [], modelName: '', deliverable: null,
   })
 }
 

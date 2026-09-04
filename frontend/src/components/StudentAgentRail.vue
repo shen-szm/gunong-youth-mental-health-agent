@@ -53,6 +53,56 @@
           </li>
         </ol>
 
+        <section v-if="hasDeliverable" class="agent-delivery" aria-labelledby="student-agent-delivery-title">
+          <header class="agent-delivery-head">
+            <div>
+              <span>可验收交付</span>
+              <h3 id="student-agent-delivery-title">最近一次任务回执</h3>
+            </div>
+            <strong :class="['agent-verification-status', `is-${verificationTone}`]">{{ verificationLabel }}</strong>
+          </header>
+
+          <div v-if="taskContract.objective" class="agent-delivery-objective">
+            <span>任务目标</span>
+            <p>{{ taskContract.objective }}</p>
+          </div>
+
+          <dl v-if="contractConstraints.length || acceptanceCriteria.length" class="agent-contract-list">
+            <div v-if="contractConstraints.length">
+              <dt>执行约束</dt>
+              <dd><ul><li v-for="item in contractConstraints" :key="item">{{ item }}</li></ul></dd>
+            </div>
+            <div v-if="acceptanceCriteria.length">
+              <dt>验收条件</dt>
+              <dd><ul><li v-for="item in acceptanceCriteria" :key="item">{{ item }}</li></ul></dd>
+            </div>
+          </dl>
+
+          <div v-if="verificationChecks.length" class="agent-checks">
+            <h4>逐项核验</h4>
+            <ul>
+              <li v-for="check in verificationChecks" :key="check.id || check.label">
+                <span :class="`is-${verificationCheckTone(check.status)}`" aria-hidden="true">{{ verificationCheckIcon(check.status) }}</span>
+                <div>
+                  <strong>{{ check.label || '未命名验收项' }}</strong>
+                  <small v-if="evidenceText(check.evidence)">{{ evidenceText(check.evidence) }}</small>
+                </div>
+                <em>{{ verificationCheckLabel(check.status) }}</em>
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="hasArtifact" class="agent-artifact">
+            <span>交付物</span>
+            <h4>{{ artifact.title || '本轮支持结果' }}</h4>
+            <p v-if="artifact.outcome">{{ artifact.outcome }}</p>
+            <dl>
+              <div v-if="artifact.next_action"><dt>可选下一步</dt><dd>{{ artifact.next_action }}</dd></div>
+              <div v-if="artifact.next_owner"><dt>下一责任人</dt><dd>{{ ownerLabel(artifact.next_owner) }}</dd></div>
+            </dl>
+          </div>
+        </section>
+
         <details class="agent-technical-details">
           <summary>查看工作记录与数据来源</summary>
           <div class="student-agent-source" aria-label="当前 Agent 生成来源">
@@ -106,6 +156,7 @@ const compactStatus = computed(() => {
     standby: '等待倾听',
     running: '正在协作',
     ready: '本轮完成',
+    attention: '需要处理',
     urgent: '安全流程优先',
     error: '等待重试',
   }
@@ -119,6 +170,7 @@ const taskEyebrow = computed(() => ({
   end_candidate: '当前任务 · 等待学生决定',
   summary: '当前任务 · 完整会话小结',
   complete: '已交付 · 情绪小结与下一步',
+  delivery_attention: '交付核验 · 等待补充处理',
   urgent: '安全任务 · 真人支持交接',
   chat_error: '当前任务 · 等待安全重试',
 })[props.state.phase] || '当前任务 · 学生支持')
@@ -129,10 +181,34 @@ const activeRoles = computed(() => {
   return []
 })
 
+const deliverable = computed(() => props.state.deliverable && typeof props.state.deliverable === 'object'
+  ? props.state.deliverable
+  : {})
+const taskContract = computed(() => deliverable.value.task_contract && typeof deliverable.value.task_contract === 'object'
+  ? deliverable.value.task_contract
+  : {})
+const verification = computed(() => deliverable.value.verification && typeof deliverable.value.verification === 'object'
+  ? deliverable.value.verification
+  : {})
+const artifact = computed(() => deliverable.value.artifact && typeof deliverable.value.artifact === 'object'
+  ? deliverable.value.artifact
+  : {})
+const contractConstraints = computed(() => listValues(taskContract.value.constraints))
+const acceptanceCriteria = computed(() => listValues(taskContract.value.acceptance_criteria))
+const verificationChecks = computed(() => Array.isArray(verification.value.checks) ? verification.value.checks : [])
+const hasArtifact = computed(() => Boolean(artifact.value.title || artifact.value.outcome || artifact.value.next_action || artifact.value.next_owner))
+const hasDeliverable = computed(() => Boolean(
+  taskContract.value.objective
+  || contractConstraints.value.length
+  || acceptanceCriteria.value.length
+  || verification.value.status
+  || verificationChecks.value.length
+  || hasArtifact.value,
+))
+const verificationTone = computed(() => verificationCheckTone(verification.value.status))
+const verificationLabel = computed(() => verificationCheckLabel(verification.value.status))
+
 const displaySteps = computed(() => {
-  if (props.state.status === 'running' && !props.state.events?.length) {
-    return [{ id: 'request-pending', label: '请求已发送', summary: '等待服务端返回可核验的执行事件', status: 'running' }]
-  }
   if (!props.state.events?.length) return props.steps
   return props.state.events.map(event => ({
     id: `${event.sequence}-${event.agent}`,
@@ -146,10 +222,15 @@ function agentLabel(agent) {
   return ({
     ConversationObserver: '理解表达',
     StudentSafetyGate: '安全检查',
+    StudentTaskPlanner: '规划受限任务',
+    bounded_support_planner: '规划受限任务',
     EmotionSynthesizer: '情绪整理',
     ResourceNavigator: '匹配支持资源',
     ResponseAgent: '生成回应',
     StudentResponseReviewer: '输出复核',
+    OutcomeVerifier: '核验交付结果',
+    DeliveryVerifier: '核验交付结果',
+    SafetyCoordinator: '交付安全路径',
     StudentCoordinator: '完成交付',
   })[agent] || agent
 }
@@ -198,15 +279,65 @@ function toolLabel(tool) {
   return ({
     derived_feature_extractor: '结构特征提炼',
     deterministic_safety_rules: '安全规则',
+    bounded_support_planner: '受限支持规划',
+    student_task_planner: '受限支持规划',
     emotion_feature_synthesizer: '情绪综合',
     local_support_resource_registry: '本地审计资源库',
     xunfei_response_strategy_selector: '讯飞回应策略选择',
     xunfei_structured_synthesizer: '讯飞结构化综合',
     deterministic_response_template: '本地回应模板',
     generated_content_validator: '输出安全校验',
+    outcome_verifier: '交付结果核验',
+    delivery_verifier: '交付结果核验',
+    student_outcome_verifier: '交付结果核验',
+    student_delivery_verifier: '交付结果核验',
     student_delivery_formatter: '结果交付',
     urgent_support_router: '真人安全路径',
   })[tool] || tool
+}
+
+function listValues(value) {
+  const values = Array.isArray(value) ? value : [value]
+  return values.map((item) => {
+    if (typeof item === 'string' || typeof item === 'number') return String(item).trim()
+    if (!item || typeof item !== 'object') return ''
+    return String(item.label || item.text || item.description || '').trim()
+  }).filter(Boolean)
+}
+
+function verificationCheckTone(status) {
+  if (['verified', 'passed', 'completed'].includes(status)) return 'verified'
+  if (['failed', 'blocked', 'rejected'].includes(status)) return 'failed'
+  if (['needs_attention', 'attention'].includes(status)) return 'attention'
+  return 'pending'
+}
+
+function verificationCheckIcon(status) {
+  return ({ verified: '✓', failed: '×', attention: '!', pending: '·' })[verificationCheckTone(status)]
+}
+
+function verificationCheckLabel(status) {
+  return ({ verified: '已核验', failed: '未通过', attention: '需处理', pending: '待核验' })[verificationCheckTone(status)]
+}
+
+function evidenceText(evidence) {
+  if (Array.isArray(evidence)) return evidence.map(item => evidenceText(item)).filter(Boolean).join('；')
+  if (typeof evidence === 'string' || typeof evidence === 'number') return String(evidence)
+  if (!evidence || typeof evidence !== 'object') return ''
+  return Object.values(evidence).filter(value => typeof value === 'string' || typeof value === 'number').join(' · ')
+}
+
+function ownerLabel(owner) {
+  return ({
+    student: '由你自主决定',
+    student_choice: '由你自主决定',
+    student_with_trusted_adult: '由你与可信成年人共同决定',
+    teacher: '教师确认后接力',
+    counselor: '校内心理支持人员',
+    school_support: '校内支持人员',
+    trusted_adult_or_school_support: '可信成年人或校内支持人员',
+    trusted_adult_or_emergency_support: '可信成年人或紧急支持',
+  })[owner] || String(owner).replaceAll('_', ' ')
 }
 
 watch(() => props.open, async (value, previous) => {
@@ -278,6 +409,7 @@ watch(() => props.open, async (value, previous) => {
   background: var(--agent-subtle);
 }
 .agent-toggle-mark.is-running { background: var(--agent-warning); animation: agent-pulse 1.2s ease-in-out infinite; }
+.agent-toggle-mark.is-attention { background: var(--agent-warning); }
 .agent-toggle-mark.is-ready { background: var(--agent-success); }
 .agent-toggle-mark.is-urgent, .agent-toggle-mark.is-error { background: var(--agent-danger); }
 .agent-toggle-copy { display: grid; gap: 3px; min-width: 0; }
@@ -326,6 +458,7 @@ watch(() => props.open, async (value, previous) => {
 }
 .agent-rail-event span { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--agent-subtle); }
 .agent-rail-event span.is-running { background: var(--agent-warning); }
+.agent-rail-event span.is-attention { background: var(--agent-warning); }
 .agent-rail-event span.is-ready { background: var(--agent-success); }
 .agent-rail-event span.is-urgent, .agent-rail-event span.is-error { background: var(--agent-danger); }
 .agent-rail-event strong,
@@ -376,6 +509,7 @@ watch(() => props.open, async (value, previous) => {
 .agent-step-list strong { color: var(--agent-ink); font-size: 11px; line-height: 1.4; }
 .agent-step-list small { margin-top: 2px; color: var(--agent-muted); font-size: 10px; line-height: 1.45; }
 .agent-step-list em { color: var(--agent-subtle); font-size: 9px; font-style: normal; white-space: nowrap; }
+.agent-delivery { display: none; }
 .agent-technical-details { margin-top: 10px; border-top: 1px solid var(--agent-line); }
 .agent-technical-details summary { min-height: 40px; padding: 11px 1px 8px; color: var(--agent-muted); font-size: 10px; cursor: pointer; }
 .agent-technical-details summary:hover { color: var(--agent-ink); }
@@ -395,6 +529,50 @@ watch(() => props.open, async (value, previous) => {
 
 @media (min-width: 900px) {
   .student-agent-shell.is-open .student-agent-toggle { display: none; }
+  .agent-delivery {
+    display: block;
+    margin-top: 12px;
+    padding-top: 13px;
+    border-top: 1px solid var(--agent-line);
+  }
+  .agent-delivery-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .agent-delivery-head > div > span,
+  .agent-delivery-objective > span,
+  .agent-artifact > span { color: var(--agent-accent); font-size: 9px; font-weight: 750; }
+  .agent-delivery-head h3 { margin: 3px 0 0; color: var(--agent-ink); font-size: 13px; line-height: 1.35; }
+  .agent-verification-status { flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; font-size: 9px; }
+  .agent-verification-status.is-verified { color: oklch(22% .04 150); background: var(--agent-success); }
+  .agent-verification-status.is-failed { color: oklch(20% .04 30); background: var(--agent-danger); }
+  .agent-verification-status.is-attention { color: oklch(24% .04 72); background: var(--agent-warning); }
+  .agent-verification-status.is-pending { color: oklch(24% .04 72); background: var(--agent-warning); }
+  .agent-delivery-objective { margin-top: 11px; }
+  .agent-delivery-objective p { margin: 4px 0 0; color: var(--agent-ink); font-size: 11px; font-weight: 650; line-height: 1.5; }
+  .agent-contract-list { display: grid; gap: 8px; margin: 10px 0 0; }
+  .agent-contract-list > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; }
+  .agent-contract-list dt { color: var(--agent-subtle); font-size: 9px; }
+  .agent-contract-list dd { margin: 0; }
+  .agent-contract-list ul { margin: 0; padding-left: 15px; color: var(--agent-muted); font-size: 9px; line-height: 1.55; }
+  .agent-contract-list li + li { margin-top: 3px; }
+  .agent-checks { margin-top: 11px; }
+  .agent-checks h4 { margin: 0 0 4px; color: var(--agent-subtle); font-size: 9px; }
+  .agent-checks ul { margin: 0; padding: 0; list-style: none; }
+  .agent-checks li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 7px; align-items: start; padding: 7px 0; border-top: 1px solid var(--agent-line); }
+  .agent-checks li > span { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 5px; color: var(--agent-muted); background: var(--agent-raised); font-size: 10px; font-weight: 800; }
+  .agent-checks li > span.is-verified { color: oklch(20% .03 150); background: var(--agent-success); }
+  .agent-checks li > span.is-failed { color: oklch(20% .04 30); background: var(--agent-danger); }
+  .agent-checks li > span.is-attention { color: oklch(24% .04 72); background: var(--agent-warning); }
+  .agent-checks strong,
+  .agent-checks small { display: block; }
+  .agent-checks strong { color: var(--agent-ink); font-size: 10px; line-height: 1.4; }
+  .agent-checks small { margin-top: 2px; color: var(--agent-muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+  .agent-checks em { color: var(--agent-subtle); font-size: 9px; font-style: normal; white-space: nowrap; }
+  .agent-artifact { margin-top: 10px; padding: 10px 11px; border-radius: 10px; background: var(--agent-raised); }
+  .agent-artifact h4 { margin: 3px 0 0; color: var(--agent-ink); font-size: 12px; line-height: 1.4; }
+  .agent-artifact > p { margin: 5px 0 0; color: var(--agent-muted); font-size: 10px; line-height: 1.5; }
+  .agent-artifact dl { display: grid; gap: 5px; margin: 8px 0 0; }
+  .agent-artifact dl > div { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 7px; }
+  .agent-artifact dt { color: var(--agent-subtle); font-size: 9px; }
+  .agent-artifact dd { margin: 0; color: var(--agent-ink); font-size: 9px; line-height: 1.45; }
 }
 
 @media (min-width: 900px) and (max-width: 1163px) {
