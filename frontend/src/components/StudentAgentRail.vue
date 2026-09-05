@@ -1,5 +1,5 @@
 <template>
-  <section class="student-agent-shell" :class="{ 'is-open': open }" aria-label="咕哝智能体工作状态">
+  <section class="student-agent-shell" :class="{ 'is-open': open, 'is-graph-open': graphOpen && desktop }" aria-label="咕哝智能体工作状态">
     <button
       ref="toggleButton"
       class="student-agent-toggle"
@@ -42,7 +42,14 @@
           <small>{{ state.lastEvent || '等待你开始表达' }}</small>
         </p>
 
-        <ol class="agent-step-list" aria-label="多 Agent 协作轨迹">
+        <button v-if="desktop" class="agent-graph-toggle" type="button" :aria-expanded="graphOpen" aria-controls="agent-execution-view" @click="graphOpen = !graphOpen">
+          {{ graphOpen ? '收起执行图' : '查看执行图与工具记录' }}<span aria-hidden="true">{{ graphOpen ? '−' : '↗' }}</span>
+        </button>
+        <div v-if="graphOpen && desktop" id="agent-execution-view">
+          <AgentExecutionGraph :state="state" :agent-label="agentLabel" :tool-label="toolLabel" />
+        </div>
+
+        <ol v-show="!graphOpen || !desktop" class="agent-step-list" aria-label="多 Agent 协作轨迹">
           <li v-for="step in displaySteps" :key="step.id" :class="`is-${step.status}`">
             <span class="agent-step-icon" aria-hidden="true">{{ statusIcon(step.status) }}</span>
             <div>
@@ -115,8 +122,8 @@
             <div v-if="activeRoles.length" class="agent-role-row" aria-label="已核验协作角色">
               <span v-for="role in activeRoles" :key="role">{{ role }}</span>
             </div>
-            <div v-if="state.tools?.length" class="agent-tool-row" aria-label="实际调用工具">
-              <span v-for="tool in state.tools" :key="tool">{{ toolLabel(tool) }}</span>
+            <div v-if="executedTools.length" class="agent-tool-row" aria-label="实际调用工具">
+              <span v-for="tool in executedTools" :key="tool">{{ toolLabel(tool) }}</span>
             </div>
           </section>
           <p class="agent-boundary">只展示可核验的工作步骤与结果摘要，不展示模型私有思维过程；情绪整理不等于心理诊断。</p>
@@ -133,7 +140,19 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+const AgentExecutionGraph = defineAsyncComponent(() => import('./AgentExecutionGraph.vue'))
+const graphOpen = ref(false)
+const desktop = ref(false)
+let desktopQuery
+function updateDesktop() { desktop.value = desktopQuery.matches }
+onMounted(() => {
+  desktopQuery = window.matchMedia('(min-width: 900px)')
+  updateDesktop()
+  desktopQuery.addEventListener('change', updateDesktop)
+})
+onUnmounted(() => desktopQuery?.removeEventListener('change', updateDesktop))
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -180,6 +199,7 @@ const activeRoles = computed(() => {
   if (verifiedRoles.length) return verifiedRoles
   return []
 })
+const executedTools = computed(() => [...new Set((props.state.events || []).map(event => event.tool).filter(Boolean))])
 
 const deliverable = computed(() => props.state.deliverable && typeof props.state.deliverable === 'object'
   ? props.state.deliverable
@@ -232,6 +252,8 @@ function agentLabel(agent) {
     DeliveryVerifier: '核验交付结果',
     SafetyCoordinator: '交付安全路径',
     StudentCoordinator: '完成交付',
+    StudentRunRecovery: '恢复任务状态',
+    StudentSupportRecovery: '恢复任务状态',
   })[agent] || agent
 }
 
@@ -341,6 +363,7 @@ function ownerLabel(owner) {
 }
 
 watch(() => props.open, async (value, previous) => {
+  if (!value) graphOpen.value = false
   await nextTick()
   if (value && !previous) closeButton.value?.focus({ preventScroll: true })
   if (!value && previous) toggleButton.value?.focus({ preventScroll: true })
@@ -707,5 +730,18 @@ watch(() => props.open, async (value, previous) => {
   .agent-step-list li.is-running .agent-step-icon { animation: none; }
   .student-agent-toggle,
   .agent-toggle-chevron { transition: none; }
+}
+
+@media (min-width: 900px) {
+  .agent-graph-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 11px 12px; margin: 12px 0 16px; color: var(--agent-ink); background: var(--agent-raised); border: 1px solid var(--agent-line); border-radius: 8px; font: inherit; font-size: 12px; cursor: pointer; }
+  .agent-graph-toggle:hover { background: var(--agent-hover); }
+  .agent-graph-toggle span { color: var(--agent-accent); font-size: 18px; }
+  .agent-graph-toggle:focus-visible { outline: 2px solid var(--agent-accent); outline-offset: 3px; }
+  .student-agent-shell.is-open.is-graph-open .student-agent-rail { width: min(740px, calc(100vw - 60px)); }
+  .is-graph-open .agent-delivery { margin-top: 20px; }
+  .is-graph-open .agent-delivery-head h3 { font-size: 15px; }
+  .is-graph-open .agent-contract-list { grid-template-columns: 1fr 1fr; gap: 24px; }
+  .is-graph-open .agent-checks strong, .is-graph-open .agent-artifact > p, .is-graph-open .agent-artifact dd, .is-graph-open .agent-contract-list ul { font-size: 12px; }
+  .is-graph-open .agent-checks small, .is-graph-open .agent-contract-list dt, .is-graph-open .agent-checks em { font-size: 11px; }
 }
 </style>

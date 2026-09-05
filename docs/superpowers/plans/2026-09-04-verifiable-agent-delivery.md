@@ -26,8 +26,8 @@
 
 ### 常规路径
 
-1. `ConversationObserver` 提取低识别风险的结构特征。
-2. `StudentSafetyGate` 执行确定性安全分流。
+1. `StudentSafetyGate` 执行确定性安全分流。
+2. `ConversationObserver` 提取低识别风险的结构特征。
 3. `StudentTaskPlanner` 生成受限、可解释的动态工具计划。
 4. 情绪、资源与回应 Agent 按计划执行；外部模型不可用时回退到本地模板。
 5. `StudentResponseReviewer` 检查结构、诊断措辞、危险建议与重复内容。

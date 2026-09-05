@@ -1706,6 +1706,7 @@ const studentAgentState = reactive({
   intentSummary: '',
   tools: [],
   events: [],
+  plan: [],
   modelName: '',
   deliverable: null,
   verifiedSteps: [],
@@ -1746,7 +1747,7 @@ async function deleteCurrentStudentAgentRun() {
     await deleteStudentAgentRun(studentAgentState.runCode)
     Object.assign(studentAgentState, {
       status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed',
-      signal: 'continue', emotion: '', runCode: '', intentSummary: '', tools: [], events: [],
+      signal: 'continue', emotion: '', runCode: '', intentSummary: '', tools: [], events: [], plan: [],
       modelName: '', deliverable: null, verifiedSteps: [], messageCount: 0, lastEvent: '本次 Agent 轨迹已删除',
     })
     showAgentRail.value = false
@@ -1761,6 +1762,7 @@ function applyVerifiedAgentRun(run) {
   studentAgentState.intentSummary = run.intent_summary || ''
   studentAgentState.tools = Array.isArray(run.tools) ? run.tools : []
   studentAgentState.events = Array.isArray(run.events) ? run.events : []
+  studentAgentState.plan = Array.isArray(run.plan) ? run.plan : []
   studentAgentState.modelName = run.model_name || ''
   studentAgentState.deliverable = run.deliverable && typeof run.deliverable === 'object' ? run.deliverable : null
   studentAgentState.messageCount = Number(run.context_message_count || 0)
@@ -3983,6 +3985,7 @@ async function sendChatMsg(text) {
   studentAgentState.intentSummary = ''
   studentAgentState.tools = []
   studentAgentState.events = []
+  studentAgentState.plan = []
   studentAgentState.modelName = ''
   studentAgentState.deliverable = null
   studentAgentState.messageCount = 0
@@ -4224,7 +4227,7 @@ function resetStudentAgentState() {
     status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed', signal: 'continue', emotion: '',
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
-    runCode: '', intentSummary: '', tools: [], events: [], modelName: '', deliverable: null,
+    runCode: '', intentSummary: '', tools: [], events: [], plan: [], modelName: '', deliverable: null,
   })
 }
 

@@ -73,6 +73,7 @@ class ChatAgentRun(BaseModel):
     status: Literal["running", "completed", "attention", "failed"]
     intent_summary: str
     context_message_count: int
+    plan: list[dict] = Field(default_factory=list)
     tools: list[str]
     events: list[ChatAgentEvent]
     deliverable: dict
@@ -208,6 +209,7 @@ def _chat_agent_payload(db: Session, run: StudentSupportRun) -> ChatAgentRun:
     return ChatAgentRun(
         run_code=run.run_code, status=run.status, intent_summary=run.intent_summary,
         context_message_count=run.context_message_count,
+        plan=json.loads(run.plan_json or "[]"),
         tools=json.loads(run.tools_json or "[]"),
         events=[ChatAgentEvent(
             sequence=item.sequence, agent=item.agent_type, tool=item.tool_name,

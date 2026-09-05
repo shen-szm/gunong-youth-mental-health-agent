@@ -1,6 +1,6 @@
 {
   "name": "shengyu-web",
-  "version": "5.1.0-alpha.33",
+  "version": "5.1.0-alpha.34",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "test:e2e:student-summary": "node --test tests/student-conversation-summary.e2e.mjs"
   },
   "dependencies": {
+    "@vue-flow/core": "1.48.2",
     "axios": "^1.7.0",
     "phaser": "3.90.0",
     "pinia": "^2.1.0",

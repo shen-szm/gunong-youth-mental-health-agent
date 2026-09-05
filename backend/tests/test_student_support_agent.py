@@ -73,6 +73,7 @@ class StudentSupportAgentTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         run = response.json()["agent_run"]
         public_run = self.one.get("/api/student-agent/runs/latest").json()
+        self.assertEqual(run["plan"], public_run["plan"])
         self.assertEqual(run["status"], "completed")
         self.assertEqual(public_run["plan"][0]["id"], "safety")
         self.assertEqual(run["events"][0]["agent"], "StudentSafetyGate")
@@ -129,6 +130,7 @@ class StudentSupportAgentTests(unittest.TestCase):
         self.assertEqual(run["status"], "attention")
         self.assertEqual(run["model_name"], "safety-override")
         self.assertEqual([step["id"] for step in public_run["plan"]], ["safety", "handoff", "verify"])
+        self.assertEqual(run["plan"], public_run["plan"])
         self.assertEqual(run["events"][0]["agent"], "StudentSafetyGate")
         self.assertIn("urgent_support_router", run["tools"])
         self.assertIn("student_delivery_verifier", run["tools"])
