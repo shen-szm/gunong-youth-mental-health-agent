@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the reviewed alpha.32 -> alpha.34 code delta. No environment/database writes.
+# Deploy the reviewed alpha.32 -> alpha.34 delta; only RELEASE_VERSION changes in .env.
 set -Eeuo pipefail
 release=${1:?Pass a unique alpha34-<commit>-<timestamp> release ID}
 case "$release" in alpha34-*) ;; *) exit 2 ;; esac
@@ -15,6 +15,45 @@ test ! -e "$backup"
 test ! -L "$root/frontend/dist"
 test -d "$root/frontend/dist"
 systemctl is-active --quiet shengyu
+
+set_release_version() {
+  python3 - "$1" "$2" <<'PY'
+import os
+import pathlib
+import re
+import stat
+import sys
+import tempfile
+
+path = pathlib.Path('/opt/shengyu/backend/.env')
+before, after = sys.argv[1:]
+allowed = {'5.1.0-alpha.32', '5.1.0-alpha.34'}
+if before not in allowed or after not in allowed or path.is_symlink():
+    raise SystemExit('Invalid release version target')
+data = path.read_bytes()
+pattern = rb'(?m)^RELEASE_VERSION=[^\r\n]*'
+matches = re.findall(pattern, data)
+if matches != [('RELEASE_VERSION=' + before).encode()]:
+    raise SystemExit('Public release version changed; refusing to overwrite')
+updated = re.sub(pattern, ('RELEASE_VERSION=' + after).encode(), data)
+if before == after:
+    raise SystemExit(0)
+metadata = path.stat()
+fd, name = tempfile.mkstemp(prefix='.release-version-', dir=path.parent)
+try:
+    with os.fdopen(fd, 'wb') as stream:
+        os.fchmod(stream.fileno(), stat.S_IMODE(metadata.st_mode))
+        os.fchown(stream.fileno(), metadata.st_uid, metadata.st_gid)
+        stream.write(updated)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(name, path)
+finally:
+    if os.path.exists(name):
+        os.unlink(name)
+PY
+}
+set_release_version 5.1.0-alpha.32 5.1.0-alpha.32
 
 verify_baseline() {
   local actual
@@ -49,12 +88,16 @@ fi
 chown -R ubuntu:ubuntu "$stage/dist"
 switched=0
 stopped=0
+version_changed=0
 rollback() {
   local result=$?
   trap - ERR
   if test "$stopped" = 1; then
     systemctl stop shengyu || true
     tar -xzf "$backup/backend-code.tar.gz" -C "$root"
+    if test "$version_changed" = 1; then
+      set_release_version 5.1.0-alpha.34 5.1.0-alpha.32
+    fi
     if test "$switched" = 1; then
       mv "$root/frontend/dist" "$stage/failed-dist"
       mv "$backup/frontend-dist" "$root/frontend/dist"
@@ -67,6 +110,8 @@ rollback() {
 trap rollback ERR
 systemctl stop shengyu
 stopped=1
+set_release_version 5.1.0-alpha.32 5.1.0-alpha.34
+version_changed=1
 for file in "${files[@]}"; do
   install -o ubuntu -g ubuntu -m 0644 "$stage/code/$file" "$root/$file"
 done
