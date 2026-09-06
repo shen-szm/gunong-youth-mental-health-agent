@@ -36,3 +36,5 @@ backend/venv/Scripts/python.exe backend/scripts/verify_teacher_cases.py
 ## 发布约束
 
 alpha.35 仅替换后端 `config.py`、`teacher_review_engine.py` 与已测试前端构建。合成案例不写入生产数据库。发布脚本验证 alpha.34 基线并备份旧代码和前端，只修改 `.env` 的公开 `RELEASE_VERSION` 字段；任何健康检查失败均回滚。
+
+通过 `.gitattributes` 固定 `deploy/*.sh` 为 LF，避免 Windows `git archive` 按本地换行规则导出后无法在 Linux 执行。脚本在服务切换前执行 `bash -n` 检查。
