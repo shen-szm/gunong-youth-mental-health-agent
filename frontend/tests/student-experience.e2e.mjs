@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import path from 'node:path'
+import { chromium } from 'playwright-core'
+
+test('conversation starters, real audio playback and persistent greenhouse loop', { skip: process.env.RUN_EXPERIENCE_E2E !== '1', timeout: 120000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', headless: true })
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+    const base = process.env.EXPERIENCE_URL || 'http://127.0.0.1:5177/'
+    const registered = await context.request.post(new URL('/api/user/register', base).href, { data: { username: `experience_${Date.now()}`, password: 'Experience_Test36!', nickname: '体验测试' } })
+    assert.ok(registered.ok())
+    const user = await registered.json()
+    const page = await context.newPage(), errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.addInitScript(id => localStorage.setItem(`shengyu_first_run_guide_completed_version:${id}`, '4.3.0'), user.user_id)
+    await page.goto(base, { waitUntil: 'networkidle' })
+    if (await page.locator('.splash').isVisible()) await page.locator('.splash').click()
+    await page.locator('.zone-monitor').focus(); await page.keyboard.press('Enter'); await page.locator('.room-action-bar').waitFor(); await page.keyboard.press('Enter')
+    const chat = page.locator('.chat-panel')
+    await chat.getByRole('button', { name: /一起理清楚/ }).click()
+    assert.match(await chat.locator('.input-wrap input').inputValue(), /理一理/)
+    assert.equal(await chat.locator('.msg-row.user').count(), 0, 'starters never send without confirmation')
+    await chat.locator('.input-wrap input').fill('最近考试让我有点焦虑，想把学习任务理清楚。')
+    const response = page.waitForResponse(r => r.url().includes('/api/chat/send') && r.request().method() === 'POST')
+    await chat.locator('.send-btn').click()
+    const result = await (await response).json()
+    assert.ok(result.reply.length > 100)
+    assert.match(result.reply, /学习/)
+    await chat.locator('.msg-row.assistant').waitFor()
+    await page.screenshot({ path: path.resolve('.codex-alpha36-conversation.png'), fullPage: true })
+    await chat.getByRole('button', { name: '关闭倾诉面板' }).click()
+    await page.getByRole('button', { name: '听音乐', exact: true }).click()
+    await page.getByRole('heading', { name: '先听一首，不必先说明心情' }).waitFor()
+    const shelf = page.locator('.listening-shelf')
+    await shelf.getByRole('button', { name: '播放当前曲目' }).click()
+    await shelf.getByRole('button', { name: '暂停当前曲目' }).waitFor({ timeout: 15000 })
+    assert.ok(await shelf.getByRole('slider', { name: '播放进度', exact: true }).isEnabled())
+    await shelf.getByRole('button', { name: '暂停当前曲目' }).click()
+    await page.screenshot({ path: path.resolve('.codex-alpha36-music.png'), fullPage: true })
+    await page.getByRole('button', { name: '关闭音乐推荐', exact: true }).click()
+    await page.getByRole('button', { name: '进入心岛探索' }).click()
+    await page.locator('.island-game-host canvas').waitFor()
+    await page.locator('.island-loading').waitFor({ state: 'detached' })
+    await page.getByRole('button', { name: /云顶暖房/ }).click()
+    const garden = page.locator('.island-garden-game')
+    await garden.waitFor({ state: 'visible', timeout: 20000 })
+    assert.equal(await garden.locator('.plot').count(), 9)
+    await garden.locator('.plot').nth(0).click()
+    await garden.getByLabel('当前种子').selectOption('mint')
+    await garden.getByRole('button', { name: '播种', exact: true }).click(); await garden.locator('.plot').nth(0).click()
+    for (let i = 1; i <= 2; i++) {
+      await garden.getByRole('button', { name: '浇水', exact: true }).click(); await garden.locator('.plot').nth(0).click()
+      await garden.getByRole('button', { name: '锄地', exact: true }).click(); await garden.locator('.plot').nth(i).click()
+    }
+    await garden.getByRole('button', { name: '收获', exact: true }).click(); await garden.locator('.plot').nth(0).click()
+    assert.match(await garden.locator('.garden-message').innerText(), /收进篮子/)
+    assert.equal(await page.evaluate(id => JSON.parse(localStorage.getItem(`shengyu_island_activities_v5_1_${id}`)).garden.produce.mint, user.user_id), 1)
+    await page.screenshot({ path: path.resolve('.codex-alpha36-garden.png'), fullPage: true })
+    await page.locator('.activity-panel-header').getByRole('button', { name: '返回岛上' }).click()
+    await page.getByRole('button', { name: /云顶暖房/ }).click()
+    await garden.waitFor({ state: 'visible', timeout: 20000 })
+    assert.match(await garden.locator('.garden-stock').filter({ hasText: '海风薄荷' }).innerText(), /收获 1/)
+    await page.setViewportSize({ width: 390, height: 844 })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+    assert.deepEqual(errors, [])
+  } finally { await browser.close() }
+})

@@ -656,6 +656,8 @@ function dismissArrival() {
 }
 function visitPlace(place) {
   if (safetyLocked.value || activeActivity.value) return
+  // Explicit navigation should not be swallowed by the automatic re-entry cooldown.
+  arrivalCooldown = false
   arrivalCard.value = null
   targetPlaceLabel.value = place.label
   bridge.emit('command', { type: 'visit', placeId: place.id })

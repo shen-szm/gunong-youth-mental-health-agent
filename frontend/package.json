@@ -1,6 +1,6 @@
 {
   "name": "shengyu-web",
-  "version": "5.1.0-alpha.35",
+  "version": "5.1.0-alpha.36",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "@lucide/vue": "1.41.0",
     "@vue-flow/core": "1.48.2",
     "axios": "^1.7.0",
+    "howler": "2.2.4",
     "phaser": "3.90.0",
     "pinia": "^2.1.0",
     "swiper": "^12.2.0",

@@ -234,6 +234,7 @@
 
 
     <nav class="bottom-nav">
+      <button class="bnav-item music-direct-entry" @click="openWorkspacePanel('music', $event.currentTarget)"><div class="icon-wrap"><UiIcon name="music" :size="20" /></div><span class="bnav-label">听音乐</span></button>
       <button ref="chatNavButton" class="bnav-item" @click="goToChat">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -899,7 +900,7 @@
           <!-- 标题 -->
           <div class="trend-header">
             <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
-              <h2>🎵 今日音乐推荐</h2>
+              <h2>听歌与放松</h2>
               <button class="music-toggle-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
                 <svg v-if="musicOn" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 3v12.26A3 3 0 107.5 18c0-.17.02-.34.04-.5H7.5a.5.5 0 01-.5-.5V7H17v7.26A3 3 0 1015.5 17c0-.17.02-.34.04-.5H15.5a.5.5 0 01-.5-.5V3H9z"/></svg>
                 <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3v12.26A3 3 0 107.5 18H7.5V7H17v5M3 3l18 18"/></svg>
@@ -907,12 +908,14 @@
               </button>
             </div>
             <p v-if="primaryEmotion">
-              你今天的<span class="emotion-badge">{{ getEmoji(primaryEmotion) }} {{ primaryEmotion }}</span>占了{{ primaryEmotionPct }}%，为你定制了以下歌单
+              也可以按你主动记录过的心情，探索下面的曲风推荐。
             </p>
-            <p v-else>还没有情绪记录，先来倾诉一下吧 💬</p>
+            <p v-else>不需要先倾诉或记录心情，选一首喜欢的就好。</p>
           </div>
 
           <!-- 算法说明卡片 -->
+          <MusicListeningShelf ref="listeningShelf" @playing="pauseOtherMusic" />
+          <details v-if="primaryEmotion" class="music-recommendation-details"><summary>查看曲风推荐依据</summary>
           <div class="algo-card" v-if="primaryEmotion">
             <div class="algo-title">📊 推荐算法</div>
             <div class="algo-factors">
@@ -956,6 +959,7 @@
           </div>
 
           <!-- 隐藏音频元素：通过后端代理播放网易云音频 -->
+          </details>
           <audio ref="musicAudioEl" class="am-hidden-audio" preload="none" controls></audio>
 
           <!-- 推荐歌单卡片列表 -->
@@ -1047,7 +1051,7 @@
           <!-- 空状态 -->
           <div class="empty-state" v-else-if="!primaryEmotion">
             <div class="empty-icon">🎶</div>
-            <p>分享你的心情，获取专属音乐推荐</p>
+            <p>记录心情后可探索更多曲风；上方房间曲目随时可听。</p>
           </div>
         </div>
       </div>
@@ -1245,9 +1249,12 @@
             <div class="welcome-wrap" v-if="chatMessages.length === 0">
               <img src="/images/logo.jpg" class="welcome-avatar ai-logo" alt="咕哝" />
               <div class="welcome-bubble">
-                <p>嘿，你来了 👋</p>
-                <p>今天怎么样？有什么想聊的，我都在这里。</p>
+                <p>先不用把话组织好。</p>
+                <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
               </div>
+            </div>
+            <div v-if="!chatMessages.length" class="conversation-starters" aria-label="选择倾诉开场">
+              <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
             </div>
             <div class="chat-ai-consent" role="status">
               <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
@@ -1329,7 +1336,7 @@
               @mouseup="onQuickMouseUp"
               @mouseleave="onQuickMouseUp"
             >
-              <button v-for="e in emotions" :key="e.text" class="quick-btn" @click="sendChatMsg(e.text)">
+              <button v-for="e in (chatMessages.length ? conversationFollowups : emotions)" :key="e.text" class="quick-btn" @click="chatMessages.length ? prepareConversation(e.text) : sendChatMsg(e.text)">
                 <span>{{ e.emoji }}</span> {{ e.text }}
               </button>
             </div>
@@ -1630,7 +1637,23 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, reactive, defineAsyncComponent, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import UiIcon from '../components/UiIcon.vue'
+const MusicListeningShelf = defineAsyncComponent(() => import('../components/MusicListeningShelf.vue'))
+const listeningShelf = ref(null)
+const conversationStarters = [
+  { title: '先听我说', text: '我想先说说，暂时不用给建议。' },
+  { title: '一起理清楚', text: '最近有件事反复占着我的心思，我想一起理一理。' },
+  { title: '留住好消息', text: '今天有一个让我开心的小瞬间，想和你分享。' },
+]
+const conversationFollowups = [
+  { emoji: '💬', text: '先听我说，暂时不用给建议。' },
+  { emoji: '📝', text: '我想一起整理一下这件事。' },
+  { emoji: '🌱', text: '我想试一个很小的步骤。' },
+  { emoji: '☕', text: '我想先停一会儿，不用追问。' },
+]
+function prepareConversation(text) { chatInput.value = text; nextTick(() => inputEl.value?.focus()) }
+function pauseOtherMusic() { audioEl.value?.pause(); musicOn.value = false; musicAudioEl.value?.pause(); activeSongId.value = null }
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
@@ -3261,6 +3284,7 @@ function toggleCard(idx) {
 }
 
 function toggleSongPlay(song) {
+  listeningShelf.value?.pause()
   if (activeSongId.value === song.songId) {
     // 暂停当前
     activeSongId.value = null
@@ -3786,6 +3810,7 @@ function enterApp() {
 }
 
 function toggleMusic() {
+  listeningShelf.value?.pause()
   if (!audioEl.value) return
   if (musicOn.value) {
     // 渐出后暂停
@@ -4472,6 +4497,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.music-panel .music-toggle-btn{display:none}.music-panel .trend-header{padding-right:42px}.chat-panel .msg-row .bubble{font-size:14px}.music-panel{border-radius:16px!important}
+.music-direct-entry{display:none}
+.conversation-starters{display:flex;flex-direction:column;gap:6px;margin:0 0 18px 42px}.conversation-starters button{display:flex;align-items:baseline;gap:12px;padding:12px;text-align:left;border:1px solid #70634e;border-radius:8px;background:#302923;color:#f4eddf;cursor:pointer;font:inherit}.conversation-starters button strong{font-size:13px;white-space:nowrap}.conversation-starters button span{font-size:12px;line-height:1.6;color:#dbceb8}.conversation-starters button:hover{background:#403729}.conversation-starters button:focus-visible{outline:3px solid #ead29b;outline-offset:2px}.music-recommendation-details{color:#d7cbb7;margin:12px 0}.music-recommendation-details summary{cursor:pointer;min-height:36px}.chat-panel .msg-row .bubble{white-space:pre-wrap;line-height:1.85}.chat-panel .welcome-bubble p{line-height:1.75}
+@media(min-width:900px){.music-direct-entry{display:flex}.music-panel{width:min(760px,92vw)!important}.chat-panel{width:min(720px,92vw)!important}.chat-panel .chat-messages{padding:20px 24px}.chat-panel .bubble-wrap{max-width:85%}.chat-panel .chat-ai-consent{margin-bottom:20px}}
+@media(max-width:600px){.conversation-starters{margin-left:0}.conversation-starters button{display:grid;gap:6px}}
 /* ═══════════ 全局 ═══════════ */
 .room {
   width: 100%; height: 100vh; position: relative; overflow: hidden;

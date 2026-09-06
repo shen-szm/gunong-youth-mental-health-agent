@@ -480,6 +480,11 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
     analysis_source = "deterministic"
     reply_variant = message_count % 3
     fallback = _render_safe_student_fallback(emotion or "不确定", reply_variant, risk_level)
+    if derived_features.get("conversation_preference") == "先倾听":
+        fallback = "我在听。你可以按自己的节奏继续说，不需要先整理出一个答案。"
+    if risk_level in {"routine", "watch"} and not safeguarding_required:
+        preference = "被倾听" if derived_features.get("conversation_preference") == "先倾听" else derived_features.get("support_preference", "被倾听")
+        fallback += "\n\n" + _student_support_bridge(preference, [derived_features], reply_variant)
     reply = fallback
     if safeguarding_required:
         reply = ("这不是你的错，也不需要你独自去面对伤害你的人。请尽快告诉一位不涉事的可信成年人或老师；"
@@ -514,6 +519,10 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
             candidate = _parse_student_turn_output(raw, derived_turns, local_emotion=emotion or "不确定")
             if not candidate:
                 raise ValueError("model response did not contain a valid JSON object")
+            if derived_turns and derived_turns[-1].get("conversation_preference") == "先倾听":
+                candidate = candidate.model_copy(update={"support_need": "被倾听", "question_focus": "暂不追问"})
+            elif derived_turns and derived_turns[-1].get("support_preference") == "整理任务":
+                candidate = candidate.model_copy(update={"support_need": "整理任务", "question_focus": "愿意尝试的小一步"})
             emotion = "" if candidate.emotion == "不确定" else candidate.emotion
             emotion_intensity = candidate.intensity
             emotion_basis = candidate.evidence
@@ -522,6 +531,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
                 risk_level,
                 variant=reply_variant,
                 previous_replies=recent_assistant_replies,
+                turn_features=derived_turns,
             )
             analysis_source = "xunfei_constrained"
             _audit(db, current_user.id, "external_model_result_chat", support_run.run_code,
@@ -904,6 +914,8 @@ def _derive_student_turn_features(text: str, turn: int) -> dict:
         "functional_impact": impacts[:3],
         "duration": duration,
         "interaction_signal": interaction_signal,
+        "support_preference": "整理任务" if re.search(r"(?:一起整理|理清|小(?:的)?步骤|学习任务)", text) else "被倾听",
+        "conversation_preference": "先倾听" if re.search(r"(?:先听我说|不(?:用|要|想).{0,3}(?:建议|追问|回答)|别问)", text) else "一起探索",
     }
 
 
@@ -948,6 +960,7 @@ def _student_turn_prompts(*, derived_turns: list[dict], risk_level: str,
             "risk_level由后端给出，不得修改或弱化；watch时可温和提醒持续影响生活时告诉可信成年人。"
             "emotion_label 是本地确定性识别结果；当它不是“不确定”时，emotion 必须原样复制该值，不得改成其他标签。"
             "若线索不足必须输出不确定，不得强行贴标签。"
+            "conversation_preference为先倾听时选择被倾听与暂不追问；依据已有主题选择支持需要，不重复盘问。"
         )},
         {"role": "user", "content": json.dumps({
             "task": "emotion_and_support",
@@ -958,6 +971,28 @@ def _student_turn_prompts(*, derived_turns: list[dict], risk_level: str,
             "required_schema": schema,
         }, ensure_ascii=False)},
     ]
+
+
+def _student_support_bridge(support_need: str, features: list[dict], variant: int) -> str:
+    """Use only enumerated themes, never interpolate model prose or private facts."""
+    themes = {
+        "学习任务": ("学习这件事里，任务本身和对结果的担心可以分开聊。不必一次把所有问题解决，我们先留意此刻最占精力的那一部分。", "如果事情堆在一起，可以先不急着排满计划。把‘需要完成的事’和‘心里担心的事’分成两栏，通常更容易看清自己需要哪一种帮助。"),
+        "同伴相处": ("谈到同伴关系时，可以先区分对方做了什么、自己怎样理解，以及希望关系有什么变化。这几件事不必马上得出同一个答案。", "在相处中，你的边界和希望被理解的部分同样重要。我们可以只聊一个片段，不需要现在就决定要不要和谁沟通。"),
+        "休息和精力": ("说到休息和精力，我们可以先把要求放低一点：不急着追求立刻恢复状态，也不用把休息变成另一项必须完成的任务。", "关于休息，可以先留意哪一种安排让身体更舒服一点。如果这种困扰持续影响白天的生活，找可信的人一起商量会比自己硬撑更合适。"),
+        "家庭相处": ("家里的话题可以慢慢展开。你愿意分享的范围由你决定，不必为了讲清楚而重述不舒服的细节，也不需要立刻去说服谁。", "关于家人的事情，我们先把重点放在你的感受和边界上。如果暂时不适合直接沟通，也可以先和一位不涉事的可信成年人商量。"),
+    }
+    theme = next((item.get("support_theme") for item in reversed(features) if item.get("support_theme") in themes), None)
+    pair = themes.get(theme)
+    context = pair[variant % 2] if pair else "这段对话不用有一个标准答案。你可以讲一件小事、一个反复出现的念头，也可以只说今天想留下的那个瞬间。"
+    needs = {
+        "被倾听": "现在可以先不找办法；把想说的话放在这里就好，我会沿着你愿意说的部分继续。",
+        "缓解压力": "如果你愿意，我们可以先把这一刻的要求降到一件很小的事，比如停下来喝口水；不合适就跳过。",
+        "整理任务": "想一起整理时，可以只挑一件最小的事，再区分‘现在能做’和‘需要别人帮忙’，不用一次列出整张清单。",
+        "获得陪伴": "你可以继续说，也可以停一会儿。这里不会因为你暂时没有话说，就催你给出答案。",
+        "寻求成人支持": "如果你想找真人帮忙，我们可以先准备一句开场：‘我想找你聊一件事，希望你先听完。’请选择不涉事的可信成年人。",
+        "暂不确定": "还不知道需要什么也没关系，我们可以先探索，不急着替你决定下一步。",
+    }
+    return context + "\n\n" + needs.get(support_need, needs["暂不确定"])
 
 
 def _render_grounded_student_reply(emotion: str, support_need: str, risk_level: str) -> str:
@@ -1021,6 +1056,7 @@ def _render_model_selected_student_reply(
     risk_level: str,
     variant: int = 0,
     previous_replies: list[str] | None = None,
+    turn_features: list[dict] | None = None,
 ) -> str:
     """Realise model-selected enums through a closed, auditable student-safe language set."""
     openings = {
@@ -1049,10 +1085,16 @@ def _render_model_selected_student_reply(
     opening_index = (style_offset + variant) % 3
     recent = previous_replies or []
     focus_order = [candidate.question_focus] + [focus for focus in questions if focus != candidate.question_focus]
+    if candidate.question_focus == "暂不追问":
+        focus_order = ["暂不追问"]
     candidates = []
     for focus in focus_order:
         for shift in range(3):
-            reply = openings[candidate.emotion][(opening_index + shift) % 3] + questions[focus]
+            opening = openings[candidate.emotion][(opening_index + shift) % 3]
+            context = _student_support_bridge(candidate.support_need, turn_features or [], variant + shift)
+            if any(context in previous for previous in recent):
+                context = "刚才的内容可以先放在这里，不用重新讲一遍。接下来只关注你想继续的那一部分。"
+            reply = opening + ("\n\n" + context if context else "") + "\n\n" + questions[focus]
             if risk_level == "watch":
                 reply += " 如果这种状态持续或影响学习、睡眠，可以考虑告诉一位可信成年人。"
             candidates.append(reply)
