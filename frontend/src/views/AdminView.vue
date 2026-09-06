@@ -15,7 +15,7 @@
           :aria-current="tab === item.id ? 'page' : undefined"
           @click="openTab(item.id)"
         >
-          <span aria-hidden="true">{{ item.icon }}</span>
+          <span aria-hidden="true"><UiIcon class="teacher-nav-icon" :name="item.id" /><span class="teacher-legacy-icon">{{ item.icon }}</span></span>
           <span>{{ item.label }}</span>
           <em v-if="item.id === 'approvals' && pendingApprovalCount">{{ pendingApprovalCount }}</em>
         </button>
@@ -48,6 +48,7 @@
 
       <template v-else>
         <main class="workspace">
+          <TeacherVerification v-if="tab === 'benchmark'" />
           <TeacherTodayDashboard
             v-if="tab === 'today'"
             :warnings="filteredWarnings"
@@ -408,12 +409,16 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import axios from 'axios'
 import TeacherTodayDashboard from '../components/TeacherTodayDashboard.vue'
 import TeacherReviewReport from '../components/TeacherReviewReport.vue'
+import UiIcon from '../components/UiIcon.vue'
+import { useDesktopViewport } from '../utils/useDesktopViewport'
+const desktop = useDesktopViewport()
+const TeacherVerification = defineAsyncComponent(() => import('../components/TeacherVerification.vue'))
 import pkg from '../../package.json'
 import {
   getTeacherOverview,
@@ -495,10 +500,12 @@ const teacherNavItems = [
   { id: 'warnings', label: '支持提醒', icon: '!', group: '工作' },
   { id: 'students', label: '学生记录', icon: '◎', group: '工作', adminOnly: true },
   { id: 'lesson', label: 'AI 班会', icon: '◇', group: '工具' },
+  { id: 'benchmark', label: '能力验证', icon: '✓', group: '工具' },
   { id: 'approvals', label: '权限审批', icon: '✓', group: '管理', adminOnly: true },
   { id: 'accounts', label: '账号职责', icon: '⌘', group: '管理', adminOnly: true },
 ]
-const visibleNavItems = computed(() => teacherNavItems.filter(item => !item.adminOnly || userStore.isSuperAdmin))
+const visibleNavItems = computed(() => teacherNavItems.filter(item => (!item.adminOnly || userStore.isSuperAdmin) && (item.id !== 'benchmark' || desktop.value)))
+watch(desktop, value => { if (!value && tab.value === 'benchmark') tab.value = 'today' })
 const currentTabMeta = computed(() => visibleNavItems.value.find(item => item.id === tab.value) || teacherNavItems[0])
 const normalizedTeacherQuery = computed(() => teacherQuery.value.trim().toLowerCase())
 const filteredStudents = computed(() => {
@@ -1083,6 +1090,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', focusTeacherSearch))
 </script>
 
 <style scoped>
+.teacher-nav-icon{display:none}
+@media(min-width:1024px){.teacher-nav-icon{display:inline-block}.teacher-legacy-icon{display:none}}
 .teacher-page { min-height: 100vh; padding: 24px; background: #f4f7f5; color: #26332f; }
 .teacher-hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding: 24px; border-radius: 20px; background: linear-gradient(135deg, #ffffff, #eaf3ef); border: 1px solid #dce8e2; }
 .eyebrow { color: #4f7d70; font-size: 13px; font-weight: 700; margin-bottom: 6px; }

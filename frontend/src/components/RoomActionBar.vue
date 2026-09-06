@@ -7,7 +7,7 @@
       aria-labelledby="room-action-title"
       @keydown.esc="$emit('close')"
     >
-      <span class="room-action-symbol" aria-hidden="true">{{ feature.symbol }}</span>
+      <span class="room-action-symbol" aria-hidden="true"><UiIcon class="action-desktop-icon" :name="feature.id" :size="24" /><span class="action-legacy-icon">{{ feature.symbol }}</span></span>
       <div class="room-action-copy">
         <p>{{ feature.location }}</p>
         <h2 id="room-action-title">{{ feature.title }}</h2>
@@ -32,7 +32,7 @@
         <button ref="primaryButton" class="room-action-primary" type="button" :disabled="feature.actionDisabled" @click="$emit('primary')">
           {{ feature.actionLabel }}
         </button>
-        <button class="room-action-close" type="button" aria-label="关闭场景操作条" @click="$emit('close')">×</button>
+        <button class="room-action-close" type="button" aria-label="关闭场景操作条" @click="$emit('close')"><UiIcon class="action-desktop-icon" name="close" /><span class="action-legacy-icon" aria-hidden="true">×</span></button>
       </div>
     </section>
   </Transition>
@@ -40,6 +40,7 @@
 
 <script setup>
 import { nextTick, ref, watch } from 'vue'
+import UiIcon from './UiIcon.vue'
 
 const props = defineProps({
   feature: { type: Object, default: null },
@@ -63,6 +64,8 @@ watch(() => props.feature?.id, async value => {
 </script>
 
 <style scoped>
+.action-desktop-icon{display:none}
+@media(min-width:900px){.action-desktop-icon{display:inline-block}.action-legacy-icon{display:none}}
 .room-action-bar {
   position: fixed;
   left: 50%;

@@ -7,6 +7,7 @@
         <p>把授权证据、风险裁决、支持任务与回访整理为可审签、可下载的工作成果。</p>
       </div>
       <button class="review-primary" type="button" :disabled="loading" @click="$emit('generate')">
+        <UiIcon v-if="desktop" name="report" />
         {{ loading ? '报告 Agent 执行中…' : report ? '重新生成评审报告' : '生成最终评审报告' }}
       </button>
     </header>
@@ -23,6 +24,8 @@
         <div><span>生成方式</span><strong>{{ generationLabel }}</strong></div>
         <div><span>数据质量</span><strong>{{ report.data_scope?.quality }}</strong></div>
       </div>
+
+      <TeacherAgentExecution v-if="desktop" class="review-desktop-execution" :report="report" />
 
       <article :class="['review-decision', report.overall_decision?.risk_level]">
         <span>{{ report.overall_decision?.risk_label }} · {{ report.overall_decision?.priority }}</span>
@@ -117,7 +120,7 @@
         <label v-if="needsGapAcknowledgement" class="review-check evidence-gap-check"><input v-model="gapAcknowledged" type="checkbox" :disabled="report.status !== 'draft' || loading"><span>我已核对报告中的证据缺口，并会在审核意见中记录接受理由和线下补充安排<em>必核</em></span></label>
         <label class="review-note"><span>审核意见</span><textarea v-model="note" maxlength="1000" :disabled="report.status !== 'draft' || loading" placeholder="记录线下核对结果、责任人或需要修订的内容"></textarea></label>
         <div class="review-actions">
-          <button type="button" class="review-secondary" :disabled="loading" @click="$emit('download')">下载 PDF</button>
+          <button type="button" class="review-secondary" :disabled="loading" @click="$emit('download')"><UiIcon v-if="desktop" name="download" /> 下载 PDF</button>
           <button v-if="report.status === 'draft'" type="button" class="review-secondary danger" :disabled="decisionLoading || loading || note.trim().length < 4" @click="submitDecision('revision_requested')">退回修订</button>
           <button v-if="report.status === 'draft'" type="button" class="review-primary" :disabled="decisionLoading || loading || !canSign" @click="submitDecision('reviewed')">{{ decisionLoading ? '记录中…' : '确认并签署' }}</button>
           <strong v-else-if="report.status === 'revision_requested'" class="revision-label">当前版本已退回，请重新生成修订版后再签署。</strong>
@@ -129,7 +132,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { useDesktopViewport } from '../utils/useDesktopViewport'
+import UiIcon from './UiIcon.vue'
+const desktop = useDesktopViewport()
+const TeacherAgentExecution = defineAsyncComponent(() => import('./TeacherAgentExecution.vue'))
 
 const props = defineProps({ report: { type: Object, default: null }, loading: Boolean, decisionLoading: Boolean })
 const emit = defineEmits(['generate', 'decision', 'download'])
@@ -165,6 +172,8 @@ function submitDecision(decision) { emit('decision', { decision, checklistConfir
 </script>
 
 <style scoped>
+@media (min-width:1024px){.review-agents{display:none}}
+@media (max-width:1023px){.review-desktop-execution{display:none}}
 .review-deliverable{margin-top:18px;padding:22px;border:1px solid rgba(69,105,91,.24);border-radius:16px;background:linear-gradient(145deg,rgba(255,252,244,.94),rgba(233,244,238,.9))}
 .review-hero,.review-section-head,.review-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.review-hero h4,.review-section-head h5,.review-card h5,.review-signoff h5{margin:4px 0 6px;color:#263f36;font-size:21px}.review-hero p,.review-section-head p,.review-signoff p{margin:0;color:#62736c}.review-kicker{color:#4f7868;font-size:12px;font-weight:800}.review-primary,.review-secondary{min-height:42px;padding:0 16px;border:1px solid #b9ccc3;border-radius:12px;background:#fff;color:#315b4d;font-weight:800;cursor:pointer}.review-primary{border-color:#315f50;background:#315f50;color:#fff}.review-primary:disabled,.review-secondary:disabled{cursor:not-allowed;opacity:.5}.review-running{display:grid;gap:12px;margin-top:18px;padding:16px;border-radius:14px;background:#fff8e7;color:#5f5128}.review-running div{display:grid;gap:3px}.review-running small{color:#746a4a}.review-skeleton{display:grid;grid-template-columns:1.5fr 1fr .7fr;gap:7px}.review-skeleton i{height:5px;border-radius:5px;background:#d8c586;opacity:.78}.review-skeleton i:nth-child(2){opacity:.55}.review-skeleton i:nth-child(3){opacity:.35}
 .review-meta{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:8px;margin:18px 0 10px}.review-meta div{padding:12px;border-radius:12px;background:rgba(255,255,255,.76)}.review-meta span,.review-meta strong{display:block}.review-meta span{margin-bottom:4px;color:#6c7c74;font-size:11px}.review-meta strong{color:#30483f;font-size:13px;overflow-wrap:anywhere}.review-decision{padding:20px;border:1px solid #8aa99b;border-radius:16px;background:#fff}.review-decision.watch{border-color:#cba14b;background:#fffaf0}.review-decision.professional{border-color:#c56a40;background:#fff7f2}.review-decision.urgent{border-color:#b54a46;background:#fff4f3}.review-decision>span{display:inline-block;padding:4px 8px;border-radius:8px;background:#e8f2ed;color:#3f6658;font-size:12px;font-weight:800}.review-decision.watch>span{background:#f7e9bd;color:#715415}.review-decision.professional>span{background:#f6dfd2;color:#80442b}.review-decision.urgent>span{background:#f2d7d4;color:#873934}.review-decision>strong{display:block;margin:9px 0 7px;color:#253f36;font-size:18px}.review-decision p{max-width:75ch;color:#40584f;line-height:1.7}.review-decision small{color:#687771}

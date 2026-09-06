@@ -7,6 +7,7 @@
         <span>所有结论都要回到授权记录与教师线下观察，Agent 不替代教师作决定。</span>
       </div>
       <button type="button" :disabled="refreshing" @click="$emit('refresh')">
+        <UiIcon class="today-refresh-icon" name="refresh" />
         {{ refreshing ? '正在同步…' : '同步工作台' }}
       </button>
     </header>
@@ -109,6 +110,7 @@
 </template>
 
 <script setup>
+import UiIcon from './UiIcon.vue'
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -222,6 +224,8 @@ function accessLabel(student) {
 </script>
 
 <style scoped>
+.today-refresh-icon{display:none;margin-right:6px}
+@media(min-width:1024px){.today-refresh-icon{display:inline-block}}
 .today-workbench { display: grid; gap: 18px; }
 .today-heading { display: flex; justify-content: space-between; gap: 24px; align-items: end; padding: 4px 2px 8px; }
 .today-heading p, .today-heading h2, .today-heading span { margin: 0; }
