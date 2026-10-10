@@ -1,0 +1,62 @@
+[
+  {
+    "resource_code": "HOTLINE-12356",
+    "name": "全国统一心理援助热线",
+    "type": "hotline",
+    "phone": "12356",
+    "availability": "全国统一号码；当地接听安排以实际语音提示为准",
+    "district": "全市",
+    "address": "",
+    "source_url": "https://www.nhc.gov.cn/yzygj/c100068/202412/49a1a65386cd4be582d4702fd0926ee8.shtml",
+    "verified_at": "2026-08-21",
+    "note": "用于心理支持与求助导航；生命存在迫切危险时优先拨打110或120。"
+  },
+  {
+    "resource_code": "DG-HOTLINE-88881111",
+    "name": "东莞市中小学生健康成长心理热线",
+    "type": "hotline",
+    "phone": "0769-88881111",
+    "availability": "24小时（以接通提示为准）",
+    "district": "全市",
+    "address": "",
+    "source_url": "https://www.dg.gov.cn/zwgk/zfxxgkml/ncjd/qt/gzdt/content/post_4475470.html",
+    "verified_at": "2026-08-21",
+    "note": "东莞市政府公开信息列示的中小学生心理热线。"
+  },
+  {
+    "resource_code": "DG-HOSPITAL-7",
+    "name": "东莞市第七人民医院（东莞市精神卫生中心）",
+    "type": "public_hospital",
+    "phone": "0769-81209200",
+    "availability": "门诊与预约信息请电话核实",
+    "district": "中堂镇",
+    "address": "东莞市中堂镇江南社区麦洲岛",
+    "source_url": "https://dghb.dg.gov.cn/zfxxgkml/zzjg/zsdw/content/post_140370.html",
+    "verified_at": "2026-08-21",
+    "note": "东莞市卫生健康局直属单位公开信息；是否适合具体个案须由机构专业人员评估。"
+  },
+  {
+    "resource_code": "EMERGENCY-110",
+    "name": "公安报警电话",
+    "type": "emergency",
+    "phone": "110",
+    "availability": "紧急服务",
+    "district": "全市",
+    "address": "",
+    "source_url": "https://www.gov.cn/fuwu/2014-10/27/content_2770999.htm",
+    "verified_at": "2026-08-21",
+    "note": "存在即时人身危险、暴力或无法保证安全时使用。"
+  },
+  {
+    "resource_code": "EMERGENCY-120",
+    "name": "医疗急救电话",
+    "type": "emergency",
+    "phone": "120",
+    "availability": "紧急服务",
+    "district": "全市",
+    "address": "",
+    "source_url": "https://www.gov.cn/fuwu/2014-10/27/content_2770999.htm",
+    "verified_at": "2026-08-21",
+    "note": "已经自伤、服药过量、意识异常或生命体征受威胁时使用。"
+  }
+]

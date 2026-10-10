@@ -1,0 +1,2 @@
+# Deployment scripts execute on Linux, including archives created on Windows.
+deploy/*.sh text eol=lf

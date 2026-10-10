@@ -1,0 +1,62 @@
+[
+  {
+    "source_code": "CN-MHL-001",
+    "title": "中华人民共和国精神卫生法",
+    "issuer": "全国人民代表大会常务委员会",
+    "source_url": "https://www.npc.gov.cn/c2/c30834/201905/t20190521_281477.html",
+    "evidence_level": "law",
+    "tags": ["边界", "专业转介", "危机", "诊断"],
+    "summary": "精神障碍诊断和治疗须遵守法定专业边界；心理支持工具不能冒充医疗诊断。",
+    "reviewed_at": "2026-08-21"
+  },
+  {
+    "source_code": "CN-PIPL-002",
+    "title": "中华人民共和国个人信息保护法",
+    "issuer": "全国人民代表大会常务委员会",
+    "source_url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm",
+    "evidence_level": "law",
+    "tags": ["隐私", "敏感信息", "未成年人", "最小必要"],
+    "summary": "医疗健康信息和不满十四周岁未成年人的个人信息属于敏感个人信息，应遵循特定目的、充分必要和严格保护。",
+    "reviewed_at": "2026-08-21"
+  },
+  {
+    "source_code": "CN-AI-003",
+    "title": "人工智能拟人化互动服务管理暂行办法",
+    "issuer": "国家互联网信息办公室等",
+    "source_url": "https://www.cac.gov.cn/2026-04/10/c_1777558395078289.htm",
+    "evidence_level": "regulation",
+    "tags": ["AI标识", "未成年人", "危机", "依赖"],
+    "summary": "拟人化互动服务需持续提示AI身份，保护未成年人，并对明确威胁生命健康的极端情境采取必要援助。",
+    "reviewed_at": "2026-08-21"
+  },
+  {
+    "source_code": "CN-NHC-004",
+    "title": "关于应用统一心理援助热线电话号码的通知",
+    "issuer": "国家卫生健康委员会",
+    "source_url": "https://www.nhc.gov.cn/yzygj/c100068/202412/49a1a65386cd4be582d4702fd0926ee8.shtml",
+    "evidence_level": "official_guidance",
+    "tags": ["12356", "危机", "专业资源", "转介"],
+    "summary": "全国统一使用12356心理援助热线，并推进与110、119、120等紧急服务联动。",
+    "reviewed_at": "2026-08-21"
+  },
+  {
+    "source_code": "WHO-AMH-005",
+    "title": "Adolescent mental health",
+    "issuer": "World Health Organization",
+    "source_url": "https://www.who.int/news-room/fact-sheets/detail/adolescent-mental-health",
+    "evidence_level": "international_guidance",
+    "tags": ["青少年", "家庭支持", "学校支持", "早期求助"],
+    "summary": "青少年心理健康受到家庭、学校和社会环境共同影响，支持性环境、早期识别与获得适当服务很重要。",
+    "reviewed_at": "2026-08-21"
+  },
+  {
+    "source_code": "WHO-AI-006",
+    "title": "Ethics and governance of artificial intelligence for health: guidance on large multi-modal models",
+    "issuer": "World Health Organization",
+    "source_url": "https://www.who.int/publications/i/item/9789240084759",
+    "evidence_level": "international_guidance",
+    "tags": ["AI治理", "人工复核", "准确性", "安全评测"],
+    "summary": "健康领域大模型需要明确任务边界、验证准确性和可靠性，并由相关专业人员及受影响群体参与治理。",
+    "reviewed_at": "2026-08-21"
+  }
+]
