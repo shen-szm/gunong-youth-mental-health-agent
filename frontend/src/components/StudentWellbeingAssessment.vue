@@ -316,13 +316,13 @@ legend small { color:#8a7769; font-weight:500; }
   .desktop-agent-lifecycle>div>strong { margin:5px 0; font-size:15px; }
   .desktop-agent-lifecycle>div>small,.desktop-agent-lifecycle>p { color:#746559; line-height:1.5; }
   .desktop-agent-lifecycle ol { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin:0; padding:0; list-style:none; }
-  .desktop-agent-lifecycle li { display:flex; gap:7px; min-width:0; padding:9px; border-radius:11px; background:rgba(100,73,52,.055); }
-  .desktop-agent-lifecycle li i { display:grid; place-items:center; width:19px; height:19px; flex:0 0 auto; border-radius:6px; color:#77675b; background:#e7ded4; font-style:normal; }
+  .desktop-agent-lifecycle li { display:flex; gap:7px; min-width:0; padding:10px; border-radius:12px; background:rgba(255,255,255,.82); border:1px solid rgba(111,78,53,.12); }
+  .desktop-agent-lifecycle li i { display:grid; place-items:center; width:20px; height:20px; flex:0 0 auto; border-radius:7px; color:#9a8a7c; background:#efe7de; font-size:11px; font-style:normal; }
   .desktop-agent-lifecycle li.is-complete i { color:#fff; background:#62836e; }
   .desktop-agent-lifecycle li.is-running i { color:#4a321f; background:#e4bc78; }
   .desktop-agent-lifecycle li span,.desktop-agent-lifecycle li strong,.desktop-agent-lifecycle li small { display:block; min-width:0; }
-  .desktop-agent-lifecycle li strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
-  .desktop-agent-lifecycle li small { margin-top:3px; color:#7d6e62; font-size:9px; }
+  .desktop-agent-lifecycle li strong { overflow:hidden; font-size:11.5px; font-weight:700; color:#4a3f36; text-overflow:ellipsis; white-space:nowrap; }
+  .desktop-agent-lifecycle li small { margin-top:2px; color:#8a7b6e; font-size:10.5px; }
   .desktop-agent-lifecycle>p { grid-column:1/-1; margin:0; font-size:11px; }
 }
 @media (max-width:720px) { .wellbeing-card { padding:16px; border-radius:20px; }.wellbeing-head { display:block; }.risk-chip { display:inline-block; margin-top:10px; }.domain-grid { grid-template-columns:1fr; }.frequency-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.frequency-options span { text-align:center; }.assessment-actions { flex-direction:column-reverse; }.assessment-actions button { width:100%; } }

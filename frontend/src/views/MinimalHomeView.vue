@@ -53,11 +53,13 @@
             <span class="m-entry-icon" aria-hidden="true">💬</span>
             <strong>倾诉</strong>
             <small>说说现在的感受。不用组织语言，正常聊天不会被分析面板打断。</small>
+            <span class="m-entry-cta">开始倾诉 →</span>
           </button>
           <button type="button" class="m-entry" @click="showMoodSheet = true">
             <span class="m-entry-icon" aria-hidden="true">📝</span>
             <strong>记录心情</strong>
             <small>选一个最接近的感受，留下此刻的标签。</small>
+            <span class="m-entry-cta is-plain">记一下 →</span>
           </button>
         </div>
 
@@ -401,7 +403,17 @@ onUnmounted(() => {
   transition: transform 180ms ease, border-color 180ms ease;
 }
 .m-entry:hover { transform: translateY(-1px); }
-.m-entry-icon { font-size: 26px; }
+.m-entry-icon {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--m-bg);
+  font-size: 24px;
+}
+.m-entry.is-primary .m-entry-icon { background: #FFFFFF; }
 .m-entry strong { font-size: 17px; color: var(--m-ink); }
 .m-entry small { font-size: 12.5px; line-height: 1.6; color: var(--m-ink-2); }
 .m-entry.is-primary {
@@ -409,6 +421,7 @@ onUnmounted(() => {
   border-color: #CFE3DA;
 }
 .m-entry.is-primary strong { color: var(--m-accent-strong); }
+.m-entry-cta { display: none; }
 
 /* 更多 */
 .m-more {
@@ -511,7 +524,7 @@ onUnmounted(() => {
 .m-fade-enter-active, .m-fade-leave-active { transition: opacity 200ms ease; }
 .m-fade-enter-from, .m-fade-leave-to { opacity: 0; }
 
-/* ─── 电脑端适配：内容加宽并垂直撑满 ─── */
+/* ─── 电脑端适配：双栏仪表盘（左：今日心情＋倾诉；右：记录心情；底部：更多通栏）─── */
 @media (min-width: 768px) {
   .m-home { display: flex; flex-direction: column; }
   .m-shell {
@@ -523,25 +536,55 @@ onUnmounted(() => {
   }
   .m-header { padding: 8px 2px 24px; }
   .m-greeting small { font-size: 13px; }
-  .m-greeting strong { font-size: 25px; }
+  .m-greeting strong { font-size: 30px; }
   .m-sound { width: 42px; height: 42px; }
-  .m-main { flex: 1; justify-content: center; gap: 16px; }
-  .m-today-btn { padding: 18px 24px; gap: 16px; border-radius: 20px; }
-  .m-today-emoji { font-size: 30px; }
+  .m-main {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(220px, 1fr) auto;
+    grid-template-areas:
+      "today mood"
+      "talk  mood"
+      "more  more";
+    gap: 16px;
+    max-height: 640px;
+    padding-top: 4px;
+  }
+  .m-today { grid-area: today; }
+  .m-entries { display: contents; }
+  .m-entry.is-primary { grid-area: talk; }
+  .m-entries > .m-entry:not(.is-primary) { grid-area: mood; }
+  .m-more { grid-area: more; }
+  .m-beian { margin-top: auto; }
+
+  .m-today-btn { padding: 20px 24px; gap: 16px; border-radius: 20px; }
+  .m-today-emoji { font-size: 32px; }
   .m-today-copy strong { font-size: 16px; }
   .m-today-copy small { font-size: 13px; }
   .m-today-action { font-size: 13px; padding: 7px 16px; }
-  .m-entries { gap: 16px; }
   .m-entry {
-    min-height: 176px;
+    min-height: 200px;
     justify-content: center;
-    gap: 9px;
-    padding: 26px 28px;
+    gap: 10px;
+    padding: 28px 32px;
     border-radius: 20px;
   }
-  .m-entry-icon { font-size: 34px; }
-  .m-entry strong { font-size: 21px; }
-  .m-entry small { font-size: 14px; }
+  .m-entry-icon { width: 62px; height: 62px; border-radius: 18px; font-size: 34px; }
+  .m-entry strong { font-size: 23px; }
+  .m-entry small { font-size: 14px; max-width: 34ch; }
+  .m-entry-cta {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 12px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: var(--m-accent-strong);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .m-entry-cta.is-plain { background: var(--m-bg); color: var(--m-ink-2); }
   .m-more { border-radius: 20px; }
   .m-more-toggle { padding: 17px 0; font-size: 14.5px; }
   .m-more-grid { padding: 4px 16px 20px; gap: 10px; }

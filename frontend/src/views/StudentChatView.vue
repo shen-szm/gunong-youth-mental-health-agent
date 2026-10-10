@@ -1,60 +1,64 @@
 <template>
   <div class="sc-page">
     <header class="sc-head">
-      <router-link class="sc-back" to="/" aria-label="返回首页">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-      </router-link>
-      <img src="/images/logo.jpg" class="sc-logo" alt="咕哝" />
-      <div class="sc-head-copy">
-        <strong id="sc-chat-title">咕哝倾诉空间</strong>
-        <small><span class="sc-dot" :class="{ thinking: chatLoading }"></span>{{ chatLoading ? '正在思考...' : '在线，随时倾听' }}</small>
+      <div class="sc-head-inner">
+        <router-link class="sc-back" to="/" aria-label="返回首页">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </router-link>
+        <img src="/images/logo.jpg" class="sc-logo" alt="咕哝" />
+        <div class="sc-head-copy">
+          <strong id="sc-chat-title">咕哝倾诉空间</strong>
+          <small><span class="sc-dot" :class="{ thinking: chatLoading }"></span>{{ chatLoading ? '正在思考...' : '在线，随时倾听' }}</small>
+        </div>
+        <button
+          v-if="!chatUrgentLocked"
+          class="sc-end"
+          type="button"
+          :disabled="chatLoading || !hasUserMessage"
+          @click="requestConversationEnd"
+        >结束本次倾诉</button>
       </div>
-      <button
-        v-if="!chatUrgentLocked"
-        class="sc-end"
-        type="button"
-        :disabled="chatLoading || !hasUserMessage"
-        @click="requestConversationEnd"
-      >结束本次倾诉</button>
     </header>
 
     <div class="sc-msgs" ref="msgBox">
-      <div class="sc-welcome" v-if="chatMessages.length === 0">
-        <img src="/images/logo.jpg" class="sc-welcome-avatar" alt="咕哝" />
-        <div class="sc-welcome-bubble">
-          <p>先不用把话组织好。</p>
-          <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
-        </div>
-      </div>
-      <div v-if="!chatMessages.length" class="sc-starters" aria-label="选择倾诉开场">
-        <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
-      </div>
-      <div class="sc-consent" role="status">
-        <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
-      </div>
-
-      <div v-for="(m, i) in chatMessages" :key="i" :class="['sc-row', m.role]">
-        <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
-        <div class="sc-bwrap">
-          <div v-if="m.role === 'user' && m.emotion" class="sc-etag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
-            <span>{{ getEmotionEmoji(m.emotion) }}</span>
-            <span>{{ m.emotion }}{{ m.emotion_intensity && m.emotion_intensity !== '不确定' ? ` · ${m.emotion_intensity}` : '' }}</span>
+      <div class="sc-msgs-inner" :class="{ 'is-empty': chatMessages.length === 0 }">
+        <div class="sc-welcome" v-if="chatMessages.length === 0">
+          <img src="/images/logo.jpg" class="sc-welcome-avatar" alt="咕哝" />
+          <div class="sc-welcome-bubble">
+            <p>先不用把话组织好。</p>
+            <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
           </div>
-          <div class="sc-bubble">
-            <span>{{ m.content }}</span>
-          </div>
-          <button v-if="m.role === 'assistant'" class="sc-tts" @click="playTTS(m.content)" :class="{ playing: ttsPlaying === i }" :aria-label="ttsPlaying === i ? '停止朗读' : '朗读这条回复'">
-            <svg v-if="ttsPlaying !== i" viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4z"/></svg>
-            <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          </button>
         </div>
-      </div>
+        <div v-if="!chatMessages.length" class="sc-starters" aria-label="选择倾诉开场">
+          <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
+        </div>
+        <div class="sc-consent" role="status">
+          <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
+        </div>
 
-      <div v-if="chatLoading" class="sc-row assistant">
-        <img src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
-        <div class="sc-bwrap">
-          <div class="sc-bubble sc-typing">
-            <span class="sc-tdot"></span><span class="sc-tdot"></span><span class="sc-tdot"></span>
+        <div v-for="(m, i) in chatMessages" :key="i" :class="['sc-row', m.role]">
+          <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
+          <div class="sc-bwrap">
+            <div v-if="m.role === 'user' && m.emotion" class="sc-etag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
+              <span>{{ getEmotionEmoji(m.emotion) }}</span>
+              <span>{{ m.emotion }}{{ m.emotion_intensity && m.emotion_intensity !== '不确定' ? ` · ${m.emotion_intensity}` : '' }}</span>
+            </div>
+            <div class="sc-bubble">
+              <span>{{ m.content }}</span>
+            </div>
+            <button v-if="m.role === 'assistant'" class="sc-tts" @click="playTTS(m.content)" :class="{ playing: ttsPlaying === i }" :aria-label="ttsPlaying === i ? '停止朗读' : '朗读这条回复'">
+              <svg v-if="ttsPlaying !== i" viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4z"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="chatLoading" class="sc-row assistant">
+          <img src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
+          <div class="sc-bwrap">
+            <div class="sc-bubble sc-typing">
+              <span class="sc-tdot"></span><span class="sc-tdot"></span><span class="sc-tdot"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -743,8 +747,7 @@ onUnmounted(() => {
 .sc-page {
   position: relative;
   height: calc(100dvh - 70px);
-  width: min(760px, 100%);
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background: var(--m-bg);
@@ -753,12 +756,16 @@ onUnmounted(() => {
 
 /* ─── 顶栏 ─── */
 .sc-head {
+  background: var(--m-surface);
+  border-bottom: 1px solid var(--m-line);
+}
+.sc-head-inner {
+  width: min(760px, 100%);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: var(--m-surface);
-  border-bottom: 1px solid var(--m-line);
 }
 .sc-back {
   width: 34px;
@@ -796,11 +803,19 @@ onUnmounted(() => {
 .sc-msgs {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 16px 8px;
+  display: flex;
+  flex-direction: column;
+}
+.sc-msgs-inner {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: 18px 16px 8px;
 }
+.sc-msgs-inner.is-empty { justify-content: safe center; }
 
 .sc-welcome { display: flex; gap: 10px; align-items: flex-start; }
 .sc-welcome-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
@@ -885,7 +900,9 @@ onUnmounted(() => {
 
 /* ─── 危机锁 ─── */
 .sc-urgent {
-  margin: 0 16px 10px;
+  width: calc(100% - 32px);
+  max-width: 728px;
+  margin: 0 auto 10px;
   padding: 14px 16px;
   border-radius: var(--m-radius-md);
   background: #FDEEEA;
@@ -922,7 +939,9 @@ onUnmounted(() => {
 
 /* ─── 结束确认 ─── */
 .sc-endconfirm {
-  margin: 0 16px 10px;
+  width: calc(100% - 32px);
+  max-width: 728px;
+  margin: 0 auto 10px;
   padding: 12px 14px;
   border-radius: var(--m-radius-md);
   background: var(--m-surface);
@@ -944,7 +963,17 @@ onUnmounted(() => {
 
 /* ─── 快捷 chips / 输入 ─── */
 .sc-quickwrap { padding: 6px 12px 4px; }
-.sc-quick { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; cursor: grab; }
+.sc-quick {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  padding-right: 28px;
+  scrollbar-width: none;
+  cursor: grab;
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+}
 .sc-quick::-webkit-scrollbar { display: none; }
 .sc-chip {
   flex: none;
@@ -1202,4 +1231,11 @@ onUnmounted(() => {
 
 .sc-fade-enter-active, .sc-fade-leave-active { transition: opacity 200ms ease; }
 .sc-fade-enter-from, .sc-fade-leave-to { opacity: 0; }
+
+/* ─── 电脑端：顶栏通栏 + 内容 760 居中，小结 orb 贴内容列右缘 ─── */
+@media (min-width: 768px) {
+  .sc-quickwrap { width: min(760px, 100%); margin: 0 auto; }
+  .sc-inputbar { width: min(760px, 100%); margin: 0 auto; }
+  .sc-orb { right: calc((100% - 760px) / 2 + 14px); }
+}
 </style>
