@@ -1,0 +1,82 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* 治愈系森林薄荷绿 - 低饱和度、温暖、放松 */
+  --primary: #5B8C7E;
+  --primary-light: #7FB3A6;
+  --primary-dark: #3D6B5E;
+  --bg: #F5F7F5;
+  --card: #FFFFFF;
+  --text: #3A3F3C;
+  --text-secondary: #7A8580;
+  --success: #6DB58B;
+  --warning: #E8C468;
+  --danger: #D4766A;
+  --border: #E8EDE9;
+  --hover: #EDF2EE;
+
+  /* v5.1.0-alpha.30 shared product tokens.
+     "Liquid glass" below is an honest web approximation, not an Apple API. */
+  --ui-forest-950: #14352d;
+  --ui-forest-800: #28594d;
+  --ui-forest-650: #427667;
+  --ui-mint-200: #bddbcf;
+  --ui-gold-300: #ead49a;
+  --ui-coral-400: #d77f70;
+  --ui-canvas: #f2f5f3;
+  --ui-surface: #ffffff;
+  --ui-ink: #22342e;
+  --ui-muted: #5b6d66;
+  --ui-line: #d7e1dc;
+  --ui-radius-control: 10px;
+  --ui-radius-panel: 14px;
+  --ui-duration-fast: 180ms;
+  --ui-ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ui-focus: #1f6387;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+}
+
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { scroll-behavior: auto; }
+}
+
+/* v5.1.0-alpha.38 student minimal skin（追加式：学生端新皮肤专用 token，
+   不改动上方既有 token，教师端/守护端不受影响） */
+:root {
+  --m-bg: #F7F8F6;
+  --m-surface: #FFFFFF;
+  --m-ink: #22302B;
+  --m-ink-2: #5C6B64;
+  --m-ink-3: #94A09A;
+  --m-line: #E6EAE7;
+  --m-accent: #5B8C7E;
+  --m-accent-strong: #4A7A6C;
+  --m-accent-soft: #EAF2EE;
+  --m-danger: #C06860;
+  --m-radius-lg: 18px;
+  --m-radius-md: 12px;
+  --m-radius-sm: 8px;
+  --m-shadow: 0 1px 2px rgba(34, 48, 43, .04), 0 8px 24px rgba(34, 48, 43, .06);
+}

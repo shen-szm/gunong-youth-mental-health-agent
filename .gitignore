@@ -24,3 +24,5 @@ Thumbs.db
 /backend/data/reports/
 .codex-alpha*-backend.tar.gz
 backend/.teacher-plan-runtime/
+.venv/
+venv/
