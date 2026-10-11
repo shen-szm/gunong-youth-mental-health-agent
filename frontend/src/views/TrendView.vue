@@ -243,9 +243,11 @@ watch(activeTab, loadData)
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: var(--m-bg); color: var(--m-ink-2);
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .back-btn:hover { background: var(--m-accent-soft); }
+.back-btn:active { transform: scale(.92); }
 .header-title h2 { margin: 0; font-size: 17px; color: var(--m-ink); text-align: center; }
 .header-title p { margin: 0; font-size: 11px; color: var(--m-ink-3); text-align: center; }
 
@@ -254,12 +256,22 @@ watch(activeTab, loadData)
 .tab-bar button {
   padding: 6px 18px; border-radius: 14px;
   background: var(--m-surface); color: var(--m-ink-2); font-size: 13px;
-  border: 1px solid var(--m-line); transition: all 0.2s;
+  border: 1px solid var(--m-line); transition: all var(--m-dur-fast) var(--m-ease);
 }
 .tab-bar button.active { background: var(--m-accent); color: #fff; border-color: var(--m-accent); }
+.tab-bar button:not(.active):hover { border-color: var(--m-accent); color: var(--m-accent-strong); }
+.tab-bar button:active { transform: scale(.96); }
 
 /* 统计卡片 */
 .stats-row { display: flex; gap: 10px; padding: 10px 16px; }
+
+/* v5.1.0-alpha.41 入场错峰（backwards：终帧不残留 transform，不干扰 hover） */
+.tab-bar, .stats-row, .trend-page > .card, .empty-state {
+  animation: m-rise var(--m-enter-dur) var(--m-ease) backwards;
+}
+.tab-bar { animation-delay: 40ms; }
+.stats-row { animation-delay: 80ms; }
+.trend-page > .card, .empty-state { animation-delay: 140ms; }
 .stat-card {
   background: var(--m-surface);
   border-radius: var(--m-radius-lg);
@@ -340,9 +352,11 @@ watch(activeTab, loadData)
   margin-top: 12px; padding: 6px 14px; border-radius: 10px;
   background: var(--m-bg); color: var(--m-ink-2); font-size: 12px;
   display: inline-flex; align-items: center;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .refresh-btn:hover:not(:disabled) { background: var(--m-accent-soft); color: var(--m-accent-strong); }
+.refresh-btn:active:not(:disabled) { transform: scale(.96); }
 .refresh-btn:disabled { opacity: 0.4; }
 
 /* 空状态 */
@@ -353,9 +367,11 @@ watch(activeTab, loadData)
 .go-chat-btn {
   margin-top: 20px; padding: 10px 28px;
   background: var(--m-accent); color: white; border-radius: 20px; font-size: 14px;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .go-chat-btn:hover { background: var(--m-accent-strong); }
+.go-chat-btn:active { transform: scale(.96); }
 
 /* ═══════════ 电脑端适配：1080 双栏 ═══════════ */
 @media (min-width: 768px) {
@@ -376,5 +392,9 @@ watch(activeTab, loadData)
   .side-stats { flex: 0 0 260px; flex-direction: row; }
   .side-card { min-width: 0; }
   .calendar-grid { grid-template-columns: repeat(10, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

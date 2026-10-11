@@ -269,10 +269,30 @@ onUnmounted(() => {
 
 <style scoped>
 .m-home {
+  position: relative;
   min-height: calc(100dvh - 70px);
   background: var(--m-bg);
   color: var(--m-ink);
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* 流光氛围：两团柔光缓慢漂移（fixed 伪元素不参与滚动，inset 外扩防露边） */
+.m-home::before,
+.m-home::after {
+  content: '';
+  position: fixed;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+}
+.m-home::before {
+  background: radial-gradient(38vmax 38vmax at 14% 12%, var(--m-glow-mint), transparent 68%);
+  animation: m-drift-a var(--m-drift-dur) ease-in-out infinite;
+}
+.m-home::after {
+  background: radial-gradient(34vmax 34vmax at 86% 88%, var(--m-glow-gold), transparent 70%);
+  animation: m-drift-b var(--m-drift-dur) ease-in-out infinite;
+  animation-delay: -13s;
 }
 
 /* ─── 欢迎遮罩 ─── */
@@ -319,12 +339,17 @@ onUnmounted(() => {
 }
 @media (prefers-reduced-motion: reduce) {
   .m-splash-hint { animation: none; opacity: .8; }
+  /* 静态柔光保留，但停止漂移（毯式 * 选择器覆盖不到伪元素） */
+  .m-home::before, .m-home::after { animation: none !important; }
+  * { transition: none !important; animation: none !important; }
 }
 .m-splash-leave-active { transition: opacity 320ms ease; }
 .m-splash-leave-to { opacity: 0; }
 
 /* ─── 主体 ─── */
 .m-shell {
+  position: relative;
+  z-index: 1;
   width: min(680px, 100% - 32px);
   margin: 0 auto;
   padding: 18px 0 30px;
@@ -350,7 +375,12 @@ onUnmounted(() => {
   background: var(--m-surface);
   color: var(--m-ink-2);
   border: 1px solid var(--m-line);
+  transition: background var(--m-dur-fast) var(--m-ease),
+              color var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
+.m-sound:hover { background: var(--m-accent-soft); color: var(--m-accent-strong); }
+.m-sound:active { transform: scale(.92); }
 
 .m-main { display: flex; flex-direction: column; gap: 14px; }
 
@@ -366,7 +396,12 @@ onUnmounted(() => {
   border: 1px solid var(--m-line);
   box-shadow: var(--m-shadow);
   text-align: left;
+  transition: transform var(--m-dur-fast) var(--m-ease),
+              box-shadow var(--m-dur-fast) var(--m-ease),
+              border-color var(--m-dur-fast) var(--m-ease);
 }
+.m-today-btn:hover { transform: translateY(-1px); box-shadow: var(--m-shadow-hover); border-color: #CFE3DA; }
+.m-today-btn:active { transform: translateY(0) scale(.99); }
 .m-today-emoji { font-size: 26px; }
 .m-today-copy { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .m-today-copy strong { font-size: 14.5px; font-weight: 600; color: var(--m-ink); }
@@ -400,9 +435,12 @@ onUnmounted(() => {
   border: 1px solid var(--m-line);
   box-shadow: var(--m-shadow);
   text-align: left;
-  transition: transform 180ms ease, border-color 180ms ease;
+  transition: transform var(--m-dur-fast) var(--m-ease),
+              box-shadow var(--m-dur-fast) var(--m-ease),
+              border-color var(--m-dur-fast) var(--m-ease);
 }
-.m-entry:hover { transform: translateY(-1px); }
+.m-entry:hover { transform: translateY(-2px); box-shadow: var(--m-shadow-hover); }
+.m-entry:active { transform: translateY(0) scale(.98); transition-duration: 90ms; }
 .m-entry-icon {
   width: 46px;
   height: 46px;
@@ -413,14 +451,46 @@ onUnmounted(() => {
   background: var(--m-bg);
   font-size: 24px;
 }
-.m-entry.is-primary .m-entry-icon { background: #FFFFFF; }
 .m-entry strong { font-size: 17px; color: var(--m-ink); }
 .m-entry small { font-size: 12.5px; line-height: 1.6; color: var(--m-ink-2); }
+/* 渐变主卡（倾诉）：视觉焦点；右上弧线 + 高光为流线装饰（absolute 避免成为 flex item） */
 .m-entry.is-primary {
-  background: var(--m-accent-soft);
-  border-color: #CFE3DA;
+  position: relative;
+  overflow: hidden;
+  background: var(--m-hero-grad);
+  border-color: transparent;
+  box-shadow: var(--m-hero-shadow);
 }
-.m-entry.is-primary strong { color: var(--m-accent-strong); }
+.m-entry.is-primary:hover { box-shadow: var(--m-hero-shadow-hover); }
+.m-entry.is-primary::before {
+  content: '';
+  position: absolute;
+  top: -56px;
+  right: -48px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, .30);
+  pointer-events: none;
+  transition: transform 420ms var(--m-ease);
+}
+.m-entry.is-primary::after {
+  content: '';
+  position: absolute;
+  top: -18px;
+  right: -6px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 62%);
+  pointer-events: none;
+  transition: transform 420ms var(--m-ease);
+}
+.m-entry.is-primary:hover::before { transform: rotate(10deg); }
+.m-entry.is-primary:hover::after { transform: scale(1.06); }
+.m-entry.is-primary .m-entry-icon { background: rgba(255, 255, 255, .22); }
+.m-entry.is-primary strong { color: #FFFFFF; }
+.m-entry.is-primary small { color: rgba(255, 255, 255, .92); }
 .m-entry-cta { display: none; }
 
 /* 更多 */
@@ -441,7 +511,9 @@ onUnmounted(() => {
   background: transparent;
   font-size: 13.5px;
   color: var(--m-ink-2);
+  transition: color var(--m-dur-fast) var(--m-ease);
 }
+.m-more-toggle:hover { color: var(--m-accent-strong); }
 .m-more-toggle svg { transition: transform 180ms ease; }
 .m-more-toggle svg.open { transform: rotate(180deg); }
 .m-more-grid {
@@ -460,7 +532,12 @@ onUnmounted(() => {
   background: var(--m-bg);
   font-size: 12px;
   color: var(--m-ink-2);
+  transition: background var(--m-dur-fast) var(--m-ease),
+              color var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
+.m-more-grid button:hover { background: var(--m-accent-soft); color: var(--m-accent-strong); transform: translateY(-1px); }
+.m-more-grid button:active { transform: scale(.95); }
 .m-more-grid button span { font-size: 20px; }
 
 /* 备案 */
@@ -479,9 +556,26 @@ onUnmounted(() => {
   gap: 5px;
   color: var(--m-ink-3);
   text-decoration: none;
+  transition: color var(--m-dur-fast) var(--m-ease);
 }
+.m-beian a:hover { color: var(--m-ink-2); }
 .m-beian-icon { width: 14px; height: 14px; }
 .m-beian-divider { color: var(--m-line); }
+
+/* 入场：错峰上浮（backwards：动画结束后释放 transform，不干扰 hover/active） */
+.m-header,
+.m-today,
+.m-entry.is-primary,
+.m-entries > .m-entry:not(.is-primary),
+.m-more,
+.m-beian {
+  animation: m-rise var(--m-enter-dur) var(--m-ease) backwards;
+}
+.m-today { animation-delay: 60ms; }
+.m-entry.is-primary { animation-delay: 120ms; }
+.m-entries > .m-entry:not(.is-primary) { animation-delay: 180ms; }
+.m-more { animation-delay: 240ms; }
+.m-beian { animation-delay: 300ms; }
 
 /* 面板 overlay */
 .m-overlay {
@@ -583,7 +677,10 @@ onUnmounted(() => {
     color: var(--m-accent-strong);
     font-size: 13.5px;
     font-weight: 600;
+    transition: transform var(--m-dur) var(--m-ease), box-shadow var(--m-dur) var(--m-ease);
   }
+  .m-entry:hover .m-entry-cta { transform: translateX(2px); }
+  .m-entry.is-primary:hover .m-entry-cta { box-shadow: 0 4px 12px rgba(0, 0, 0, .16); }
   .m-entry-cta.is-plain { background: var(--m-bg); color: var(--m-ink-2); }
   .m-more { border-radius: 20px; }
   .m-more-toggle { padding: 17px 0; font-size: 14.5px; }

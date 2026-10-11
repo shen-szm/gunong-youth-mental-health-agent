@@ -1,6 +1,10 @@
 <template>
   <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'home-full': route.path === '/', 'room-full': route.path === '/room', 'chat-full': route.path === '/chat', 'trend-full': route.path === '/trend', 'profile-full': route.path === '/profile', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
-    <router-view class="page-content" />
+    <Transition name="page" mode="out-in">
+      <div :key="route.path" class="page-wrap">
+        <router-view class="page-content" />
+      </div>
+    </Transition>
     <div class="build-badge" :title="buildTitle">v{{ appVersion }}</div>
     <!-- 旧房间页和管理后台不显示底部导航 -->
     <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/room' && route.path !== '/teacher-login' && !route.path.startsWith('/guardian')">
@@ -206,5 +210,17 @@ console.info('[咕哝] build', { version: appVersion, buildTime });
 }
 .admin-full .build-badge {
   display: none;
+}
+
+/* v5.1.0-alpha.41 页面切换淡出淡入。
+   Transition 的直接子节点是带 :key="route.path" 的包裹层 —— 只有 key 变化时
+   out-in 才会真正排序；router-view 自身 vnode 类型不变，直接包裹时不生效。 */
+.page-enter-active { transition: opacity 200ms var(--m-ease-soft); }
+.page-leave-active { transition: opacity 150ms ease; }
+.page-enter-from,
+.page-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

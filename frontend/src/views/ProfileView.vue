@@ -310,7 +310,10 @@ onMounted(() => { loadStats(); loadTodayStatus() })
 }
 
 /* 顶部英雄区 */
-.profile-hero { position: relative; padding-bottom: 28px; }
+.profile-hero {
+  position: relative; padding-bottom: 28px;
+  animation: m-fadein 400ms var(--m-ease-soft) backwards;
+}
 .hero-bg {
   position: absolute; inset: 0; height: 160px;
   background: linear-gradient(160deg, #A8C4B8 0%, #8EA89A 50%, #7A9A8C 100%);
@@ -343,9 +346,10 @@ onMounted(() => { loadStats(); loadTodayStatus() })
 }
 .stat-item {
   flex: 1; text-align: center; cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform var(--m-dur-fast) var(--m-ease);
 }
 .stat-item:hover { transform: scale(1.05); }
+.stat-item:active { transform: scale(.97); }
 .stat-val { font-size: 24px; font-weight: 700; color: var(--m-accent-strong); }
 .stat-lbl { font-size: 11px; color: #9A948E; margin-top: 3px; }
 .stat-divider { width: 1px; height: 36px; background: #F0ECE8; }
@@ -358,14 +362,27 @@ onMounted(() => { loadStats(); loadTodayStatus() })
   margin-bottom: 8px; padding-left: 4px;
 }
 
+/* v5.1.0-alpha.41 入场错峰（hero 只淡入：hero-bg 大圆角绝对定位，位移会露缝） */
+.stats-row, .profile-col .section {
+  animation: m-rise var(--m-enter-dur) var(--m-ease) backwards;
+}
+.stats-row { animation-delay: 40ms; }
+.profile-col .section:nth-child(1) { animation-delay: 80ms; }
+.profile-col .section:nth-child(2) { animation-delay: 140ms; }
+.profile-col .section:nth-child(3) { animation-delay: 200ms; }
+.profile-col .section:nth-child(4) { animation-delay: 260ms; }
+.profile-col .section:nth-child(5) { animation-delay: 320ms; }
+
 /* 今日状态 */
 .status-card { padding: 14px 16px; }
 .status-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .status-chips button {
   padding: 7px 14px; border-radius: 999px; font-size: 13px;
   background: var(--m-bg); color: var(--m-ink-2);
-  border: 1.5px solid transparent; transition: all 0.2s;
+  border: 1.5px solid transparent; transition: all var(--m-dur-fast) var(--m-ease);
 }
+.status-chips button:not(.active):hover { border-color: #CFE3DA; }
+.status-chips button:active { transform: scale(.94); }
 .status-chips button.active {
   background: var(--m-accent-soft); color: var(--m-accent-strong);
   border-color: var(--m-accent); font-weight: 600;
@@ -432,16 +449,19 @@ onMounted(() => { loadStats(); loadTodayStatus() })
 .save-btn {
   padding: 6px 14px; background: var(--m-accent); color: white;
   border-radius: 8px; font-size: 12px; white-space: nowrap;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .save-btn:hover { background: var(--m-accent-strong); }
+.save-btn:active { transform: scale(.96); }
 
 .menu-row {
   display: flex; align-items: center; gap: 10px; padding: 14px 16px;
   cursor: pointer; font-size: 14px; color: #5A5450;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease);
 }
 .menu-row:hover { background: #F8F4F0; }
+.menu-row:active { background: #F1ECE7; }
 .arrow { margin-left: auto; font-size: 18px; color: #C0B8B0; }
 
 /* 退出按钮 */
@@ -454,6 +474,7 @@ onMounted(() => { loadStats(); loadTodayStatus() })
   transition: all 0.2s;
 }
 .logout-btn:hover { background: #FFF5F3; border-color: #D4776A; }
+.logout-btn:active { transform: scale(.98); }
 
 /* 修改密码弹窗 */
 .modal-overlay {
@@ -476,15 +497,19 @@ onMounted(() => { loadStats(); loadTodayStatus() })
 .modal-cancel {
   flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
   background: #F5F0EC; color: #5A5450; text-align: center;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .modal-cancel:hover { background: #EBE4DC; }
+.modal-cancel:active { transform: scale(.97); }
 .modal-confirm {
   flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
   background: var(--m-accent); color: white; text-align: center;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
 .modal-confirm:hover { background: var(--m-accent-strong); }
+.modal-confirm:active { transform: scale(.97); }
 .pwd-msg { text-align: center; margin: 12px 0 0; font-size: 13px; }
 .pwd-msg.success { color: #5A8070; }
 .pwd-msg.error { color: #C06860; }
@@ -515,5 +540,9 @@ onMounted(() => { loadStats(); loadTodayStatus() })
   .mini-cell { padding: 9px 0; font-size: 12px; }
   .mini-cell em { font-size: 16px; }
   .logout-btn { width: calc(100% - 32px); margin: 16px 16px 0; padding: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

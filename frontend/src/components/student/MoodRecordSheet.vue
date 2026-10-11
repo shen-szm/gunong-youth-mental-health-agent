@@ -96,6 +96,7 @@ async function save() {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  animation: m-fadein var(--m-dur) var(--m-ease-soft) backwards;
 }
 @media (min-width: 640px) {
   .mrs-overlay { align-items: center; }
@@ -108,6 +109,7 @@ async function save() {
   border-radius: var(--m-radius-lg) var(--m-radius-lg) 0 0;
   padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
   box-shadow: var(--m-shadow);
+  animation: m-panel-rise 340ms var(--m-ease) backwards;
 }
 @media (min-width: 640px) {
   .mrs-card { border-radius: var(--m-radius-lg); padding-bottom: 20px; }
@@ -141,8 +143,18 @@ async function save() {
   border: 1.5px solid transparent;
   font-size: 12px;
   color: var(--m-ink-2);
-  transition: border-color 180ms ease, background 180ms ease;
+  transition: border-color var(--m-dur-fast) var(--m-ease),
+              background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
+  animation: m-pop 360ms var(--m-ease) backwards;
 }
+.mrs-moods button:nth-child(1) { animation-delay: 40ms; }
+.mrs-moods button:nth-child(2) { animation-delay: 80ms; }
+.mrs-moods button:nth-child(3) { animation-delay: 120ms; }
+.mrs-moods button:nth-child(4) { animation-delay: 160ms; }
+.mrs-moods button:nth-child(5) { animation-delay: 200ms; }
+.mrs-moods button:hover { border-color: #CFE3DA; }
+.mrs-moods button:active { transform: scale(.94); }
 .mrs-moods button span { font-size: 22px; }
 .mrs-moods button.active {
   border-color: var(--m-accent);
@@ -169,8 +181,9 @@ async function save() {
   background: var(--m-surface);
   resize: none;
   outline: none;
+  transition: border-color var(--m-dur-fast) var(--m-ease), box-shadow var(--m-dur-fast) var(--m-ease);
 }
-.mrs-note textarea:focus { border-color: var(--m-accent); }
+.mrs-note textarea:focus { border-color: var(--m-accent); box-shadow: 0 0 0 3px var(--m-ring); }
 
 .mrs-error {
   margin: 10px 0 0;
@@ -188,16 +201,20 @@ async function save() {
   padding: 11px 0;
   border-radius: var(--m-radius-md);
   font-size: 14.5px;
+  transition: background var(--m-dur-fast) var(--m-ease), transform var(--m-dur-fast) var(--m-ease);
 }
+.mrs-actions button:active { transform: scale(.97); }
 .mrs-cancel {
   background: var(--m-bg);
   color: var(--m-ink-2);
 }
+.mrs-cancel:hover { background: var(--m-line); }
 .mrs-save {
   background: var(--m-accent);
   color: #fff;
   font-weight: 600;
 }
+.mrs-save:not(:disabled):hover { background: var(--m-accent-strong); }
 .mrs-save:disabled { opacity: .45; cursor: not-allowed; }
 
 .mrs-boundary {
@@ -205,5 +222,9 @@ async function save() {
   text-align: center;
   font-size: 11px;
   color: var(--m-ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

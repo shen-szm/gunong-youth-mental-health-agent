@@ -80,3 +80,52 @@ button {
   --m-radius-sm: 8px;
   --m-shadow: 0 1px 2px rgba(34, 48, 43, .04), 0 8px 24px rgba(34, 48, 43, .06);
 }
+
+/* v5.1.0-alpha.41 流光氛围：运动与流光 token（追加式，不改上方 token） */
+:root {
+  --m-ease: cubic-bezier(.22, 1, .36, 1);
+  --m-ease-soft: cubic-bezier(.33, 0, .2, 1);
+  --m-dur-fast: 160ms;
+  --m-dur: 220ms;
+  --m-dur-slow: 320ms;
+  --m-enter-dur: 480ms;
+  --m-drift-dur: 26s;
+  --m-hero-grad: linear-gradient(135deg, #639B89 0%, #4A7A6C 52%, #3D6B5E 100%);
+  --m-hero-shadow: 0 2px 4px rgba(74, 122, 108, .16), 0 16px 36px rgba(74, 122, 108, .26);
+  --m-hero-shadow-hover: 0 4px 10px rgba(74, 122, 108, .20), 0 24px 52px rgba(74, 122, 108, .34);
+  --m-shadow-hover: 0 2px 4px rgba(34, 48, 43, .05), 0 14px 34px rgba(34, 48, 43, .10);
+  --m-ring: rgba(91, 140, 126, .16);
+  --m-glow-mint: rgba(140, 200, 178, .38);
+  --m-glow-gold: rgba(232, 196, 104, .28);
+}
+
+/* v5.1.0-alpha.41 流光氛围：全局 keyframes（学生端多文件复用） */
+@keyframes m-rise {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-rise-sm {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes m-pop {
+  0%   { opacity: 0; transform: scale(.86); }
+  62%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes m-panel-rise {
+  from { opacity: 0; transform: translate3d(0, 30px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-drift-a {
+  0%, 100% { transform: translate3d(-4%, -3%, 0) scale(1); }
+  50%      { transform: translate3d(5%, 4%, 0) scale(1.08); }
+}
+@keyframes m-drift-b {
+  0%, 100% { transform: translate3d(4%, 3%, 0) scale(1.06); }
+  50%      { transform: translate3d(-5%, -4%, 0) scale(1); }
+}
