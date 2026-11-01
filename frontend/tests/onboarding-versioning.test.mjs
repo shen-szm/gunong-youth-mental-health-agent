@@ -32,15 +32,16 @@ test('daily return is available through the unified status and action system', a
   assert.match(room, /治愈/)
 })
 
-test('window hotspot label is hidden until hover and uses subtle copy', async () => {
+test('window entry stays subtle until hover and uses restrained copy', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.doesNotMatch(room, />出去看看</)
   assert.doesNotMatch(room, /<h2>[^<]*出去看看<\/h2>/)
   assert.doesNotMatch(room, />窗外有新风景</)
   assert.match(room, /看看窗外/)
-  assert.match(room, /\.window-label \{[\s\S]*?opacity:\s*0/)
-  assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
+  assert.match(room, /\.lobby-pill \{[\s\S]*?background: var\(--lobby-card\)/)
+  assert.match(room, /\.lobby-pill:hover \{[\s\S]*?border-color: var\(--lobby-gold\)/)
+  assert.match(room, /\.lobby-card \{[\s\S]*?background: var\(--lobby-card\)/)
 })
 
 test('patch release continues from latest baseline and records changelog', async () => {

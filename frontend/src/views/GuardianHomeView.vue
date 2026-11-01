@@ -15,8 +15,10 @@
     <main>
       <section class="guardian-container guardian-hero">
         <div class="guardian-hero-copy">
-          <div class="guardian-status-line">v{{ version }} · 青少年心理支持工作台 · 待专业人员审核</div>
-          <h1>把担心，整理成<span>下一步</span></h1>
+          <div class="guardian-status-line">
+            <span>v{{ version }}</span><span class="guardian-status-scope">青少年心理支持工作台</span><span>待专业人员审核</span>
+          </div>
+          <h1>把担心，<br />整理成<span>下一步</span></h1>
           <p class="guardian-lead">
             面向家长与教师的多 Agent 支持系统。提交一次去标识化观察后，咕哝会完成安全分流、证据检索、行动方案、资源匹配与站内回访。
           </p>

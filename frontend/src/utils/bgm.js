@@ -6,6 +6,21 @@ const TARGET_VOLUME = 0.35
 let audio = null
 let index = 0
 let on = false
+let fadeTimer = null
+const listeners = new Set()
+
+function setOn(value) {
+  if (on === value) return
+  on = value
+  listeners.forEach(listener => {
+    try { listener(on) } catch {}
+  })
+}
+
+export function subscribeBgm(listener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
 
 function ensureAudio() {
   if (audio) return audio
@@ -15,7 +30,9 @@ function ensureAudio() {
   audio.addEventListener('ended', () => {
     index = (index + 1) % PLAYLIST.length
     audio.src = PLAYLIST[index]
-    if (on && !muted()) audio.play().catch(() => {})
+    if (on && !muted()) {
+      audio.play().catch(() => { setOn(false) })
+    }
   })
   return audio
 }
@@ -28,14 +45,22 @@ function setMuted(value) {
   try { value ? localStorage.setItem(MUTE_KEY, '1') : localStorage.removeItem(MUTE_KEY) } catch {}
 }
 
+function cancelFade() {
+  if (fadeTimer) {
+    clearInterval(fadeTimer)
+    fadeTimer = null
+  }
+}
+
 function fadeTo(target) {
   const el = ensureAudio()
+  cancelFade()
   const step = target > el.volume ? 0.04 : -0.06
-  const timer = setInterval(() => {
+  fadeTimer = setInterval(() => {
     const next = el.volume + step
     if ((step > 0 && next >= target) || (step < 0 && next <= target)) {
-      el.volume = target
-      clearInterval(timer)
+      el.volume = Math.max(0, Math.min(1, target))
+      cancelFade()
       if (target === 0) el.pause()
       return
     }
@@ -52,34 +77,48 @@ export function isBgmOn() {
 }
 
 // 进入首页的点击手势内调用；用户曾主动静音则不启动。
-export function startBgm() {
+export async function startBgm() {
   if (muted()) return false
   const el = ensureAudio()
-  on = true
-  el.src = PLAYLIST[index]
-  el.play().then(() => fadeTo(TARGET_VOLUME)).catch(() => {})
+  setOn(true)
+  if (!el.getAttribute('src')) el.src = PLAYLIST[index]
+  try {
+    if (el.paused) await el.play()
+  } catch {
+    setOn(false)
+    return false
+  }
+  if (!on) return false
+  fadeTo(TARGET_VOLUME)
   return true
 }
 
 // 声音按钮：在开/关之间切换，并把静音偏好持久化，下次免打扰。
-export function toggleBgm() {
+export async function toggleBgm() {
   const el = ensureAudio()
   if (on) {
     setMuted(true)
-    on = false
+    setOn(false)
     fadeTo(0)
     return false
   }
   setMuted(false)
-  on = true
-  el.src = PLAYLIST[index]
-  el.play().then(() => fadeTo(TARGET_VOLUME)).catch(() => {})
+  setOn(true)
+  if (!el.getAttribute('src')) el.src = PLAYLIST[index]
+  try {
+    await el.play()
+  } catch {
+    setOn(false)
+    return false
+  }
+  if (!on) return false
+  fadeTo(TARGET_VOLUME)
   return true
 }
 
 // 临时停播（如进入旧房间或打开音乐播放器），不写入静音偏好。
 export function stopBgm() {
-  if (!on) return
-  on = false
+  setOn(false)
+  if (!audio) return
   fadeTo(0)
 }

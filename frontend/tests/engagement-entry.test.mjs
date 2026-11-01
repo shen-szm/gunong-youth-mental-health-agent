@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const GUIDE_TITLE = '\u5148\u4ece\u623f\u95f4\u91cc\u7684\u7535\u8111\u5f00\u59cb'
+const GUIDE_TITLE = '\u5148\u4ece\u7b2c\u4e00\u53e5\u503e\u8bc9\u5f00\u59cb'
 const FIRST_CONFESSION_PROMPT = '\u628a\u4eca\u5929\u6700\u60f3\u8bf4\u7684\u4e00\u53e5\u8bdd\u4e22\u7ed9\u6211'
 const MOOD_CARD_TITLE = '\u4eca\u65e5\u5fc3\u60c5\u5361'
 const DAILY_RETURN_TITLE = '\u4eca\u5929\u4e5f\u7ed9\u81ea\u5df1\u7559\u4e00\u5206\u949f'
@@ -113,10 +113,10 @@ test('one responsive action bar replaces stacked engagement cards', async () => 
 test('onboarding highlights the exact room target users should click', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
-  assert.match(room, /:class="\['hot-zone zone-monitor'/)
+  assert.match(room, /class="lobby-primary-cta"/)
   assert.match(room, /guideStage === 'computer'/)
-  assert.match(room, /'is-guide-target': showFirstRunGuide && guideStage === 'computer'/)
-  assert.match(room, /@click\.stop="selectRoomFeature\('chat', \$event\)"/)
+  assert.match(room, /'is-guide': showFirstRunGuide && guideStage === 'computer'/)
+  assert.match(room, /class="lobby-primary-cta" @click\.stop="handleGuideChatTarget"/)
   assert.match(room, /@click="handleGuideTreeholeTarget"/)
   assert.match(room, /guide-target-badge/)
 })
@@ -152,12 +152,11 @@ test('student room includes original Guguan nurture and companion loop', async (
   assert.match(room, /updatePetFromMood/)
   assert.match(room, /showPetCompanionPanel/)
   assert.match(room, /pet-panel-overlay/)
-  assert.match(room, /room-roaming-pet/)
-  assert.match(room, /handleRoomPetMove/)
+  assert.match(room, /class="lobby-pet-stage"/)
+  assert.match(room, /class="lobby-card lobby-card-pet"/)
   assert.match(room, /openPetPlayground/)
   assert.match(room, /pet-playground-stage/)
-  assert.match(room, /ROOM_PET_POSITION_KEY/)
-  assert.match(room, /@click\.stop="selectRoomFeature\('pet', \$event\)"/)
+  assert.match(room, /@click="openWorkspacePanel\('pet', \$event\.currentTarget\)"/)
   assert.match(room, /@click\.stop="petPetting"/)
   assert.match(room, /@click\.stop="feedPetSnack"/)
   assert.match(room, /@click\.stop="talkWithPet"/)

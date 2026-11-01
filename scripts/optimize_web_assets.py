@@ -14,11 +14,6 @@ ASSETS = (
     (PUBLIC / "guguan" / "guguan-eating.png", (384, 384), 84, True),
     (PUBLIC / "guguan" / "guguan-happy.png", (384, 384), 84, True),
     (PUBLIC / "guguan" / "guguan-sleeping.png", (384, 384), 84, True),
-    (PUBLIC / "电脑端-白天.jpg", (1920, 1080), 80, False),
-    (PUBLIC / "电脑端-傍晚.jpg", (1920, 1080), 80, False),
-    (PUBLIC / "电脑端-夜晚.jpg", (1920, 1080), 80, False),
-    (PUBLIC / "白天.png", (960, 2090), 78, False),
-    (PUBLIC / "夜晚.png", (960, 2090), 78, False),
 )
 
 

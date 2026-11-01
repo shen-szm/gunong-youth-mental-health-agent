@@ -24,7 +24,7 @@
 
       <div class="island-header-actions">
         <span class="island-version">v{{ version }}</span>
-        <button ref="closeButton" type="button" class="island-close" aria-label="关闭心岛，返回房间" @click="$emit('close')">×</button>
+        <button ref="closeButton" type="button" class="island-close" aria-label="关闭心岛，返回首页" @click="$emit('close')">×</button>
       </div>
     </header>
 
@@ -89,10 +89,10 @@
         </div>
         <div v-else-if="loadError" class="island-error" role="alert">
           <strong>心岛暂时没有展开</strong>
-          <p>聊天和房间内容都还在，可以重新准备心岛或先返回房间。</p>
+          <p>聊天记录都还在，可以重新准备心岛或先返回首页。</p>
           <div>
             <button type="button" @click="startGame">重新尝试</button>
-            <button type="button" @click="$emit('close')">返回房间</button>
+            <button type="button" @click="$emit('close')">返回首页</button>
           </div>
         </div>
       </div>
@@ -260,9 +260,9 @@ const agentSteps = computed(() => [
 ])
 const reflectionCopy = computed(() => ({
   lighter: '把这点轻松留住就好。可以回到岛上走走，也可以直接结束。',
-  same: '没有变化也很正常。可以换一种玩法，或回房间继续倾诉。',
+  same: '没有变化也很正常。可以换一种玩法，或回首页继续倾诉。',
   energized: '把这点精神留给一件你愿意做的小事，不需要马上安排很多任务。',
-  more_tense: '先停下玩法，回房间坐一会或继续倾诉；这份主动反馈会出现在你的情绪回顾里。',
+  more_tense: '先停下玩法，回首页坐一会或继续倾诉；这份主动反馈会出现在你的情绪回顾里。',
 })[activityState.value.reflection] || '')
 let game = null
 let cancelled = false
@@ -401,7 +401,7 @@ async function startGame() {
       gameStartTimeout = null
       loading.value = false
       loadError.value = true
-      liveStatus.value = '心岛加载失败，可以重试或先返回房间。'
+      liveStatus.value = '心岛加载失败，可以重试或先返回首页。'
     }
   })()
   startingPromise = promise
@@ -1225,5 +1225,179 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .island-loading span { animation: none; }
   .island-workspace * { scroll-behavior: auto !important; transition: none !important; }
+}
+
+/* 像素皮肤 3.0 · 心岛工作台 */
+.island-workspace {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.island-header {
+  border-bottom: 2px solid var(--px-line);
+}
+.island-brand small { font-family: var(--px-font); }
+.island-brand h2 { font-family: var(--px-font); }
+.island-phase-status {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.island-phase-status strong { font-family: var(--px-font); }
+.island-version {
+  border: 1px solid var(--px-line);
+  border-radius: 3px;
+}
+.island-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.island-close:hover {
+  border-color: var(--px-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-close:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.island-mission-glass {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-mission-glass small { font-family: var(--px-font); }
+.island-mission-glass strong { font-family: var(--px-font); }
+.island-agent-rail {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.agent-state-dot { border-radius: 0; }
+.agent-rail-body li > span { border-radius: 4px; }
+.island-arrival-card {
+  --px-line: rgba(118, 83, 55, .4);
+  --px-gold: #744336;
+  --px-shadow: rgba(67, 30, 27, .32);
+  border: 2px solid #fff0bd;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-arrival-card small { font-family: var(--px-font); }
+.island-arrival-card strong { font-family: var(--px-font); }
+.arrival-dismiss {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.arrival-primary {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.arrival-primary:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.arrival-primary:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.island-urgent-support {
+  border-width: 2px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-urgent-support strong { font-family: var(--px-font); }
+.island-urgent-support a,
+.island-urgent-support button {
+  border: 2px solid rgba(255, 243, 200, .3);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .38);
+}
+.island-place-dock {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-place-dock button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+}
+.island-place-dock button.is-current {
+  border-color: var(--px-gold);
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.island-place-dock strong { font-family: var(--px-font); }
+.island-mobile-controls button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.island-mobile-controls .is-interact { border-color: var(--px-gold); }
+.island-activity-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.activity-panel-header > button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.activity-panel-header nav {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.activity-panel-header nav button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.activity-panel-header nav button.active {
+  border-color: var(--px-gold);
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.activity-panel-body { scrollbar-color: var(--px-gold) rgba(255, 248, 234, .12); }
+.island-reflection {
+  border: 2px solid var(--px-line);
+  border-top-width: 2px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-reflection legend { font-family: var(--px-font); }
+.island-reflection button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.island-reflection button.active {
+  border-color: var(--px-gold);
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.island-workspace button:focus-visible,
+.island-workspace a:focus-visible,
+.island-game-surface:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+
+@media (min-width: 901px) {
+  .island-header { border-bottom: 0; }
+  .island-brand {
+    border: 2px solid var(--px-line);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 var(--px-shadow);
+  }
+  .island-phase-status { border-radius: 4px; }
+  .island-close { border-radius: 4px; }
+  .island-mission-glass { border-radius: 6px; }
+  .island-agent-rail { border-radius: 6px; }
+  .island-place-dock { border-radius: 6px; }
+  .island-place-dock button { border-radius: 4px; }
+  .island-arrival-card { border-radius: 6px; }
+  .activity-panel-header { border-bottom: 2px solid var(--px-line); }
+  .activity-panel-header > button { border-radius: 4px; }
+  .activity-panel-header nav { border-radius: 6px; }
+  .activity-panel-header nav button { border-radius: 4px; }
+  .island-reflection { border-radius: 6px; }
 }
 </style>

@@ -471,6 +471,78 @@ onBeforeUnmount(() => {
   .move-hint { bottom: 80px; padding: 5px 8px; border-radius: 7px; color: rgba(255,248,234,.72); background: rgba(24,31,30,.54); text-shadow: none; }
 }
 
+/* 像素皮肤 3.0 · 潮汐沙滩 */
+.tidal-beach {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent, #efb96f);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.beach-header strong { font-family: var(--px-font); }
+.shell-count {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.collect-feedback {
+  --px-line: rgba(74, 58, 42, .3);
+  --px-gold: #b07a45;
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.sitting-card {
+  --px-line: rgba(61, 61, 45, .3);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(61, 61, 45, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.sitting-close {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  background: var(--px-gold);
+  color: #fff8ea;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.beach-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.beach-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.beach-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.beach-btn.primary {
+  border-color: var(--px-gold);
+  background: var(--px-gold);
+  color: #2d241c;
+  text-shadow: none;
+}
+.move-hint { border-radius: 4px; }
+.tidal-beach:focus-visible,
+.tidal-beach button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+@media (min-width: 901px) {
+  .beach-header {
+    border: 2px solid var(--px-line);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 var(--px-shadow);
+  }
+  .beach-actions {
+    border: 2px solid var(--px-line);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 var(--px-shadow);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tidal-beach *, .collectible-shell, .pet-sprite { animation: none !important; transition-duration: .01ms !important; }
 }

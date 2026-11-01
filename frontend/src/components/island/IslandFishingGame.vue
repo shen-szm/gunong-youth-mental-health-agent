@@ -213,4 +213,43 @@ button:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
   .fish-book article > span { border-radius: 7px; background: rgba(255,255,255,.075); }
 }
 @media (max-width: 900px) { .activity-copy dl { display: none; } .fishing-tools { grid-template-columns: 1fr; } }
+
+/* 像素皮肤 3.0 · 月光钓鱼湾 */
+.fishing-game {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent, #efb96f);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.activity-copy small { font-family: var(--px-font); }
+.activity-copy h3 { font-family: var(--px-font); }
+.activity-copy dl div {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.activity-copy dd { font-family: var(--px-font); }
+.fishing-stage-shell { border-radius: 4px; }
+.fishing-tools button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.fishing-tools button:not(:disabled):not([aria-disabled='true']):hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.fishing-tools button:not(:disabled):not([aria-disabled='true']):active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.fish-book article {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.fish-book article + article { box-shadow: 2px 2px 0 var(--px-shadow); }
+.fish-book article > span { border-radius: 4px; }
+button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
 </style>

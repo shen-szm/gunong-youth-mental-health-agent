@@ -1,20 +1,23 @@
 <template>
-  <div class="sc-page">
+  <div class="sc-page game-page" :data-part="part">
+    <GameBackdrop :part="part" variant="chat" />
     <header class="sc-head">
       <div class="sc-head-inner">
         <router-link class="sc-back" to="/" aria-label="返回首页">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </router-link>
-        <img src="/images/logo.jpg" class="sc-logo" alt="咕哝" />
+        <router-link class="sc-pet" to="/" aria-label="咕团在首页等你，点击返回" title="回首页看看咕团">
+          <img :src="petAvatar" alt="咕团" />
+        </router-link>
         <div class="sc-head-copy">
           <strong id="sc-chat-title">咕哝倾诉空间</strong>
           <small><span class="sc-dot" :class="{ thinking: chatLoading }"></span>{{ chatLoading ? '正在思考...' : '在线，随时倾听' }}</small>
         </div>
         <button
-          v-if="!chatUrgentLocked"
+          v-if="!chatUrgentLocked && hasUserMessage"
           class="sc-end"
           type="button"
-          :disabled="chatLoading || !hasUserMessage"
+          :disabled="chatLoading"
           @click="requestConversationEnd"
         >结束本次倾诉</button>
       </div>
@@ -22,22 +25,31 @@
 
     <div class="sc-msgs" ref="msgBox">
       <div class="sc-msgs-inner" :class="{ 'is-empty': chatMessages.length === 0 }">
+        <div v-if="guideCompleteNotice" class="sc-guide-notice" role="status">
+          第一段倾诉已经完成，引导也收好啦。
+          <router-link to="/">回首页看看咕团</router-link>
+        </div>
         <div class="sc-welcome" v-if="chatMessages.length === 0">
-          <img src="/images/logo.jpg" class="sc-welcome-avatar" alt="咕哝" />
+          <img :src="guguanAvatar" class="sc-welcome-avatar" alt="咕团" />
           <div class="sc-welcome-bubble">
             <p>先不用把话组织好。</p>
-            <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
+            <small>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。</small>
           </div>
         </div>
         <div v-if="!chatMessages.length" class="sc-starters" aria-label="选择倾诉开场">
-          <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
-        </div>
-        <div class="sc-consent" role="status">
-          <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
+          <button v-for="starter in conversationStarters" :key="starter.title" type="button" :title="starter.text" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
         </div>
 
+        <StudentScreeningCard
+          v-if="!chatMessages.length && (!chatUrgentLocked || screeningUrgentActive)"
+          ref="screeningCard"
+          :paused="chatUrgentLocked"
+          @urgent="handleScreeningUrgent"
+          @updated="handleScreeningUpdated"
+        />
+
         <div v-for="(m, i) in chatMessages" :key="i" :class="['sc-row', m.role]">
-          <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
+          <img v-if="m.role === 'assistant'" :src="guguanAvatar" class="sc-msg-avatar" alt="咕团" />
           <div class="sc-bwrap">
             <div v-if="m.role === 'user' && m.emotion" class="sc-etag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
               <span>{{ getEmotionEmoji(m.emotion) }}</span>
@@ -46,7 +58,7 @@
             <div class="sc-bubble">
               <span>{{ m.content }}</span>
             </div>
-            <button v-if="m.role === 'assistant'" class="sc-tts" @click="playTTS(m.content)" :class="{ playing: ttsPlaying === i }" :aria-label="ttsPlaying === i ? '停止朗读' : '朗读这条回复'">
+            <button v-if="m.role === 'assistant'" class="sc-tts" type="button" @click="toggleTTS(m.content, i)" :class="{ playing: ttsPlaying === i }" :aria-label="ttsPlaying === i ? '停止朗读' : '朗读这条回复'">
               <svg v-if="ttsPlaying !== i" viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4z"/></svg>
               <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
             </button>
@@ -54,13 +66,30 @@
         </div>
 
         <div v-if="chatLoading" class="sc-row assistant">
-          <img src="/images/logo.jpg" class="sc-msg-avatar" alt="咕哝" />
+          <img :src="guguanAvatar" class="sc-msg-avatar" alt="咕团" />
           <div class="sc-bwrap">
             <div class="sc-bubble sc-typing">
               <span class="sc-tdot"></span><span class="sc-tdot"></span><span class="sc-tdot"></span>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div v-if="!chatUrgentLocked" class="sc-consentbar">
+      <div class="sc-consent" :class="{ 'is-open': policyExpanded }" role="note">
+        <button
+          type="button"
+          class="sc-consent-toggle"
+          :aria-expanded="policyExpanded"
+          aria-controls="sc-consent-detail"
+          @click="policyExpanded = !policyExpanded"
+        >
+          <strong>{{ consentTitle }}</strong>
+          <span>{{ policyExpanded ? '收起' : '数据说明' }}</span>
+          <svg :class="{ open: policyExpanded }" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <small v-if="policyExpanded" id="sc-consent-detail">{{ consentDetail }}</small>
       </div>
     </div>
 
@@ -82,6 +111,9 @@
       </div>
       <label><input v-model="safetyCurrentSafe" type="checkbox"> 我现在在安全地点，身边没有危险物</label>
       <label><input v-model="safetyContactedAdult" type="checkbox"> 我已经联系并和一位可信成年人待在一起</label>
+      <small v-if="!safetyCurrentSafe || !safetyContactedAdult" class="sc-resolve-hint">
+        请先勾选以上两项，确认你已在安全地点并已联系可信成年人。
+      </small>
       <button
         class="sc-resolve"
         type="button"
@@ -102,7 +134,31 @@
       </div>
     </section>
 
-    <div v-if="!chatUrgentLocked" class="sc-quickwrap">
+    <section
+      v-if="showProfessionalNotice"
+      class="sc-screening-ack"
+      role="note"
+      aria-live="polite"
+      aria-labelledby="sc-screening-ack-title"
+    >
+      <div class="sc-screening-ack-copy">
+        <strong id="sc-screening-ack-title">筛查结果正在影响聊天</strong>
+        <p>你最近一次状态筛查的总分偏高，这不是诊断。在你确认已联系可信成年人之前，咕哝会先给出安全建议。</p>
+        <small>如果还没有联系，请先找家长、老师或学校心理老师；有即时危险请拨打 110 或 120。确认后会恢复普通对话，筛查结果仍保留，可随时删除。</small>
+      </div>
+      <button
+        ref="screeningAckButton"
+        type="button"
+        :disabled="screeningAcking"
+        @click="acknowledgeProfessionalScreening"
+      >{{ screeningAcking ? '正在记录…' : '我已知晓并已联系可信成年人' }}</button>
+      <p v-if="screeningAckError" class="sc-screening-ack-error" role="status">{{ screeningAckError }}</p>
+    </section>
+    <p v-else-if="screeningAckDone" class="sc-screening-ackdone" role="status">
+      已记录你的确认，接下来会恢复正常对话。筛查结果仍保留。
+    </p>
+
+    <div v-if="!chatUrgentLocked && chatMessages.length" class="sc-quickwrap">
       <div
         class="sc-quick"
         ref="quickScroll"
@@ -112,7 +168,7 @@
         @mouseup="onQuickMouseUp"
         @mouseleave="onQuickMouseUp"
       >
-        <button v-for="e in (chatMessages.length ? conversationFollowups : emotions)" :key="e.text" class="sc-chip" @click="chatMessages.length ? prepareConversation(e.text) : sendChatMsg(e.text)">
+        <button v-for="e in conversationFollowups" :key="e.text" class="sc-chip" @click="prepareConversation(e.text)">
           <span>{{ e.emoji }}</span> {{ e.text }}
         </button>
       </div>
@@ -124,7 +180,7 @@
         <span v-else class="sc-rec-wave" aria-hidden="true"></span>
       </button>
       <div class="sc-iinput">
-        <input v-model="chatInput" :placeholder="chatInputPlaceholder" @keyup.enter="sendChatMsg()" :disabled="chatLoading" ref="inputEl" aria-label="输入想说的话" />
+        <input v-model="chatInput" :placeholder="chatInputPlaceholder" @keydown.enter="onInputEnter" :disabled="chatLoading" ref="inputEl" aria-label="输入想说的话" />
       </div>
       <button class="sc-send" @click="sendChatMsg()" :disabled="chatLoading || !chatInput.trim()" aria-label="发送">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -144,7 +200,7 @@
       :aria-expanded="showSupportDrawer"
       @click="openSummaryDrawer"
     >
-      <span class="sc-orb-pixel" aria-hidden="true"><img src="/images/logo.jpg" alt="" /></span>
+      <span class="sc-orb-pixel" aria-hidden="true"><img :src="guguanAvatar" alt="" /></span>
       <span class="sc-orb-copy">
         <strong>{{ summaryStatus === 'processing' ? '正在整理' : summaryStatus === 'error' ? '整理失败' : '倾诉小结' }}</strong>
         <small>{{ summaryStatus === 'ready' ? `${conversationSummary?.dominant_emotion || '情绪'} · ${conversationSummary?.intensity || ''}` : summaryStatus === 'error' ? '点此重试' : '请稍候' }}</small>
@@ -155,7 +211,7 @@
 
     <Transition name="sc-fade">
       <div v-if="showSupportDrawer" class="sc-drawer-mask" @click.self="closeSupportDrawer">
-        <aside class="sc-drawer" role="dialog" aria-modal="true" aria-labelledby="sc-drawer-title" @keydown.esc="closeSupportDrawer">
+        <aside ref="drawerEl" class="sc-drawer" role="dialog" aria-modal="true" aria-labelledby="sc-drawer-title" tabindex="-1">
           <button class="sc-drawer-close" type="button" aria-label="关闭倾诉小结" @click="closeSupportDrawer">×</button>
 
           <template v-if="supportDrawerMode === 'plan' && summaryStatus === 'ready' && conversationSummary">
@@ -241,9 +297,15 @@
 // 从 RoomHomeView.vue（alpha.37）移植的学生聊天实现：
 // 会话生命周期、危机锁、结束确认、小结与求助卡抽屉与旧实现保持一致，
 // 仅剥离房间专属元素（Agent 轨迹、首启引导、天气/音乐），换用极简皮肤。
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { activateDialog } from '../utils/dialogFocus'
+import { useTimeOfDay } from '../utils/timeOfDay'
+import { petImageForStatus, readPetCompanion } from '../utils/petCompanion'
+import StudentScreeningCard from '../components/StudentScreeningCard.vue'
+import GameBackdrop from '../components/student/GameBackdrop.vue'
+import { acknowledgeScreening, getLatestScreening } from '../api/screening'
 import {
   completeChatSession,
   deleteChatSummary,
@@ -257,6 +319,47 @@ import {
 const route = useRoute()
 const userStore = useUserStore()
 
+const part = useTimeOfDay()
+const petState = computed(() => readPetCompanion(userStore.userId))
+const petAvatar = computed(() => {
+  const status = part.value === 'night' && petState.value.status !== 'happy' ? 'sleeping' : petState.value.status
+  return petImageForStatus(status)
+})
+// 聊天头像不跟随“夜里睡觉”的门口宠物状态，保持在线陪伴的表情。
+const guguanAvatar = computed(() => petImageForStatus(petState.value.status))
+const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
+const FIRST_RUN_GUIDE_VERSION = '4.3.0'
+const guidePending = ref(false)
+const guideCompleteNotice = ref(false)
+
+function safeSessionGet(key) {
+  try { return sessionStorage.getItem(key) } catch { return null }
+}
+
+function completePendingGuide(message, reply) {
+  if (!guidePending.value) return
+  guidePending.value = false
+  guideCompleteNotice.value = true
+  const emotion = reply?.emotion || '被认真听见'
+  const summary = message
+    ? `你刚刚说的是：“${message.slice(0, 18)}${message.length > 18 ? '…' : ''}”。这份心情已经被好好接住。`
+    : '你已经完成了第一次小倾诉，这份心情已经被好好接住。'
+  try {
+    const uid = userStore.userId || 'guest'
+    localStorage.setItem(`${FIRST_RUN_GUIDE_KEY}:${uid}`, FIRST_RUN_GUIDE_VERSION)
+    localStorage.setItem(`shengyu_first_run_mood_card:${uid}`, JSON.stringify({
+      emoji: emotion.includes('开') ? '🌤️' : emotion.includes('难') ? '🌧️' : '🌱',
+      title: '今日心情卡',
+      copy: summary,
+      emotion,
+      summary,
+      suggestion: '去树洞看看，也许会遇到相似的回声。',
+    }))
+    sessionStorage.removeItem('gy_guide_pending_chat')
+  } catch {}
+  setTimeout(() => { guideCompleteNotice.value = false }, 8000)
+}
+
 const conversationStarters = [
   { title: '先听我说', text: '我想先说说，暂时不用给建议。' },
   { title: '一起理清楚', text: '最近有件事反复占着我的心思，我想一起理一理。' },
@@ -268,26 +371,22 @@ const conversationFollowups = [
   { emoji: '🌱', text: '我想试一个很小的步骤。' },
   { emoji: '☕', text: '我想先停一会儿，不用追问。' },
 ]
-const emotions = [
-  { emoji: '😊', text: '今天有好事发生' },
-  { emoji: '🌟', text: '我想分享快乐' },
-  { emoji: '💪', text: '给自己打个气' },
-  { emoji: '🌈', text: '来点正能量' },
-  { emoji: '✨', text: '感恩小确幸' },
-  { emoji: '🎯', text: '聊聊小目标' },
-  { emoji: '🍀', text: '今天运气不错' },
-  { emoji: '☀️', text: '晒晒太阳充充电' },
-  { emoji: '🌸', text: '被美好治愈了' },
-  { emoji: '🎉', text: '值得庆祝的事' },
-  { emoji: '🤗', text: '想找人抱抱' },
-  { emoji: '📝', text: '记录一下心情' },
-  { emoji: '🎵', text: '想听歌放松下' },
-  { emoji: '🌙', text: '夜猫子还没睡' },
-]
-
 const chatInput = ref('')
 const chatInputPlaceholder = '说说你的感受...'
 const externalAiConsent = ref(false)
+const companionEngine = ref(null)
+const consentTitle = computed(() => {
+  if (!externalAiConsent.value) return '当前使用本地安全回应'
+  return companionEngine.value === 'legacy_xunfei' ? '讯飞策略协作已启用' : 'DeepSeek 小满对话已启用'
+})
+const consentDetail = computed(() => {
+  if (!externalAiConsent.value) return '模型服务暂不可用，系统会继续提供本地安全回应。'
+  if (companionEngine.value === 'legacy_xunfei') {
+    return '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。'
+  }
+  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
+})
+const policyExpanded = ref(false)
 const voiceInputEnabled = ref(false)
 const chatMessages = ref([])
 const chatLoading = ref(false)
@@ -296,8 +395,15 @@ const msgBox = ref(null)
 const inputEl = ref(null)
 const ttsPlaying = ref(-1)
 const chatSessionId = ref('')
+const screeningCard = ref(null)
 const chatUrgentSupport = ref(null)
 const chatUrgentLocked = ref(false)
+const screeningUrgentActive = ref(false)
+const screeningState = ref(null)
+const screeningAckButton = ref(null)
+const screeningAcking = ref(false)
+const screeningAckError = ref('')
+const screeningAckDone = ref(false)
 const safetyCurrentSafe = ref(false)
 const safetyContactedAdult = ref(false)
 const safetyResolving = ref(false)
@@ -308,8 +414,10 @@ const summaryStatus = ref('idle')
 const summaryUnread = ref(false)
 const conversationSummary = ref(null)
 const showSupportDrawer = ref(false)
+const drawerEl = ref(null)
 const supportModeHeading = ref(null)
 const summaryOrbButton = ref(null)
+let releaseDrawerDialog = null
 const supportDrawerMode = ref('plan')
 const supportDraft = ref({ summary: '', actions: [] })
 const supportFeedback = ref('')
@@ -318,6 +426,11 @@ const shareSupportSummary = ref(false)
 const currentHelpCard = ref({ person: '', summary: '' })
 
 const hasUserMessage = computed(() => chatMessages.value.some(item => item.role === 'user'))
+const showProfessionalNotice = computed(() => (
+  !chatUrgentLocked.value
+  && screeningState.value?.risk_level === 'professional'
+  && !screeningState.value?.acknowledged
+))
 const summaryOrbLabel = computed(() => {
   if (summaryStatus.value === 'processing') return '正在整理本次倾诉'
   if (summaryStatus.value === 'error') return '倾诉小结整理失败，打开后可以重试'
@@ -328,9 +441,56 @@ function focusWithoutScroll(target) {
   target?.focus?.({ preventScroll: true })
 }
 
+const CHAT_KEYBOARD_EXCLUDE = 'button, a, input, select, textarea, summary, label, [role="button"], [role="link"], [contenteditable="true"]'
+
+function canAutoFocusChat() {
+  return !!window.matchMedia
+    && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    && window.matchMedia('(min-width: 768px)').matches
+}
+
+function isTextEntryTarget(target) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true
+  if (target.tagName === 'INPUT') {
+    return !['checkbox', 'radio', 'button', 'submit', 'reset'].includes(target.type)
+  }
+  return false
+}
+
+// 页面上直接打字时把焦点交给聊天输入框；按钮/链接上的空格仍保留原生激活。
+function handleGlobalChatKeydown(event) {
+  if (event.defaultPrevented) return
+  if (chatUrgentLocked.value || chatLoading.value || showSupportDrawer.value || recording.value) return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  const target = event.target
+  if (isTextEntryTarget(target)) return
+  if (target instanceof Element && target.closest('[role="dialog"], [aria-modal="true"]')) return
+  const editingKey = event.isComposing || event.key === 'Process'
+    || event.key === 'Unidentified' || event.key === 'Dead' || event.keyCode === 229
+  if (!editingKey && event.key.length !== 1) return
+  if (!editingKey && event.key === ' '
+    && target instanceof Element && target.closest(CHAT_KEYBOARD_EXCLUDE)) return
+  const input = inputEl.value
+  if (!input || input.disabled) return
+  input.focus({ preventScroll: true })
+}
+
+function restoreChatFocusAfterReply() {
+  if (!canAutoFocusChat()) return
+  if (chatUrgentLocked.value || showSupportDrawer.value || recording.value) return
+  const active = document.activeElement
+  const passive = !active || active === document.body || active === document.documentElement
+    || active.classList?.contains('sc-send')
+    || !!active.closest?.('.sc-quick')
+  if (passive) focusWithoutScroll(inputEl.value)
+}
+
 function getEmotionEmoji(emotion) {
   const map = {
-    '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴',
+    '愤怒': '😠', '厌恶': '🤢', '恐惧': '😨', '开心': '😊', '中性': '😐', '悲伤': '😢', '惊讶': '😲',
+    '平静': '😌', '焦虑': '😟', '难过': '😢', '疲惫': '😴',
     '孤独': '🌙', '委屈': '💧', '害怕': '🫧', '复杂': '🌀', '不确定': '…',
   }
   return map[emotion] || '🙂'
@@ -339,6 +499,13 @@ function getEmotionEmoji(emotion) {
 function prepareConversation(text) {
   chatInput.value = text
   nextTick(() => inputEl.value?.focus())
+}
+
+function onInputEnter(event) {
+  // 中文输入法选词时的回车只用于确认候选，不发送消息。
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  sendChatMsg()
 }
 
 function scrollChatBottom() {
@@ -381,6 +548,7 @@ async function sendChatMsg(text) {
   if (!msg || chatLoading.value || chatUrgentLocked.value) return
   chatInput.value = ''
   showEndConfirmation.value = false
+  screeningAckDone.value = false
   chatMessages.value.push({ role: 'user', content: msg })
   const userMessageIndex = chatMessages.value.length - 1
   await nextTick()
@@ -390,13 +558,23 @@ async function sendChatMsg(text) {
     await userStore.ensureStudentSession(true)
     const session = await startChatSession(false)
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
-    if (!chatSessionId.value) {
-      chatSessionId.value = session.data.session_id
-    }
+    chatSessionId.value = session.data.session_id
     const requestKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    let res
+    try {
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    } catch (err) {
+      if (err.response?.status !== 409 || !String(err.response.data?.detail || '').includes('隐私说明已更新')) throw err
+      const fresh = await startChatSession(true)
+      chatSessionId.value = fresh.data.session_id
+      externalAiConsent.value = !!fresh.data.external_ai_enabled
+      companionEngine.value = fresh.data.companion_engine || null
+      voiceInputEnabled.value = !!fresh.data.voice_input_enabled
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    }
     await nextTick()
     if (res.data?.reply) {
       chatMessages.value[userMessageIndex] = {
@@ -406,7 +584,11 @@ async function sendChatMsg(text) {
       }
       chatMessages.value.push({ role: 'assistant', content: res.data.reply })
       chatSessionId.value = res.data.session_id || chatSessionId.value
+      completePendingGuide(msg, res.data)
       showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
+      if (res.data?.risk_level === 'professional' && !screeningState.value?.acknowledged) {
+        loadScreeningNotice()
+      }
       if (res.data.conversation_signal === 'urgent') {
         chatUrgentLocked.value = true
         safetyCurrentSafe.value = false
@@ -423,6 +605,7 @@ async function sendChatMsg(text) {
   chatLoading.value = false
   await nextTick()
   scrollChatBottom()
+  restoreChatFocusAfterReply()
 }
 
 function requestConversationEnd() {
@@ -438,12 +621,47 @@ function cancelConversationEnd() {
 
 function applyChatSessionStatus(status) {
   chatUrgentLocked.value = status === 'urgent'
+  if (!chatUrgentLocked.value) screeningUrgentActive.value = false
   safetyCurrentSafe.value = false
   safetyContactedAdult.value = false
   safetyResolveError.value = ''
   if (!chatUrgentLocked.value) return
   showEndConfirmation.value = false
   nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
+}
+
+function handleScreeningUrgent(payload) {
+  if (payload?.session_id) chatSessionId.value = payload.session_id
+  screeningUrgentActive.value = true
+  applyChatSessionStatus('urgent')
+}
+
+function handleScreeningUpdated(latest) {
+  screeningState.value = latest || null
+}
+
+async function loadScreeningNotice() {
+  try {
+    const res = await getLatestScreening()
+    screeningState.value = res.data?.screening || null
+  } catch {}
+}
+
+async function acknowledgeProfessionalScreening() {
+  if (screeningAcking.value || !showProfessionalNotice.value) return
+  screeningAcking.value = true
+  screeningAckError.value = ''
+  try {
+    const res = await acknowledgeScreening(true)
+    screeningState.value = res.data || null
+    screeningAckDone.value = true
+    await nextTick()
+    focusWithoutScroll(inputEl.value)
+  } catch (err) {
+    screeningAckError.value = err?.response?.data?.detail || '暂时无法记录，请稍后再试，或先和可信成年人待在一起。'
+  } finally {
+    screeningAcking.value = false
+  }
 }
 
 async function resolveUrgentChat() {
@@ -454,11 +672,17 @@ async function resolveUrgentChat() {
     await resolveChatSafety(chatSessionId.value, true, true)
     const session = await startChatSession(true)
     chatSessionId.value = session.data.session_id
+    stopTTS()
     chatMessages.value = []
     chatInput.value = ''
     applyChatSessionStatus(session.data?.status)
     await nextTick()
-    focusWithoutScroll(inputEl.value)
+    await screeningCard.value?.refresh()
+    await loadScreeningNotice()
+    screeningAckDone.value = false
+    await nextTick()
+    if (showProfessionalNotice.value) focusWithoutScroll(screeningAckButton.value)
+    else focusWithoutScroll(inputEl.value)
   } catch (err) {
     safetyResolveError.value = err?.response?.data?.detail || '暂时无法开始新话题，请继续和可信成年人待在一起。'
   } finally {
@@ -505,13 +729,11 @@ async function completeConversation() {
   }
 }
 
-async function openSummaryDrawer() {
+function openSummaryDrawer() {
   if (summaryStatus.value === 'processing') return
-  showSupportDrawer.value = true
   supportDrawerMode.value = 'plan'
   summaryUnread.value = false
-  await nextTick()
-  focusWithoutScroll(supportModeHeading.value)
+  showSupportDrawer.value = true
 }
 
 function closeSupportDrawer() {
@@ -523,6 +745,19 @@ function closeSupportDrawer() {
   })
 }
 
+watch(showSupportDrawer, async open => {
+  if (open) {
+    await nextTick()
+    releaseDrawerDialog = activateDialog(drawerEl.value, {
+      onClose: closeSupportDrawer,
+      initialFocus: () => supportModeHeading.value || drawerEl.value,
+    })
+  } else {
+    releaseDrawerDialog?.()
+    releaseDrawerDialog = null
+  }
+})
+
 async function beginFreshConversation() {
   const res = await startChatSession(true)
   chatSessionId.value = res.data.session_id
@@ -531,6 +766,7 @@ async function beginFreshConversation() {
     showSupportDrawer.value = false
     return
   }
+  stopTTS()
   chatMessages.value = []
   chatInput.value = ''
   showEndConfirmation.value = false
@@ -624,6 +860,7 @@ async function startRecording() {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     if (!voiceInputEnabled.value) {
       alert('语音输入需要独立授权，当前请使用文字输入')
@@ -666,7 +903,7 @@ function encodeWav(pcmData, sampleRate = 16000) {
   return buffer
 }
 
-function stopRecording() {
+async function stopRecording() {
   recording.value = false
   if (audioContext) { audioContext.close().catch(() => {}); audioContext = null }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null }
@@ -676,37 +913,100 @@ function stopRecording() {
   let offset = 0
   for (const chunk of audioChunks) { merged.set(new Int16Array(chunk), offset); offset += chunk.byteLength / 2 }
   const wavBuffer = encodeWav(merged.buffer, 16000)
-  chatLoading.value = true
-  const asrUrl = `/api/chat/asr?session_id=${encodeURIComponent(chatSessionId.value || '')}`
-  fetch(asrUrl, { method: 'POST', body: new Blob([wavBuffer], { type: 'audio/wav' }), headers: { 'Content-Type': 'audio/wav' } })
-    .then(r => r.json())
-    .then(data => { if (data.text) sendChatMsg(data.text); else chatMessages.value.push({ role: 'assistant', content: '没有听清，请再说一次~' }) })
-    .catch(() => chatMessages.value.push({ role: 'assistant', content: '语音识别失败，请重试...' }))
-    .finally(() => { chatLoading.value = false })
   audioChunks = []
+  chatLoading.value = true
+  try {
+    const asrUrl = `/api/chat/asr?session_id=${encodeURIComponent(chatSessionId.value || '')}`
+    const res = await fetch(asrUrl, { method: 'POST', body: new Blob([wavBuffer], { type: 'audio/wav' }), headers: { 'Content-Type': 'audio/wav' } })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      chatMessages.value.push({ role: 'assistant', content: data?.detail || '语音识别失败，请重试...' })
+    } else if (data.text) {
+      // 转写成功后先释放 ASR 的 loading，再交给正常发送流程；否则 sendChatMsg 会被自身守卫吞掉。
+      chatLoading.value = false
+      await sendChatMsg(data.text)
+    } else {
+      chatMessages.value.push({ role: 'assistant', content: '没有听清，请再说一次~' })
+    }
+  } catch {
+    chatMessages.value.push({ role: 'assistant', content: '语音识别失败，请重试...' })
+  } finally {
+    chatLoading.value = false
+    await nextTick()
+    scrollChatBottom()
+  }
 }
 
-async function playTTS(text) {
+let ttsAudio = null
+let ttsObjectUrl = ''
+let ttsRequestId = 0
+
+function releaseTTS() {
+  if (ttsAudio) {
+    ttsAudio.onended = null
+    ttsAudio.pause()
+    ttsAudio.src = ''
+    ttsAudio = null
+  }
+  if (ttsObjectUrl) {
+    URL.revokeObjectURL(ttsObjectUrl)
+    ttsObjectUrl = ''
+  }
+  ttsPlaying.value = -1
+}
+
+function stopTTS() {
+  ttsRequestId += 1
+  releaseTTS()
+}
+
+async function toggleTTS(text, index) {
   if (!text) return
-  try {
-    const session = await startChatSession(false)
-    chatSessionId.value = session.data.session_id
-    externalAiConsent.value = !!session.data.external_ai_enabled
-    voiceInputEnabled.value = !!session.data.voice_input_enabled
-    if (!externalAiConsent.value) throw new Error('authorization unavailable')
-  } catch {
-    alert('教师端尚未启用语音模型协作')
+  if (ttsPlaying.value === index) {
+    stopTTS()
     return
   }
-  fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: chatSessionId.value || null }) })
-    .then(r => { if (!r.ok) throw new Error(); return r.blob() })
-    .then(blob => {
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      audio.play().catch(() => alert('语音播放失败'))
-      audio.onended = () => { URL.revokeObjectURL(url); ttsPlaying.value = -1 }
+  const requestId = ++ttsRequestId
+  releaseTTS()
+  ttsPlaying.value = index
+  try {
+    const session = await startChatSession(false)
+    if (requestId !== ttsRequestId) return
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    if (!externalAiConsent.value) {
+      releaseTTS()
+      alert('教师端尚未启用语音模型协作')
+      return
+    }
+    const res = await fetch('/api/chat/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, session_id: chatSessionId.value || null }),
     })
-    .catch(() => alert('语音合成失败'))
+    if (requestId !== ttsRequestId) return
+    if (!res.ok) throw new Error('tts request failed')
+    const blob = await res.blob()
+    if (requestId !== ttsRequestId) return
+    ttsObjectUrl = URL.createObjectURL(blob)
+    const audio = new Audio(ttsObjectUrl)
+    ttsAudio = audio
+    audio.onended = () => { if (requestId === ttsRequestId) releaseTTS() }
+    try {
+      await audio.play()
+    } catch {
+      if (requestId === ttsRequestId) {
+        releaseTTS()
+        alert('语音播放失败')
+      }
+    }
+  } catch {
+    if (requestId !== ttsRequestId) return
+    releaseTTS()
+    alert('语音合成失败')
+  }
 }
 
 async function loadLatestConversationSummary() {
@@ -717,29 +1017,39 @@ async function loadLatestConversationSummary() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleGlobalChatKeydown)
+  guidePending.value = safeSessionGet('gy_guide_pending_chat') === '1'
   try {
     await userStore.ensureStudentSession()
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     chatMessages.value = Array.isArray(res.data) ? res.data : []
   } catch {}
+  await loadScreeningNotice()
   if (route.query.handoff === 'failed') {
     applyChatSessionStatus('urgent')
     safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
   }
   await loadLatestConversationSummary()
   await nextTick()
-  scrollChatBottom()
+  if (chatMessages.value.length) scrollChatBottom()
+  else if (msgBox.value) msgBox.value.scrollTop = 0
+  if (!chatUrgentLocked.value && canAutoFocusChat()) focusWithoutScroll(inputEl.value)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalChatKeydown)
   if (audioContext) { audioContext.close().catch(() => {}); audioContext = null }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null }
   recording.value = false
+  stopTTS()
+  releaseDrawerDialog?.()
+  releaseDrawerDialog = null
 })
 </script>
 
@@ -752,6 +1062,10 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--m-bg);
   color: var(--m-ink);
+}
+@media (min-width: 768px) {
+  /* 桌面端底栏改为悬浮 dock，给输入栏留出 8px 间隙 */
+  .sc-page { height: calc(100dvh - 78px); }
 }
 
 /* 流光氛围：两团柔光缓慢漂移（z0，内容层升到 z1 之上） */
@@ -774,6 +1088,7 @@ onUnmounted(() => {
 }
 .sc-head,
 .sc-msgs,
+.sc-consentbar,
 .sc-quickwrap,
 .sc-inputbar,
 .sc-urgent,
@@ -848,8 +1163,8 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 16px 8px;
+  gap: 12px;
+  padding: 14px 16px 6px;
 }
 .sc-msgs-inner.is-empty { justify-content: safe center; }
 
@@ -859,18 +1174,19 @@ onUnmounted(() => {
   background: var(--m-surface);
   border: 1px solid var(--m-line);
   border-radius: 4px 16px 16px 16px;
-  padding: 14px 16px;
-  font-size: 14px;
-  line-height: 1.75;
+  padding: 11px 13px;
+  font-size: 13.5px;
+  line-height: 1.7;
 }
+.sc-welcome-bubble small { display: block; margin-top: 3px; font-size: 12px; color: var(--m-ink-2); }
 .sc-welcome-bubble p + p { margin-top: 8px; }
 
-.sc-starters { display: flex; flex-direction: column; gap: 8px; animation: m-rise var(--m-enter-dur) var(--m-ease) 60ms backwards; }
+.sc-starters { display: flex; flex-wrap: wrap; gap: 8px; animation: m-rise var(--m-enter-dur) var(--m-ease) 60ms backwards; }
 .sc-starters button {
-  display: grid;
-  gap: 3px;
-  text-align: left;
-  padding: 12px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
   border-radius: var(--m-radius-md);
   border: 1px solid var(--m-line);
   background: var(--m-surface);
@@ -881,19 +1197,38 @@ onUnmounted(() => {
 .sc-starters button:hover { border-color: var(--m-accent); background: var(--m-accent-soft); transform: translateY(-1px); }
 .sc-starters button:active { transform: scale(.99); }
 .sc-starters button strong { font-size: 13px; color: var(--m-ink); }
-.sc-starters button span { font-size: 12px; line-height: 1.6; color: var(--m-ink-2); }
+.sc-starters button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
+.sc-consentbar {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 2px 14px 0;
+}
 .sc-consent {
   font-size: 11px;
-  line-height: 1.9;
-  color: var(--m-ink-3);
+  line-height: 1.7;
+  color: var(--m-ink-2);
   background: var(--m-accent-soft);
   border-radius: var(--m-radius-md);
-  padding: 10px 12px;
-  animation: m-rise var(--m-enter-dur) var(--m-ease) 120ms backwards;
+  padding: 6px 10px;
 }
-.sc-consent strong { display: block; font-size: 11.5px; color: var(--m-accent-strong); }
-.sc-consent small { display: block; }
+.sc-consent strong { display: block; font-size: 11px; color: var(--m-accent-strong); }
+.sc-consent small { display: block; margin-top: 4px; }
+.sc-consent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.sc-consent-toggle strong { flex: 1; margin: 0; }
+.sc-consent-toggle span { flex: none; font-size: 11px; font-weight: 600; color: var(--m-accent-strong); }
+.sc-consent-toggle svg { flex: none; color: var(--m-ink-2); transition: transform var(--m-dur-fast) var(--m-ease); }
+.sc-consent-toggle svg.open { transform: rotate(180deg); }
 
 .sc-row { display: flex; gap: 8px; align-items: flex-end; animation: m-rise-sm var(--m-dur-slow) var(--m-ease) backwards; }
 .sc-row.user { justify-content: flex-end; }
@@ -1322,9 +1657,268 @@ onUnmounted(() => {
   .sc-orb { right: calc((100% - 760px) / 2 + 14px); }
 }
 
+/* ─── 游戏化皮肤：场景由 GameBackdrop 承担，聊天浮在房间世界里 ─── */
+.sc-page {
+  background: transparent;
+  color: var(--game-ink);
+}
+.sc-page::before,
+.sc-page::after { display: none; }
+
+.sc-pet {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--game-line);
+  background: var(--game-gold-soft);
+  overflow: hidden;
+  transition: transform var(--m-dur-fast) var(--m-ease), background var(--m-dur-fast) var(--m-ease);
+}
+.sc-pet img { width: 32px; height: 32px; object-fit: contain; }
+.sc-pet:hover { transform: translateY(-1px) scale(1.03); background: var(--game-surface); }
+.sc-pet:active { transform: scale(.94); }
+
+.sc-head { background: var(--game-surface); border-bottom-color: var(--game-line); }
+.sc-head-copy strong { color: var(--game-ink); }
+.sc-head-copy small { color: var(--game-ink-3); }
+.sc-back { color: var(--game-ink-2); }
+.sc-back:hover { background: var(--game-surface-soft); }
+.sc-end { background: var(--game-surface-soft); border-color: var(--game-line); color: var(--game-ink-2); }
+.sc-end:hover { border-color: var(--game-accent); color: var(--game-ink); }
+
+.sc-welcome-bubble,
+.sc-starters button,
+.sc-bubble,
+.sc-endconfirm {
+  background: var(--game-surface);
+  border-color: var(--game-line);
+  color: var(--game-ink);
+  box-shadow: var(--game-shadow-soft);
+}
+.sc-starters button strong { color: var(--game-ink); }
+.sc-starters button span { color: var(--game-ink-2); }
+.sc-starters button:hover { background: var(--game-accent-soft); border-color: var(--game-accent); }
+.sc-consent { background: var(--game-accent-soft); color: var(--game-ink-2); }
+.sc-consent strong { color: var(--game-wood); }
+.sc-row.user .sc-bubble {
+  background: var(--game-accent);
+  border-color: transparent;
+  color: var(--game-on-accent);
+  box-shadow: 0 6px 16px rgba(40, 30, 20, .16);
+}
+.sc-etag { background: var(--game-gold-soft); color: var(--game-wood); }
+
+.sc-chip {
+  background: var(--game-surface);
+  border-color: var(--game-line);
+  color: var(--game-ink-2);
+}
+.sc-chip:hover {
+  background: var(--game-accent-soft);
+  border-color: var(--game-accent);
+  color: var(--game-ink);
+}
+.sc-voice,
+.sc-iinput {
+  background: var(--game-surface);
+  border-color: var(--game-line);
+}
+.sc-voice { color: var(--game-ink-2); }
+.sc-voice.recording { background: var(--game-gold-soft); color: var(--game-wood); }
+.sc-iinput input { color: var(--game-ink); }
+.sc-iinput input::placeholder { color: var(--game-ink-3); }
+.sc-iinput:focus-within { border-color: var(--game-accent); box-shadow: 0 0 0 3px var(--game-accent-soft); }
+.sc-send { background: var(--game-accent); color: var(--game-on-accent); }
+.sc-send:not(:disabled):hover { background: var(--game-accent); filter: brightness(1.08); }
+.sc-endconfirm-actions button { background: var(--game-surface-soft); color: var(--game-ink-2); }
+.sc-endconfirm-actions .sc-endconfirm-primary { background: var(--game-accent); color: var(--game-on-accent); }
+
+.sc-guide-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--game-line);
+  background: var(--game-gold-soft);
+  color: var(--game-ink-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  animation: m-rise var(--m-enter-dur) var(--m-ease) backwards;
+}
+.sc-guide-notice a {
+  color: var(--game-wood);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+}
+
+/* 夜晚 / 傍晚的危机卡保持高对比，不做深色化处理。 */
+
+/* 像素皮肤 3.0 · 倾诉页 */
+.sc-head { border-bottom: 2px solid var(--px-line); }
+.sc-back,
+.sc-end,
+.sc-pet {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  background: var(--game-surface-soft);
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end),
+              background 160ms steps(2, end), border-color 160ms steps(2, end);
+}
+.sc-back:hover,
+.sc-end:hover,
+.sc-pet:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.sc-back:active,
+.sc-end:active,
+.sc-pet:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.sc-head-copy strong { font-family: var(--px-font); font-size: 16px; letter-spacing: .02em; }
+.sc-welcome-bubble,
+.sc-bubble,
+.sc-endconfirm,
+.sc-consent,
+.sc-guide-notice {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.sc-consent { padding: 6px 10px; }
+.sc-msg-avatar,
+.sc-welcome-avatar {
+  width: 34px;
+  height: 34px;
+  padding: 1px;
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  background: var(--game-gold-soft);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.sc-orb {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.sc-orb:not(:disabled):hover { box-shadow: 4px 4px 0 var(--px-shadow); }
+.sc-orb-pixel img {
+  width: 36px;
+  height: 36px;
+  padding: 1px;
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  background: var(--game-gold-soft);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.sc-orb-copy strong { font-family: var(--px-font); font-size: 13px; }
+.sc-row.assistant .sc-bubble,
+.sc-row.user .sc-bubble { border-radius: 4px; }
+.sc-row.user .sc-bubble { border-color: var(--px-line); box-shadow: none; }
+.sc-starters button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end),
+              background 160ms steps(2, end), border-color 160ms steps(2, end);
+}
+.sc-starters button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.sc-starters button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.sc-starters button strong { font-family: var(--px-font); font-size: 14px; letter-spacing: .01em; }
+.sc-chip { border-width: 2px; border-radius: 4px; }
+.sc-iinput,
+.sc-voice {
+  border-width: 2px;
+  border-radius: 4px;
+}
+.sc-send {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  background: var(--px-gold);
+  color: var(--game-on-accent);
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), filter 160ms steps(2, end);
+}
+.sc-send:not(:disabled):hover { background: var(--px-gold); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); filter: none; }
+.sc-send:not(:disabled):active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.sc-endconfirm-actions button { border: 2px solid var(--px-line); border-radius: 4px; }
+.sc-drawer {
+  border: 2px solid var(--px-line);
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.sc-drawer-close { border-radius: 4px; }
+.sc-person-grid button { border-width: 2px; border-radius: 4px; }
+.sc-screening-ack {
+  width: calc(100% - 32px);
+  max-width: 728px;
+  margin: 0 auto 10px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  background: var(--m-surface);
+  color: var(--m-ink);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.sc-screening-ack-copy { display: grid; gap: 4px; }
+.sc-screening-ack strong { font-family: var(--px-font); font-size: 14px; }
+.sc-screening-ack p { font-size: 12.5px; line-height: 1.65; color: var(--m-ink-2); }
+.sc-screening-ack small { font-size: 11px; line-height: 1.6; color: var(--m-ink-3); }
+.sc-screening-ack button {
+  justify-self: start;
+  max-width: 100%;
+  padding: 9px 14px;
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  background: var(--px-gold);
+  color: var(--game-on-accent);
+  font-family: var(--px-font);
+  font-size: 12.5px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.sc-screening-ack button:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.sc-screening-ack button:not(:disabled):active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.sc-screening-ack button:disabled { opacity: .55; cursor: not-allowed; }
+.sc-screening-ack .sc-screening-ack-error { color: #B4534A; }
+.sc-screening-ackdone {
+  width: calc(100% - 32px);
+  max-width: 728px;
+  margin: 0 auto 10px;
+  padding: 8px 12px;
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  background: var(--m-surface);
+  color: var(--m-ink-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.sc-resolve-hint { font-size: 12px; color: #8A4A42; }
+.sc-back:focus-visible,
+.sc-end:focus-visible,
+.sc-pet:focus-visible,
+.sc-starters button:focus-visible,
+.sc-chip:focus-visible,
+.sc-send:focus-visible,
+.sc-voice:focus-visible,
+.sc-orb:focus-visible,
+.sc-drawer-close:focus-visible,
+.sc-endconfirm-actions button:focus-visible,
+.sc-screening-ack button:focus-visible,
+.sc-drawer-controls button:focus-visible,
+.sc-submit:focus-visible,
+.sc-person-grid button:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  /* 静态柔光保留，但停止漂移（毯式 * 选择器覆盖不到伪元素） */
-  .sc-page::before, .sc-page::after { animation: none !important; }
   * { transition: none !important; animation: none !important; }
 }
 </style>

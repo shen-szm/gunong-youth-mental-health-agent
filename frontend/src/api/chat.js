@@ -14,6 +14,9 @@ export function sendMessage(_userId, content, inputType = "text", sessionId = nu
 export function getChatHistory(_userId, sessionId = null) {
   return instance.get("/history", { params: { session_id: sessionId, limit: 50 } });
 }
+export function getChatSessionCount() {
+  return instance.get("/sessions/count");
+}
 export function completeChatSession(sessionId) {
   return instance.post(`/sessions/${encodeURIComponent(sessionId)}/complete`);
 }

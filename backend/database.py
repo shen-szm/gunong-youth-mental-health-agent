@@ -134,6 +134,7 @@ def init_db():
         session_additions = {
             "continued_from_session_id": "INTEGER",
             "external_ai_consent_version": "VARCHAR(32)",
+            "companion_state_json": "TEXT",
             "summary_deleted_at": "DATETIME",
             "processing_started_at": "DATETIME",
             "processing_token": "VARCHAR(64)",
@@ -142,6 +143,10 @@ def init_db():
             if column_name not in session_columns:
                 with engine.begin() as connection:
                     connection.execute(text(f"ALTER TABLE student_chat_sessions ADD COLUMN {column_name} {column_type}"))
+        screening_columns = {item["name"] for item in inspector.get_columns("student_screening_runs")}
+        if "acknowledged_at" not in screening_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE student_screening_runs ADD COLUMN acknowledged_at DATETIME"))
         if "teacher_review_reports" in inspector.get_table_names():
             report_columns = {item["name"] for item in inspector.get_columns("teacher_review_reports")}
             report_additions = {

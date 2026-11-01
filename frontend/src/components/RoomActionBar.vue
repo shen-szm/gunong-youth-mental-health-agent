@@ -199,4 +199,69 @@ watch(() => props.feature?.id, async value => {
   .room-action-enter-active,
   .room-action-leave-active { transition: none; }
 }
+
+/* 像素皮肤 3.0 · 场景操作条 */
+.room-action-bar {
+  --px-line: rgba(240, 216, 170, .28);
+  --px-gold: #f0d29a;
+  --px-shadow: rgba(0, 0, 0, .5);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-symbol { border-radius: 4px; }
+.room-action-copy p { font-family: var(--px-font); font-size: 11px; letter-spacing: .04em; }
+.room-action-copy h2 { font-family: var(--px-font); font-size: 16px; }
+.room-action-controls { gap: 8px; }
+.room-action-primary,
+.room-action-close,
+.room-action-moods button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.room-action-primary {
+  color: #1d1710;
+  background: var(--px-gold);
+  font-family: var(--px-font);
+  font-size: 13px;
+}
+.room-action-primary:hover {
+  background: #f7dda6;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.room-action-close:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-close:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.room-action-moods legend { font-family: var(--px-font); font-size: 11px; }
+.room-action-moods button { font-family: var(--px-font); font-size: 12px; }
+.room-action-moods button.active { color: #1d1710; background: var(--px-gold); border-color: var(--px-gold); }
+.room-action-moods button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.room-action-moods button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.room-action-primary:focus-visible,
+.room-action-close:focus-visible,
+.room-action-moods button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .room-action-primary,
+  .room-action-close,
+  .room-action-moods button { transition: none; }
+  .room-action-primary:hover,
+  .room-action-primary:active,
+  .room-action-close:hover,
+  .room-action-close:active,
+  .room-action-moods button:hover,
+  .room-action-moods button:active { transform: none; }
+}
 </style>

@@ -15,7 +15,7 @@ test('desktop chat exposes a real workflow rail only after the student opens it'
   assert.match(room, /if \(except !== 'agent'\) showAgentRail\.value = false/)
   assert.match(room, /function openChatPanel\(\)[\s\S]*?openWorkspacePanel\('chat'\)/)
   assert.match(room, /:disabled="chatLoading \|\| !voiceInputEnabled"/)
-  assert.match(room, /聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型/)
+  assert.match(room, /对话原文会发送给平台接入的 DeepSeek 模型/)
   assert.match(rail, /agent-toggle-latest[^>]*>\{\{ state\.lastEvent/)
   assert.match(rail, /最新状态：\$\{state\.lastEvent/)
   assert.match(rail, /class="agent-toggle-live" role="status" aria-live="polite"/)

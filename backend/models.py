@@ -57,6 +57,7 @@ class StudentChatSession(Base):
     status = Column(String(20), nullable=False, default="active", index=True)
     risk_level = Column(String(16), nullable=False, default="routine")
     external_ai_consent_version = Column(String(32), nullable=True)
+    companion_state_json = Column(Text, nullable=True)
     summary_deleted_at = Column(DateTime, nullable=True)
     processing_started_at = Column(DateTime, nullable=True)
     processing_token = Column(String(64), nullable=True)
@@ -128,6 +129,34 @@ class StudentAssessmentAgentRun(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     __table_args__ = (Index("idx_assessment_agent_run", "assessment_id", "agent_type"),)
+
+
+class StudentScreeningRun(Base):
+    """学生主动完成的标准筛查；答案只在服务端保存，教师只看分级与总分。"""
+
+    __tablename__ = "student_screening_runs"
+
+    id = Column(Integer, primary_key=True)
+    run_code = Column(String(48), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    instrument = Column(String(16), nullable=False, default="phq9")
+    instrument_version = Column(String(32), nullable=False, default="phq-9-cn-v1")
+    answers_json = Column(Text, nullable=False)
+    total_score = Column(Integer, nullable=False)
+    band = Column(String(24), nullable=False)
+    risk_level = Column(String(16), nullable=False, default="routine", index=True)
+    item9_positive = Column(Integer, nullable=False, default=0)
+    safety_flag_active = Column(Integer, nullable=False, default=0)
+    acknowledged_at = Column(DateTime, nullable=True)
+    linked_session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=True, index=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("idx_student_screening_user_created", "user_id", "created_at"),
+        Index("idx_student_screening_user_expiry", "user_id", "expires_at"),
+    )
 
 
 class StudentSupportRun(Base):
@@ -362,7 +391,7 @@ class StudentExternalAiAuthorization(Base):
     student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
     authorized_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     basis = Column(String(40), nullable=False, default="school_guardian_authority")
-    statement_version = Column(String(40), nullable=False, default="teacher-ai-authorization-v1")
+    statement_version = Column(String(40), nullable=False, default="teacher-ai-authorization-v3")
     purpose = Column(String(120), nullable=False, default="student_support_agents")
     status = Column(String(16), nullable=False, default="active", index=True)
     expires_at = Column(DateTime, nullable=False, index=True)

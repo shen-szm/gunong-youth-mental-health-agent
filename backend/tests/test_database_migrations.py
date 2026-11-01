@@ -9,10 +9,24 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from database import _migrate_assessment_created_at_to_china_time, _migrate_legacy_sensitive_access_logs
+from database import Base, _migrate_assessment_created_at_to_china_time, _migrate_legacy_sensitive_access_logs
 
 
 class DatabaseMigrationTests(unittest.TestCase):
+    def test_student_screening_table_is_created_with_expected_columns(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        columns = {column["name"] for column in inspect(engine).get_columns("student_screening_runs")}
+        self.assertTrue({
+            "run_code", "user_id", "answers_json", "total_score", "band", "risk_level",
+            "item9_positive", "safety_flag_active", "acknowledged_at", "linked_session_id",
+            "deleted_at", "created_at", "expires_at",
+        } <= columns)
+        indexes = {index["name"] for index in inspect(engine).get_indexes("student_screening_runs")}
+        self.assertIn("idx_student_screening_user_created", indexes)
+        self.assertIn("idx_student_screening_user_expiry", indexes)
+        engine.dispose()
+
     def test_assessment_utc_created_at_is_shifted_once_to_china_time(self):
         engine = create_engine("sqlite:///:memory:")
         with engine.begin() as connection:

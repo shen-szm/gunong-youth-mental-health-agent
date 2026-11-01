@@ -1,72 +1,113 @@
 <template>
   <!-- 登录页 -->
-  <div class="login-page" :class="{ bgready: bgReady }">
+  <div class="login-page">
     <!-- 白光流星层 -->
-    <canvas ref="veilRef" class="veil-canvas" :class="{ gone: veilGone }"></canvas>
+    <canvas ref="veilRef" class="veil-canvas" :class="{ gone: veilGone }" aria-hidden="true"></canvas>
 
     <!-- 登录主体容器 -->
+    <div class="login-shell">
     <div class="login-container" :class="{ visible: containerVisible }">
-      
       <!-- 左侧：每日一句 -->
       <div class="left-panel">
         <div class="quote-area">
-          <div class="quote-icon">"</div>
+          <div class="quote-icon" aria-hidden="true">“</div>
           <p class="quote-text">{{ daily.quote }}</p>
           <p class="quote-author">—— {{ daily.author }}</p>
         </div>
         <div class="brand">
-          <span class="brand-name">咕哝</span>
-          <span class="brand-slogan">让每一句心声，都被温柔以待</span>
+          <span class="brand-mark" aria-hidden="true">咕</span>
+          <span class="brand-copy">
+            <span class="brand-name">咕哝</span>
+            <span class="brand-slogan">让每一句心声，都被温柔以待</span>
+          </span>
         </div>
       </div>
 
       <!-- 右侧：登录表单 -->
       <div class="right-panel">
         <div class="form-header">
+          <span class="form-kicker">咕哝 · 账号入口</span>
           <h2>{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h2>
           <p>{{ mode === 'login' ? '很高兴再次见到你' : '加入咕哝，开始倾诉' }}</p>
         </div>
 
-        <div class="tab-switch">
-          <button :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</button>
-          <button :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</button>
+        <div class="tab-switch" role="tablist" aria-label="登录或注册">
+          <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="switchMode('login')">登录</button>
+          <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="switchMode('register')">注册</button>
         </div>
 
-        <div class="form-body">
+        <form class="form-body" novalidate @submit.prevent="handleSubmit">
           <div class="input-group">
-            <label>用户名</label>
-            <input v-model="form.username" placeholder="请输入用户名" class="input" autocomplete="username" />
+            <label for="login-username">用户名</label>
+            <input
+              id="login-username"
+              ref="usernameRef"
+              v-model.trim="form.username"
+              name="username"
+              placeholder="请输入用户名"
+              class="input"
+              autocomplete="username"
+            />
           </div>
           <div class="input-group" v-if="mode === 'register'">
-            <label>昵称</label>
-            <input v-model="form.nickname" placeholder="如何称呼你？（可选）" class="input" />
+            <label for="login-nickname">昵称</label>
+            <input
+              id="login-nickname"
+              v-model.trim="form.nickname"
+              name="nickname"
+              placeholder="如何称呼你？（可选）"
+              class="input"
+              autocomplete="nickname"
+            />
           </div>
           <div class="input-group">
-            <label>密码</label>
-            <input v-model="form.password" type="password" placeholder="请输入密码" class="input" autocomplete="current-password" />
+            <label for="login-password">密码</label>
+            <div class="input-affix">
+              <input
+                id="login-password"
+                v-model="form.password"
+                :type="showPassword ? 'text' : 'password'"
+                name="password"
+                placeholder="请输入密码"
+                class="input"
+                :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                :aria-pressed="showPassword"
+                @click="showPassword = !showPassword"
+              >
+                <EyeOff v-if="showPassword" :size="17" :stroke-width="1.8" aria-hidden="true" />
+                <Eye v-else :size="17" :stroke-width="1.8" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
-          <p class="error" v-if="error">{{ error }}</p>
+          <p class="form-message is-error" v-if="error" role="alert">{{ error }}</p>
+          <p class="form-message is-success" v-else-if="notice" role="status">{{ notice }}</p>
 
-          <button class="btn-primary" @click="handleSubmit" :disabled="loading">
-            <span v-if="loading" class="loading-dot"></span>
+          <button type="submit" class="btn-primary" :disabled="loading">
+            <span v-if="loading" class="loading-dot" aria-hidden="true"></span>
             <span v-else>{{ mode === 'login' ? '登 录' : '注 册' }}</span>
           </button>
 
           <div class="form-extras">
             <p v-if="mode === 'login'" class="forgot-hint">密码不会被系统展示；需要重置时请联系教师管理员。</p>
+            <RouterLink class="back-home" to="/">返回学生端</RouterLink>
           </div>
-        </div>
+        </form>
       </div>
-
     </div>
-
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Eye, EyeOff } from '@lucide/vue'
 import { useUserStore } from '../stores/user'
 import { register, login } from '../api/user'
 
@@ -76,11 +117,13 @@ const userStore = useUserStore()
 const mode = ref('login')
 const loading = ref(false)
 const error = ref('')
+const notice = ref('')
+const showPassword = ref(false)
 const form = ref({ username: '', password: '', nickname: '' })
+const usernameRef = ref(null)
 const veilRef = ref(null)
 const containerVisible = ref(false)
 const veilGone = ref(false)
-const bgReady = ref(false)
 
 
 // ─── 每日一句 ──────────────────────────────────────────────────────
@@ -122,9 +165,29 @@ const daily = quotes[Math.floor(Math.random() * quotes.length)]
 // ─── 白光流星 Canvas 动画 ────────────────────────────────────────────
 let animId = null
 let cleanupFn = null
+const INTRO_KEY = 'gy_login_intro_seen'
+const INTRO = { move: 220, fadeStart: 520, fadeEnd: 1000 }
+
+function prefersReducedMotion() {
+  return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+function revealLogin() {
+  containerVisible.value = true
+  veilGone.value = true
+}
 
 onMounted(() => {
+  let seenIntro = false
+  try { seenIntro = sessionStorage.getItem(INTRO_KEY) === '1' } catch {}
+  if (prefersReducedMotion() || seenIntro) {
+    revealLogin()
+    return
+  }
+  try { sessionStorage.setItem(INTRO_KEY, '1') } catch {}
+
   const canvas = veilRef.value
+  if (!canvas) { revealLogin(); return }
   const ctx = canvas.getContext('2d')
   let W = canvas.width = window.innerWidth
   let H = canvas.height = window.innerHeight
@@ -147,7 +210,7 @@ onMounted(() => {
       speed: 0.015 + Math.random() * 0.025,   // 深度增长速度
       size: 2 + Math.random() * 3,
       alpha: 0.5 + Math.random() * 0.5,
-      delay: Math.random() * 40,
+      delay: Math.random() * 160,
       trail: [],
     }
   })
@@ -162,31 +225,29 @@ onMounted(() => {
     speed: 0.008 + Math.random() * 0.012,
   }))
 
-  let frame = 0
-  const START_MOVE = 50  // 第50帧开始流星移动
-  const FADE_START = 100 // 第100帧开始消退
-  const FADE_END = 180   // 第180帧完全消失
+  const startAt = performance.now()
+  let revealed = false
 
-  function draw() {
-    frame++
+  function draw(now) {
+    const t = now - startAt
 
-    // ── 计算整体透明度 ──
-    let masterAlpha = 1
-    if (frame >= FADE_START && frame < FADE_END) {
-      masterAlpha = 1 - (frame - FADE_START) / (FADE_END - FADE_START)
+    if (!revealed && t >= INTRO.fadeStart) {
+      revealed = true
+      containerVisible.value = true
     }
-    if (frame >= FADE_END) {
-      // 白光层消失，显示登录框
+    if (t >= INTRO.fadeEnd) {
       veilGone.value = true
-      bgReady.value = true
-      setTimeout(() => { containerVisible.value = true }, 50)
       return
     }
 
+    const masterAlpha = t <= INTRO.fadeStart
+      ? 1
+      : Math.max(0, 1 - (t - INTRO.fadeStart) / (INTRO.fadeEnd - INTRO.fadeStart))
+
     ctx.clearRect(0, 0, W, H)
 
-    // ── 白色底色（渐隐） ──
-    ctx.fillStyle = `rgba(255, 255, 255, ${masterAlpha * 0.95})`
+    // ── 底色（渐隐） ──
+    ctx.fillStyle = `rgba(240, 246, 242, ${masterAlpha * 0.94})`
     ctx.fillRect(0, 0, W, H)
 
     // ── 柔和光晕 ──
@@ -195,18 +256,18 @@ onMounted(() => {
       const ox = orb.x + Math.sin(orb.phase) * 30
       const oy = orb.y + Math.cos(orb.phase * 0.7) * 20
       const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orb.r)
-      grad.addColorStop(0, `rgba(220, 235, 255, ${orb.alpha * masterAlpha})`)
-      grad.addColorStop(1, `rgba(220, 235, 255, 0)`)
+      grad.addColorStop(0, `rgba(140, 200, 178, ${orb.alpha * masterAlpha})`)
+      grad.addColorStop(1, 'rgba(140, 200, 178, 0)')
       ctx.fillStyle = grad
       ctx.fillRect(ox - orb.r, oy - orb.r, orb.r * 2, orb.r * 2)
     })
 
     // ── 流星（向后划走，空间感） ──
-    if (frame > START_MOVE) {
-      const progress = (frame - START_MOVE) / (FADE_END - START_MOVE)
+    if (t > INTRO.move) {
+      const progress = Math.min(1, (t - INTRO.move) / (INTRO.fadeEnd - INTRO.move))
 
       meteors.forEach(m => {
-        if (frame - START_MOVE < m.delay) return
+        if (t - INTRO.move < m.delay) return
 
         // 深度递增 → 向远处飞去
         m.z += m.speed * (1 + progress * 4)
@@ -250,7 +311,7 @@ onMounted(() => {
           const headGrad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowR)
           headGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.max(0, headA)})`)
           headGrad.addColorStop(0.3, `rgba(230, 240, 255, ${Math.max(0, headA * 0.4)})`)
-          headGrad.addColorStop(1, `rgba(230, 240, 255, 0)`)
+          headGrad.addColorStop(1, 'rgba(230, 240, 255, 0)')
           ctx.fillStyle = headGrad
           ctx.fillRect(drawX - glowR, drawY - glowR, glowR * 2, glowR * 2)
         }
@@ -269,8 +330,18 @@ onUnmounted(() => {
 })
 
 // ─── 登录 / 注册逻辑 ────────────────────────────────────────────────
-async function handleSubmit() {
+function switchMode(next) {
+  if (mode.value === next) return
+  mode.value = next
   error.value = ''
+  notice.value = ''
+  showPassword.value = false
+}
+
+async function handleSubmit() {
+  if (loading.value) return
+  error.value = ''
+  notice.value = ''
   if (!form.value.username || !form.value.password) {
     error.value = '请填写用户名和密码'
     return
@@ -286,7 +357,9 @@ async function handleSubmit() {
     } else {
       await register(form.value.username, form.value.password, form.value.nickname)
       mode.value = 'login'
-      error.value = '注册成功，请登录 ✓'
+      form.value.password = ''
+      showPassword.value = false
+      notice.value = '注册成功，请用新账号登录'
     }
   } catch (e) {
     error.value = e.response?.data?.detail || '操作失败，请重试'
@@ -302,24 +375,63 @@ async function handleSubmit() {
 
 .login-page {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(52vmax 42vmax at 12% 8%, rgba(140, 200, 178, .30), transparent 68%),
+    radial-gradient(46vmax 40vmax at 92% 90%, rgba(232, 196, 104, .16), transparent 70%),
+    linear-gradient(150deg, #eef4f0 0%, #e7efea 45%, #eef2ee 100%);
+  color: var(--m-ink);
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #eef2f7;
-  transition: background 0.8s ease;
+  width: 100%;
+  min-height: 100dvh;
+  padding: clamp(16px, 4vh, 44px) 20px;
 }
 
-.login-page.bgready {
-  background: linear-gradient(145deg, #e8edf5 0%, #dfe6f0 30%, #d6dfea 60%, #e4e9f3 100%);
+.login-page::before,
+.login-page::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(8px);
+}
+.login-page::before {
+  top: -14vmax;
+  left: -10vmax;
+  width: 42vmax;
+  height: 42vmax;
+  background: radial-gradient(circle, rgba(189, 219, 207, .34), transparent 68%);
+  animation: login-drift 22s ease-in-out infinite;
+}
+.login-page::after {
+  right: -12vmax;
+  bottom: -16vmax;
+  width: 46vmax;
+  height: 46vmax;
+  background: radial-gradient(circle, rgba(234, 212, 154, .18), transparent 70%);
+  animation: login-drift 28s ease-in-out infinite reverse;
+}
+@keyframes login-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3%, 2%, 0) scale(1.08); }
 }
 
 /* ── 白光流星 Canvas ── */
 .veil-canvas {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 10;
   pointer-events: none;
 }
@@ -332,21 +444,23 @@ async function handleSubmit() {
 .login-container {
   position: relative;
   z-index: 1;
-  display: flex;
-  width: min(860px, 94vw);
-  min-height: 480px;
-  border-radius: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(340px, .96fr);
+  width: min(920px, 100%);
+  min-height: 520px;
+  border-radius: 28px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, .64);
+  backdrop-filter: blur(26px) saturate(1.2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, .78);
   box-shadow:
-    0 8px 32px rgba(90, 120, 160, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+    0 30px 80px rgba(34, 48, 43, .16),
+    0 2px 6px rgba(34, 48, 43, .05),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
   opacity: 0;
-  transform: translateY(24px) scale(0.98);
-  transition: opacity 0.8s ease, transform 0.8s ease;
+  transform: translateY(22px) scale(.985);
+  transition: opacity .7s var(--m-ease), transform .7s var(--m-ease);
 }
 
 .login-container.visible {
@@ -356,14 +470,16 @@ async function handleSubmit() {
 
 /* ── 左侧面板 ── */
 .left-panel {
-  flex: 1;
-  padding: 48px 40px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: linear-gradient(155deg, rgba(100, 140, 185, 0.55) 0%, rgba(85, 130, 175, 0.5) 50%, rgba(75, 120, 168, 0.55) 100%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  gap: 40px;
+  padding: 52px 44px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .10) 1px, transparent 1.6px),
+    linear-gradient(152deg, #4E7B6D 0%, #3F6C5F 52%, #2E5046 100%);
+  background-size: 24px 24px, cover;
+  color: #fff;
   position: relative;
   overflow: hidden;
 }
@@ -372,25 +488,25 @@ async function handleSubmit() {
 .left-panel::before {
   content: '';
   position: absolute;
-  top: -60px;
+  top: -70px;
   right: -60px;
-  width: 220px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(160, 200, 240, 0.3) 0%, transparent 70%);
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(189, 219, 207, .34) 0%, transparent 70%);
   border-radius: 50%;
-  animation: morandi-float 8s ease-in-out infinite;
+  animation: morandi-float 9s ease-in-out infinite;
 }
 
 .left-panel::after {
   content: '';
   position: absolute;
-  bottom: -40px;
-  left: -40px;
-  width: 160px;
-  height: 160px;
-  background: radial-gradient(circle, rgba(180, 215, 250, 0.2) 0%, transparent 70%);
+  bottom: -50px;
+  left: -50px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(234, 212, 154, .22) 0%, transparent 70%);
   border-radius: 50%;
-  animation: morandi-float 10s ease-in-out infinite reverse;
+  animation: morandi-float 12s ease-in-out infinite reverse;
 }
 
 @keyframes morandi-float {
@@ -404,26 +520,26 @@ async function handleSubmit() {
 }
 
 .quote-icon {
-  font-size: 60px;
+  font-size: 64px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.25);
-  font-family: Georgia, serif;
-  margin-bottom: -8px;
+  color: rgba(255, 255, 255, 0.22);
+  font-family: Georgia, 'Songti SC', serif;
+  margin-bottom: -10px;
 }
 
 .quote-text {
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.9;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.94);
   font-weight: 300;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   margin: 0 0 16px 0;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  text-wrap: pretty;
 }
 
 .quote-author {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.65);
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.62);
   letter-spacing: 0.06em;
   margin: 0;
 }
@@ -432,50 +548,77 @@ async function handleSubmit() {
   position: relative;
   z-index: 1;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .26);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.brand-copy {
+  display: grid;
+  gap: 3px;
 }
 
 .brand-name {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
-  letter-spacing: 0.15em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: 0.22em;
 }
 
 .brand-slogan {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.04em;
 }
 
 /* ── 右侧面板 ── */
 .right-panel {
-  width: 360px;
-  padding: 48px 40px;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  justify-content: center;
+  padding: 52px 46px;
+  background: rgba(255, 255, 255, .34);
 }
 
 .form-header {
-  margin-bottom: 28px;
+  margin-bottom: 26px;
+}
+
+.form-kicker {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--m-accent-soft);
+  color: var(--m-accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
 }
 
 .form-header h2 {
-  font-size: 24px;
+  font-size: 27px;
   font-weight: 600;
-  color: rgba(40, 60, 90, 0.85);
-  margin: 0 0 6px 0;
-  letter-spacing: 0.02em;
+  color: var(--m-ink);
+  margin: 0 0 7px 0;
+  letter-spacing: 0.01em;
 }
 
 .form-header p {
   font-size: 13px;
-  color: rgba(80, 100, 130, 0.5);
+  color: var(--m-ink-3);
   margin: 0;
 }
 
@@ -484,28 +627,32 @@ async function handleSubmit() {
   display: flex;
   gap: 4px;
   margin-bottom: 24px;
-  background: rgba(150, 175, 210, 0.12);
-  border-radius: 10px;
-  padding: 3px;
+  background: rgba(34, 48, 43, .055);
+  border-radius: 12px;
+  padding: 4px;
 }
 
 .tab-switch button {
   flex: 1;
   padding: 8px;
-  border-radius: 8px;
-  font-size: 14px;
-  color: rgba(80, 100, 130, 0.45);
+  border-radius: 9px;
+  font-size: 13.5px;
+  color: var(--m-ink-3);
   background: none;
   border: none;
   cursor: pointer;
-  transition: all 0.25s;
+  transition: background .2s var(--m-ease), color .2s var(--m-ease), box-shadow .2s var(--m-ease);
+}
+
+.tab-switch button:hover {
+  color: var(--m-ink-2);
 }
 
 .tab-switch button.active {
-  background: rgba(255, 255, 255, 0.55);
-  color: rgba(50, 80, 120, 0.9);
+  background: #fff;
+  color: var(--m-accent-strong);
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(80, 110, 150, 0.06);
+  box-shadow: 0 1px 3px rgba(34, 48, 43, .10);
 }
 
 /* ── 表单 ── */
@@ -521,56 +668,100 @@ async function handleSubmit() {
 .input-group label {
   display: block;
   font-size: 12px;
-  color: rgba(60, 85, 115, 0.55);
-  margin-bottom: 6px;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--m-ink-2);
+  margin-bottom: 7px;
+  letter-spacing: 0.03em;
+}
+
+.input-affix {
+  position: relative;
 }
 
 .input {
   width: 100%;
-  padding: 11px 14px;
-  background: rgba(255, 255, 255, 0.35);
-  border: 1px solid rgba(150, 175, 210, 0.3);
-  border-radius: 10px;
-  color: rgba(30, 50, 80, 0.85);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid var(--m-line);
+  border-radius: 12px;
+  color: var(--m-ink);
   font-size: 14px;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color .18s var(--m-ease), box-shadow .18s var(--m-ease), background .18s var(--m-ease);
   outline: none;
 }
 
 .input::placeholder {
-  color: rgba(140, 160, 190, 0.4);
+  color: #9aa8a2;
+}
+
+.input:hover {
+  border-color: #cbd6cf;
 }
 
 .input:focus {
-  border-color: rgba(100, 140, 190, 0.45);
-  background: rgba(255, 255, 255, 0.5);
+  border-color: var(--m-accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(74, 122, 108, .14);
+}
+
+.input-affix .input {
+  padding-right: 46px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--m-ink-3);
+  cursor: pointer;
+  transition: background .18s var(--m-ease), color .18s var(--m-ease);
+}
+
+.password-toggle:hover {
+  background: var(--m-accent-soft);
+  color: var(--m-accent-strong);
 }
 
 /* ── 按钮 ── */
 .btn-primary {
   width: 100%;
-  padding: 13px;
-  margin-top: 4px;
-  background: linear-gradient(135deg, rgba(90, 135, 180, 0.75), rgba(75, 120, 165, 0.75));
-  color: white;
+  min-height: 46px;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--m-hero-grad);
+  color: #fff;
   border: none;
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.10em;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(90, 125, 168, 0.2);
+  box-shadow: var(--m-hero-shadow);
+  transition: transform .18s var(--m-ease), box-shadow .18s var(--m-ease), opacity .18s var(--m-ease);
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.88;
   transform: translateY(-1px);
+  box-shadow: var(--m-hero-shadow-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -589,36 +780,131 @@ async function handleSubmit() {
   to { transform: rotate(360deg); }
 }
 
-/* ── 错误提示 ── */
-.error {
-  font-size: 12px;
-  color: #a06060;
-  margin-bottom: 10px;
-  margin-top: -6px;
-  padding-left: 2px;
+/* ── 表单提示 ── */
+.form-message {
+  margin: 2px 0 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 
-/* ── 找回密码弹窗 ── */
-.form-extras { text-align: center; margin-top: 12px; }
-.link-forgot { background: none; border: none; font-size: 12px; color: rgba(90, 135, 180, 0.7); cursor: pointer; transition: color 0.2s; }
-.link-forgot:hover { color: rgba(90, 135, 180, 1); }
+.form-message.is-error {
+  background: #fdf0ed;
+  border: 1px solid #efc9c0;
+  color: #8f3f36;
+}
 
-.forgot-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
-.forgot-panel { background: white; border-radius: 20px; width: min(360px, 90vw); padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-.forgot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.forgot-header h3 { font-size: 18px; color: rgba(40, 60, 90, 0.85); margin: 0; }
-.forgot-close { background: none; border: none; font-size: 18px; color: #999; cursor: pointer; }
-.forgot-body { display: flex; flex-direction: column; gap: 12px; }
-.forgot-hint { font-size: 12px; color: rgba(80, 100, 130, 0.5); margin: 0 0 4px; }
-.forgot-error { font-size: 12px; color: #a06060; margin: 0; }
-.forgot-success { font-size: 14px; color: #5B8C7E; margin: 0; padding: 10px; background: rgba(91,140,126,0.08); border-radius: 10px; }
-.forgot-success strong { color: #3D6B5E; font-size: 16px; letter-spacing: 0.1em; }
+.form-message.is-success {
+  background: var(--m-accent-soft);
+  border: 1px solid #cfe3d8;
+  color: var(--m-accent-strong);
+}
+
+.form-extras {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin-top: 16px;
+}
+
+.forgot-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--m-ink-3);
+  text-align: center;
+}
+
+.back-home {
+  font-size: 12px;
+  color: var(--m-accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color .18s var(--m-ease);
+}
+
+.back-home:hover {
+  border-bottom-color: currentColor;
+}
 
 /* ── 响应式 ── */
-@media (max-width: 600px) {
-  .login-container { flex-direction: column; width: 92vw; min-height: auto; }
-  .left-panel { padding: 32px 28px 24px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.25); }
-  .right-panel { width: 100%; padding: 28px 28px 36px; }
-  .quote-text { font-size: 15px; }
+@media (max-width: 760px) {
+  .login-shell {
+    align-items: flex-start;
+    padding: 12px;
+  }
+  .login-container {
+    grid-template-columns: 1fr;
+    width: 100%;
+    min-height: 0;
+    border-radius: 22px;
+  }
+  .left-panel {
+    gap: 22px;
+    padding: 26px 24px 24px;
+  }
+  .left-panel::before {
+    width: 180px;
+    height: 180px;
+  }
+  .left-panel::after {
+    display: none;
+  }
+  .quote-icon {
+    font-size: 40px;
+    margin-bottom: -6px;
+  }
+  .quote-text {
+    font-size: 15px;
+    line-height: 1.75;
+    margin-bottom: 6px;
+  }
+  .quote-author {
+    font-size: 11.5px;
+  }
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+  .brand-name {
+    font-size: 15px;
+  }
+  .right-panel {
+    padding: 28px 24px 32px;
+  }
+  .form-header {
+    margin-bottom: 20px;
+  }
+  .form-header h2 {
+    font-size: 23px;
+  }
+  .tab-switch {
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-height: 720px) and (min-width: 761px) {
+  .login-container {
+    min-height: 0;
+  }
+  .left-panel,
+  .right-panel {
+    padding-top: 38px;
+    padding-bottom: 38px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page::before,
+  .login-page::after,
+  .left-panel::before,
+  .left-panel::after {
+    animation: none;
+  }
+  .login-container {
+    transition: none;
+  }
 }
 </style>

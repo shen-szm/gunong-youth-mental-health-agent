@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+import screening_engine
 from auth import get_current_user
 from config import settings
 from database import SessionLocal, get_db
@@ -274,7 +275,10 @@ def chat_with_companion(
     recent_contents, already_urgent = _recent_context(context_key, content)
     joined_contexts = recent_contents + (["".join(recent_contents[-2:])] if len(recent_contents) >= 2 else [])
     joined_contexts += (["".join(recent_contents[-3:])] if len(recent_contents) >= 3 else [])
-    risk_level = "urgent" if already_urgent or shared_urgent else _student_safety_gate(joined_contexts)
+    risk_level = screening_engine.merge_risk(
+        "urgent" if already_urgent or shared_urgent else _student_safety_gate(joined_contexts),
+        screening_engine.active_screening_risk(db, current_user.id),
+    )
     crisis_context = next((item for item in joined_contexts if _detect_crisis(item)), content)
     if risk_level == "urgent" or _detect_crisis(crisis_context):
         _latch_urgent(context_key)

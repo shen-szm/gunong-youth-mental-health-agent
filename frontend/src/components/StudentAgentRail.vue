@@ -269,6 +269,7 @@ const riskLabel = computed(() => {
 })
 
 const sourceLabel = computed(() => ({
+  deepseek_companion: 'DeepSeek 小满对话',
   xunfei_constrained: '讯飞策略协作',
   safety_override: '安全规则强制覆盖',
   degraded: '规则安全降级',
@@ -277,17 +278,19 @@ const sourceLabel = computed(() => ({
   unavailable: '来源未确认',
 })[props.state.source] || '来源未确认')
 
-const sourceDetail = computed(() => props.state.source === 'xunfei_constrained'
-  ? '模型依据去标识化结构线索选择情绪、支持需要与回应策略；学生可见文字由后端审核话术库实现，聊天原文不外发'
-  : props.state.source === 'safety_override'
-    ? '普通生成已停止，当前只执行确定性安全路径'
-    : props.state.source === 'degraded'
-      ? '模型结果不可用或未通过校验，已使用可审核规则模板'
-  : props.state.source === 'pending'
-    ? '等待后端返回可核验的执行结果'
-    : props.state.source === 'unavailable'
-      ? '本轮未获得有效执行结果，不能判断生成来源'
-      : '本轮未使用外部模型')
+const sourceDetail = computed(() => props.state.source === 'deepseek_companion'
+  ? '本轮回应由 DeepSeek 小满对话生成，会话原文按隐私说明发送，也用于生成小结；安全规则仍具有最终裁决权'
+  : props.state.source === 'xunfei_constrained'
+    ? '模型依据去标识化结构线索选择情绪、支持需要与回应策略；学生可见文字由后端审核话术库实现'
+    : props.state.source === 'safety_override'
+      ? '普通生成已停止，当前只执行确定性安全路径'
+      : props.state.source === 'degraded'
+        ? '模型结果不可用或未通过校验，已使用可审核规则模板'
+      : props.state.source === 'pending'
+        ? '等待后端返回可核验的执行结果'
+        : props.state.source === 'unavailable'
+          ? '本轮未获得有效执行结果，不能判断生成来源'
+          : '本轮未使用外部模型')
 
 function statusIcon(status) {
   return ({ completed: '✓', running: '•', attention: '!', blocked: '停', waiting: '·', error: '×' })[status] || '·'
@@ -743,5 +746,111 @@ watch(() => props.open, async (value, previous) => {
   .is-graph-open .agent-contract-list { grid-template-columns: 1fr 1fr; gap: 24px; }
   .is-graph-open .agent-checks strong, .is-graph-open .agent-artifact > p, .is-graph-open .agent-artifact dd, .is-graph-open .agent-contract-list ul { font-size: 12px; }
   .is-graph-open .agent-checks small, .is-graph-open .agent-contract-list dt, .is-graph-open .agent-checks em { font-size: 11px; }
+}
+
+/* 收起态只留一枚状态胶囊：房间是主画面，协作细节点开再看。 */
+.student-agent-shell { top: 14px; right: 14px; }
+.student-agent-toggle {
+  grid-template-columns: 8px minmax(0, 1fr) 14px;
+  gap: 7px;
+  width: 196px;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: 12px;
+}
+.agent-toggle-latest { display: none; }
+.agent-toggle-heading { gap: 5px; }
+.agent-toggle-heading strong { font-size: 11px; }
+.agent-toggle-heading small { font-size: 9px; }
+.agent-toggle-chevron { font-size: 14px; }
+
+@media (min-width: 900px) {
+  .student-agent-shell { top: 16px; right: 18px; }
+  .student-agent-toggle { width: 196px; min-height: 48px; padding: 6px 11px; }
+  .agent-toggle-heading strong { font-size: 11.5px; }
+}
+
+@media (max-width: 899px) {
+  .student-agent-shell { top: 10px; right: 10px; }
+  .student-agent-toggle {
+    grid-template-columns: 8px minmax(0, 1fr) 10px;
+    gap: 5px;
+    width: 108px;
+    min-width: 108px;
+    min-height: 44px;
+    padding: 0 8px;
+    border-radius: 999px;
+  }
+  .student-agent-toggle .agent-toggle-heading small,
+  .student-agent-toggle .agent-toggle-latest { display: none; }
+  .student-agent-toggle .agent-toggle-heading strong { font-size: 10px; }
+  .student-agent-toggle .agent-toggle-chevron { font-size: 12px; }
+}
+
+/* 像素皮肤 3.0 · 咕哝 Agent 栏 */
+.student-agent-shell {
+  --px-line: rgba(255, 248, 235, .2);
+  --px-gold: #efd79c;
+  --px-shadow: rgba(0, 0, 0, .46);
+}
+.student-agent-toggle {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: background 160ms steps(2, end), border-color 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.student-agent-toggle:hover {
+  border-color: var(--px-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.student-agent-toggle:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.agent-toggle-heading strong { font-family: var(--px-font); }
+.student-agent-rail {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.agent-rail-header h2 { font-family: var(--px-font); font-size: 17px; }
+.agent-rail-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: background 160ms steps(2, end), border-color 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.agent-rail-close:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.agent-rail-close:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.agent-rail-event { border: 2px solid var(--px-line); border-radius: 4px; }
+.agent-step-icon { border-radius: 4px; }
+.agent-verification-status { border-radius: 4px; }
+.agent-graph-toggle {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.agent-graph-toggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.agent-delete-run { border-width: 2px; border-radius: 4px; }
+.agent-artifact { border-radius: 4px; }
+.student-agent-toggle:focus-visible,
+.student-agent-rail button:focus-visible,
+.agent-technical-details summary:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .student-agent-toggle,
+  .agent-rail-close { transition: none; }
+  .student-agent-toggle:hover,
+  .student-agent-toggle:active,
+  .agent-rail-close:hover,
+  .agent-rail-close:active,
+  .agent-graph-toggle:hover { transform: none; }
 }
 </style>

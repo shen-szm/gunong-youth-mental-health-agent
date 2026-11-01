@@ -1,5 +1,5 @@
 <template>
-  <div ref="roomRoot" class="room" :class="[timeOfDay, { 'agent-rail-open': showAgentRail }]" @click="handleRoomPetMove">
+  <div class="room lobby-home" :class="[timeOfDay, { 'agent-rail-open': showAgentRail }]" :data-part="timeOfDay">
 
     <!-- ══ 欢迎遮罩：点击任意处进入 ══ -->
     <Transition name="splash-fade">
@@ -13,33 +13,129 @@
       </div>
     </Transition>
 
-    <!-- AI 生成背景图 -->
-    <div class="bg-wrap">
-      <img class="room-bg" :src="bgImage" alt="温馨房间" />
+    <!-- 动态环境层：缓慢漂移的像素云、星点、萤火与呼吸光。 -->
+    <div v-if="!showSplash" class="lobby-ambient" aria-hidden="true">
+      <span class="ambient-glow"></span>
+      <span class="ambient-clouds">
+        <span class="ambient-cloud ambient-cloud-a"></span>
+        <span class="ambient-cloud ambient-cloud-b"></span>
+        <span class="ambient-cloud ambient-cloud-c"></span>
+      </span>
+      <span class="ambient-stars">
+        <b v-for="n in 14" :key="n" :style="{ '--n': n }"></b>
+      </span>
+      <span class="ambient-fireflies">
+        <b v-for="n in 6" :key="n" :style="{ '--n': n }"></b>
+      </span>
+      <span class="ambient-shooting-star"></span>
     </div>
 
-    <!-- 顶部状态条：只保留今日上下文，不再堆叠独立卡片。 -->
-    <header v-if="!showSplash" class="room-status-bar">
-      <div class="room-status-greeting">
-        <time>{{ currentTime }}</time>
-        <strong>{{ greeting }}，{{ displayNickname }}</strong>
-      </div>
-      <button type="button" class="room-status-checkin" :aria-pressed="selectedRoomFeatureId === 'daily'" @click.stop="selectRoomFeature('daily', $event)">
-        <span aria-hidden="true">{{ dailyReturnTask.emoji }}</span>
-        <span>
-          <small>今日状态</small>
+    <!-- 动态天象：太阳按时刻升起落下，夜里月亮按真实月相盈亏。 -->
+    <svg
+      v-if="!showSplash"
+      class="lobby-celestial"
+      :class="celestialState.kind"
+      viewBox="0 0 1600 1000"
+      preserveAspectRatio="xMidYMax slice"
+      aria-hidden="true"
+    >
+      <g :transform="`translate(${celestialState.x} ${celestialState.y})`">
+        <rect
+          v-for="(cell, index) in celestialState.rects"
+          :key="index"
+          :x="cell.x"
+          :y="cell.y"
+          :width="cell.w"
+          :height="cell.h"
+          :fill="cell.fill"
+          :opacity="cell.opacity"
+        />
+      </g>
+    </svg>
+
+    <!-- 主题大厅：像素心岛背景 + 渐变光场与发丝线。 -->
+    <main v-if="!showSplash" class="lobby">
+      <header class="lobby-top">
+        <div class="lobby-hello">
+          <time>{{ currentTime }}</time>
+          <strong>{{ greeting }}，{{ displayNickname }}</strong>
+        </div>
+        <div class="lobby-top-actions">
+          <button type="button" class="lobby-utility lobby-utility-weather" :aria-label="`刷新天气，当前${temperature}度`" @click.stop="refreshWeather">
+            <span aria-hidden="true">{{ weatherEmoji }}</span>
+            <span>{{ temperature }}°</span>
+          </button>
+          <button type="button" class="lobby-utility" :aria-label="musicOn ? '关闭背景音乐' : '开启背景音乐'" @click.stop="toggleMusic">
+            <span aria-hidden="true">{{ musicOn ? 'Ⅱ' : '▷' }}</span>
+          </button>
+          <button ref="profileNavButton" type="button" class="lobby-profile" aria-label="打开我的" @click="goProfile">
+            <span aria-hidden="true">我</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="lobby-hero" :class="{ 'is-guide': showFirstRunGuide && guideStage === 'computer' }">
+        <p class="lobby-eyebrow">咕哝 · 你的心岛</p>
+        <button type="button" class="lobby-pet-stage" :class="{ 'is-reacting': petReactionActive }" aria-label="摸摸咕团，和它玩一下" @click="petGuguanHome">
+          <span class="lobby-pet-halo" aria-hidden="true"></span>
+          <span v-if="petReactionActive" :key="petReactionKey" class="lobby-pet-reaction" aria-hidden="true">
+            <i>♥</i><i>✦</i><i>♥</i><i>✦</i><i>♥</i><i>✦</i>
+          </span>
+          <img :src="selectedPetFrame" alt="原创陪伴宠物咕团" />
+          <span class="lobby-pet-caption" role="status" aria-live="polite">{{ petCompanionMessage }}</span>
+        </button>
+        <h1 class="lobby-title">{{ greeting }}，<br />今天想说什么？</h1>
+        <p class="lobby-sub">{{ dailyReturnTask.copy }}</p>
+        <button ref="chatNavButton" type="button" class="lobby-primary-cta" @click.stop="handleGuideChatTarget">
+          <span class="lobby-cta-label">开始倾诉</span>
+          <span class="lobby-cta-arrow" aria-hidden="true">→</span>
+          <span v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</span>
+        </button>
+      </section>
+
+      <section class="lobby-grid" aria-label="今日入口">
+        <button type="button" class="lobby-card lobby-card-trend" @click="goToTrend">
+          <span class="lobby-card-kicker">回顾</span>
+          <strong>看看最近的自己</strong>
+          <small class="lobby-card-hint">情绪轨迹与小纸条</small>
+        </button>
+        <button ref="islandNavButton" type="button" class="lobby-card lobby-card-island" @click="openWorkspacePanel('leisure', $event.currentTarget)">
+          <span class="lobby-card-kicker">心岛</span>
+          <strong>走进去探索</strong>
+          <small class="lobby-card-hint">岛上安静的小任务</small>
+        </button>
+        <button type="button" class="lobby-card lobby-card-pet" @click="openWorkspacePanel('pet', $event.currentTarget)">
+          <span class="lobby-card-kicker">咕团</span>
+          <strong>陪它待一会儿</strong>
+          <small class="lobby-card-hint">亲密度与小游戏</small>
+        </button>
+        <button type="button" class="lobby-card lobby-card-daily room-status-checkin" :aria-pressed="selectedRoomFeatureId === 'daily'" @click.stop="selectRoomFeature('daily', $event)">
+          <span class="lobby-card-kicker">今天</span>
           <strong>{{ dailyStatusLabel }}</strong>
-        </span>
-      </button>
-      <button type="button" class="room-status-utility" :aria-label="`刷新天气，当前${temperature}度`" @click.stop="refreshWeather">
-        <span aria-hidden="true">{{ weatherEmoji }}</span>
-        <span>{{ temperature }}°</span>
-      </button>
-      <button type="button" class="room-status-utility" :aria-label="musicOn ? '关闭背景音乐' : '开启背景音乐'" @click.stop="toggleMusic">
-        <span aria-hidden="true">{{ musicOn ? 'Ⅱ' : '▷' }}</span>
-        <span>声音</span>
-      </button>
-    </header>
+          <small class="lobby-card-hint">签到与小心愿</small>
+        </button>
+      </section>
+
+      <nav class="lobby-tertiary" aria-label="更多入口">
+        <button type="button" class="lobby-pill" @click="openMusicPanel">听点音乐</button>
+        <button type="button" class="lobby-pill" @click="openWorkspacePanel('transport', $event.currentTarget)">看看窗外</button>
+      </nav>
+
+      <footer class="beian-footer">
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
+          <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
+          <span>粤公网安备44011202003950号</span>
+        </a>
+        <span class="beian-divider">|</span>
+        <a
+          href="https://beian.miit.gov.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="icp-link"
+          aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
+        >粤ICP备2026048986号-2</a>
+      </footer>
+    </main>
     <StudentAgentRail
       v-if="!showSplash && !showLeisurePanel"
       :open="showAgentRail"
@@ -52,25 +148,14 @@
     <aside v-if="!showSplash && showFirstRunGuide" class="room-onboarding-cue" aria-live="polite">
       <span class="room-onboarding-step">{{ guideStage === 'mood-card' ? '完成' : guideStage === 'confession' ? '2/2' : '1/2' }}</span>
       <div>
-        <strong>{{ guideStage === 'mood-card' ? '第一次倾诉已经被接住' : guideStage === 'confession' ? '把最想说的一句话告诉咕哝' : '先从房间里的电脑开始' }}</strong>
-        <small>{{ guideStage === 'mood-card' ? firstRunMoodCard.summary : guideStage === 'confession' ? '倾诉窗口已经准备好。' : '电脑会打开一个安静的倾诉空间。' }}</small>
+        <strong>{{ guideStage === 'mood-card' ? '第一次倾诉已经被接住' : guideStage === 'confession' ? '把最想说的一句话告诉咕哝' : '先从第一句倾诉开始' }}</strong>
+        <small>{{ guideStage === 'mood-card' ? firstRunMoodCard.summary : guideStage === 'confession' ? '倾诉窗口已经准备好。' : '写下的第一句话，咕哝会认真接住。' }}</small>
       </div>
       <button type="button" @click="guideStage === 'mood-card' ? openTreeHoleFromMoodCard() : focusGuideTarget()">
         {{ guideStage === 'mood-card' ? '去树洞看看' : '带我开始' }}
       </button>
       <button v-if="guideStage !== 'mood-card'" type="button" class="room-onboarding-skip" aria-label="跳过首次引导" @click="skipFirstRunGuide">×</button>
     </aside>
-    <button
-      v-if="!showSplash"
-      type="button"
-      :class="['room-roaming-pet', { moving: petIsMoving }]"
-      :style="{ left: `${roomPetPosition.x}px`, top: `${roomPetPosition.y}px` }"
-      :aria-pressed="selectedRoomFeatureId === 'pet'"
-      @click.stop="selectRoomFeature('pet', $event)"
-    >
-      <img :src="selectedPetFrame" alt="原创陪伴宠物咕团" />
-      <span>{{ petIsMoving ? petRoamingBubble : petCompanionMessage }}</span>
-    </button>
     <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="closeWorkspacePanel('pet')">
       <section ref="petPanelRoot" class="pet-panel-card pet-playground-card" data-workspace="pet" role="dialog" aria-modal="true" aria-labelledby="guguan-panel-title" @keydown="handlePetPanelKeydown">
         <button type="button" class="pet-panel-close" aria-label="关闭宠物互动" @click="closeWorkspacePanel('pet')">×</button>
@@ -171,58 +256,6 @@
         <p class="pet-care-boundary">这些互动只用于陪伴和游戏反馈，不用于判断你的情绪，也没有连续打卡要求。</p>
       </section>
     </div>
-    <!-- 交互热区 — 电脑（倾诉） -->
-    <button type="button" :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && guideStage === 'computer', 'is-selected': selectedRoomFeatureId === 'chat' }]" :aria-pressed="selectedRoomFeatureId === 'chat'" aria-label="电脑：打开倾诉空间" @click.stop="selectRoomFeature('chat', $event)">
-      <span class="hover-tip">电脑 · 倾诉</span>
-      <div v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</div>
-    </button>
-
-    <!-- 交互热区 — 床（情绪回顾） -->
-    <button type="button" :class="['hot-zone zone-bed', { 'is-selected': selectedRoomFeatureId === 'trend' }]" :aria-pressed="selectedRoomFeatureId === 'trend'" aria-label="床头：回顾近期情绪" @click.stop="selectRoomFeature('trend', $event)">
-      <span class="bed-label">床头 · 情绪回顾</span>
-    </button>
-
-    <!-- 交互热区 — 窗户（悬浮提示） -->
-    <button type="button" class="hot-zone zone-window" aria-haspopup="dialog" aria-label="窗户：打开窗外漫游" @click.stop="openWindowJourney($event)">
-      <span class="window-label">窗边 · 看看窗外</span>
-    </button>
-
-    <!-- 心岛入口：延续房间像素场景，真正的游戏引擎仅在进入后加载。 -->
-    <button
-      v-if="!showSplash"
-      type="button"
-      class="heart-island-door"
-      aria-label="进入心岛探索"
-      @click.stop="openWorkspacePanel('leisure', $event.currentTarget, 'island')"
-    >
-      <span class="heart-island-door-glow" aria-hidden="true"></span>
-      <span class="heart-island-door-copy"><strong>心岛</strong><small>走进去探索</small></span>
-    </button>
-
-    <!-- 交互热区 — 音响1（音乐推荐） -->
-    <button type="button" :class="['hot-zone zone-speaker zone-speaker-left', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
-      <span class="hover-tip">音响 · 音乐</span>
-      <div class="speaker-notes">
-        <span class="note n1">🎵</span>
-        <span class="note n2">🎶</span>
-        <span class="note n3">♪</span>
-        <span class="note n4">🎵</span>
-        <span class="note n5">♫</span>
-      </div>
-    </button>
-
-    <!-- 交互热区 — 音响2（音乐推荐） -->
-    <button type="button" :class="['hot-zone zone-speaker zone-speaker-right', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
-      <span class="hover-tip">音响 · 音乐</span>
-      <div class="speaker-notes">
-        <span class="note n1">🎶</span>
-        <span class="note n2">♫</span>
-        <span class="note n3">🎵</span>
-        <span class="note n4">♪</span>
-        <span class="note n5">🎶</span>
-      </div>
-    </button>
-
     <RoomActionBar
       :feature="selectedRoomFeature"
       :moods="dailyCheckInOptions"
@@ -232,45 +265,6 @@
       @close="clearRoomFeature"
     />
 
-
-    <nav class="bottom-nav">
-      <button class="bnav-item music-direct-entry" @click="openWorkspacePanel('music', $event.currentTarget)"><div class="icon-wrap"><UiIcon name="music" :size="20" /></div><span class="bnav-label">听音乐</span></button>
-      <button ref="chatNavButton" class="bnav-item" @click="goToChat">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-          </svg>
-        </div>
-        <span class="bnav-label">倾诉</span>
-      </button>
-      <button class="bnav-item" @click="openWorkspacePanel('pet', $event.currentTarget)">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 11c-2.5-2.5-5-1.2-5 1.3 0 2.7 3.1 5.2 9 8.2 5.9-3 9-5.5 9-8.2 0-2.5-2.5-3.8-5-1.3"/>
-            <path d="M8.5 7.5 7 4M15.5 7.5 17 4M9 13h.01M15 13h.01"/>
-          </svg>
-        </div>
-        <span class="bnav-label">咕团</span>
-      </button>
-      <button ref="islandNavButton" class="bnav-item" @click="openWorkspacePanel('leisure', $event.currentTarget)">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3 5 7v10l7 4 7-4V7z"/>
-            <path d="m5 7 7 4 7-4M12 11v10"/>
-          </svg>
-        </div>
-        <span class="bnav-label">探索</span>
-      </button>
-      <button ref="profileNavButton" class="bnav-item" @click="goProfile">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-        </div>
-        <span class="bnav-label">我的</span>
-      </button>
-    </nav>
 
     <!-- ══ 个人中心面板 ══ -->
     <Transition name="panel-slide">
@@ -1226,7 +1220,7 @@
           <!-- 顶部 -->
           <div class="chat-header">
             <div class="header-center">
-              <img src="/images/logo.jpg" class="ai-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="ai-avatar ai-logo" alt="咕团" />
               <div>
                 <div id="student-chat-title" class="ai-name">咕哝倾诉空间</div>
                 <div class="ai-status">
@@ -1247,7 +1241,7 @@
           <!-- 消息列表 -->
           <div class="chat-messages" ref="msgBox">
             <div class="welcome-wrap" v-if="chatMessages.length === 0">
-              <img src="/images/logo.jpg" class="welcome-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="welcome-avatar ai-logo" alt="咕团" />
               <div class="welcome-bubble">
                 <p>先不用把话组织好。</p>
                 <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
@@ -1257,11 +1251,11 @@
               <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
             </div>
             <div class="chat-ai-consent" role="status">
-              <span><strong>{{ externalAiConsent ? '讯飞策略协作已启用' : '当前使用本地安全回应' }}</strong><small>{{ externalAiConsent ? '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。' : '模型服务暂不可用，系统会继续提供本地安全回应。' }}</small></span>
+              <span><strong>{{ consentTitle }}</strong><small>{{ consentDetail }}</small></span>
             </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
-              <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
+              <img v-if="m.role === 'assistant'" :src="selectedPetFrame" class="msg-avatar ai-logo" alt="咕团" />
               <div class="bubble-wrap">
                 <div v-if="m.role === 'user' && m.emotion" class="emotion-tag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
                   <span>{{ getEmotionEmoji(m.emotion) }}</span>
@@ -1278,7 +1272,7 @@
             </div>
 
             <div v-if="chatLoading" class="msg-row assistant">
-              <img src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="msg-avatar ai-logo" alt="咕团" />
               <div class="bubble-wrap">
                 <div class="bubble typing-bubble">
                   <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -1305,6 +1299,9 @@
             </div>
             <label><input v-model="safetyCurrentSafe" type="checkbox"> 我现在在安全地点，身边没有危险物</label>
             <label><input v-model="safetyContactedAdult" type="checkbox"> 我已经联系并和一位可信成年人待在一起</label>
+            <small v-if="!safetyCurrentSafe || !safetyContactedAdult" class="chat-resolve-hint">
+              请先勾选以上两项，确认你已在安全地点并已联系可信成年人。
+            </small>
             <button
               class="chat-safety-resolve"
               type="button"
@@ -1380,7 +1377,7 @@
         @click="openSummaryDrawer"
       >
         <span class="summary-orb-pixel" aria-hidden="true">
-          <img src="/images/logo.jpg" alt="" />
+          <img :src="selectedPetFrame" alt="" />
         </span>
         <span class="summary-orb-copy">
           <strong>{{ summaryStatus === 'processing' ? '正在整理' : summaryStatus === 'error' ? '整理失败' : '倾诉小结' }}</strong>
@@ -1613,32 +1610,11 @@
         </div>
       </div>
     </Transition>
-
-
-    <!-- 隐藏音频元素2 -->
-    <audio ref="audioEl" src="/audio/bgm.mp3" preload="auto" />
-
-    <!-- 备案信息 -->
-    <footer class="beian-footer">
-      <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
-        <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
-        <span>粤公网安备44011202003950号</span>
-      </a>
-      <span class="beian-divider">|</span>
-      <a
-        href="https://beian.miit.gov.cn/"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="icp-link"
-        aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
-      >粤ICP备2026048986号-2</a>
-    </footer>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, reactive, defineAsyncComponent, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import UiIcon from '../components/UiIcon.vue'
 const MusicListeningShelf = defineAsyncComponent(() => import('../components/MusicListeningShelf.vue'))
 const listeningShelf = ref(null)
 const conversationStarters = [
@@ -1653,13 +1629,15 @@ const conversationFollowups = [
   { emoji: '☕', text: '我想先停一会儿，不用追问。' },
 ]
 function prepareConversation(text) { chatInput.value = text; nextTick(() => inputEl.value?.focus()) }
-function pauseOtherMusic() { audioEl.value?.pause(); musicOn.value = false; musicAudioEl.value?.pause(); activeSongId.value = null }
+function pauseOtherMusic() { stopBgm(); musicAudioEl.value?.pause(); activeSongId.value = null }
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
 import { getMoodStats, getMoodInsight, getEmotionReport } from '../api/mood'
 import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
 import { isOfflineCompanionUrgent } from '../utils/companionSafety'
+import { devHourOverride } from '../utils/timeOfDay'
+import { isBgmMuted, isBgmOn, startBgm, stopBgm, subscribeBgm, toggleBgm } from '../utils/bgm'
 import { deleteStudentAgentRun, getLatestStudentAgentRun } from '../api/studentAgent'
 import {
   completeChatSession,
@@ -1682,6 +1660,7 @@ import petHomeNight from '../assets/island/home-night.png'
 
 const router = useRouter()
 const userStore = useUserStore()
+const SPLASH_SEEN_KEY = 'shengyu_home_entered'
 const splashVersion = (import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || 'local').split('+')[0]
 const displayNickname = computed(() => (userStore.nickname || '朋友').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '朋友')
 
@@ -1809,9 +1788,10 @@ async function restoreLatestStudentAgentRun() {
     studentAgentState.riskLevel = run.risk_level || 'unassessed'
     studentAgentState.source = run.status === 'running' ? 'pending'
       : run.status === 'failed' ? 'unavailable'
-        : ['xunfei-constrained', 'xunfei-response-strategy-selector'].includes(run.model_name) ? 'xunfei_constrained'
-          : run.model_name === 'safety-override' ? 'safety_override'
-            : run.degraded && Object.keys(run.deliverable || {}).length ? 'degraded' : 'deterministic'
+        : run.model_name === 'deepseek-companion' ? 'deepseek_companion'
+          : ['xunfei-constrained', 'xunfei-response-strategy-selector'].includes(run.model_name) ? 'xunfei_constrained'
+            : run.model_name === 'safety-override' ? 'safety_override'
+              : run.degraded && Object.keys(run.deliverable || {}).length ? 'degraded' : 'deterministic'
     studentAgentState.lastEvent = run.events?.at(-1)?.summary || '已恢复最近一次智能体任务'
   } catch {
     // 学生端主体功能不因轨迹恢复失败而中断。
@@ -1933,13 +1913,9 @@ async function handleLeisureSafetySignal() {
 async function handleLeisureSafetyHandoff() {
   closeWorkspacePanel('leisure')
   await nextTick()
-  await openChatPanel()
-  if (leisureSafetyHandoffFailed.value) {
-    applyChatSessionStatus('urgent')
-    safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
-  }
-  await nextTick()
-  focusWithoutScroll(chatPanelRoot.value?.querySelector('.panel-close'))
+  await router.push(leisureSafetyHandoffFailed.value
+    ? { path: '/chat', query: { handoff: 'failed' } }
+    : { path: '/chat' })
 }
 
 function closeWorkspacePanel(key) {
@@ -2016,7 +1992,6 @@ const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
 const PET_COMPANION_STATE_KEY = 'shengyu_guguan_v5_1_0_alpha_6'
-const ROOM_PET_POSITION_KEY = 'shengyu_room_pet_position_v4_5_5'
 const todayKey = new Date().toISOString().slice(0, 10)
 function studentStorageKey(base) {
   return `${base}:${userStore.userId || 'guest'}`
@@ -2086,48 +2061,8 @@ const petHideGuessButtons = ref([])
 let petVisualTimer = null
 const selectedPetFrame = computed(() => GUGUAN_ASSETS[petVisualState.value] || GUGUAN_ASSETS.idle)
 
-const roomRoot = ref(null)
-const roomPetPosition = reactive(loadRoomPetPosition())
-const petIsMoving = ref(false)
-let petMoveTimer = null
-const petRoamingBubble = computed(() => petIsMoving.value ? '我来了' : '点房间，我会过去')
-
-function loadRoomPetPosition() {
-  try {
-    const saved = JSON.parse(safeStudentStorageGet(ROOM_PET_POSITION_KEY) || 'null')
-    if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
-      return safeRoomPetPosition(Number(saved.x), Number(saved.y))
-    }
-  } catch {}
-  return safeRoomPetPosition(window.innerWidth * .72, window.innerHeight * .76)
-}
-function safeRoomPetPosition(x, y) {
-  const minX = Math.max(92, window.innerWidth * .38)
-  const maxX = Math.max(minX, window.innerWidth - 58)
-  const minY = Math.max(220, window.innerHeight * .58)
-  const maxY = Math.max(minY, window.innerHeight - 96)
-  return {
-    x: Math.min(Math.max(x, minX), maxX),
-    y: Math.min(Math.max(y, minY), maxY),
-  }
-}
-function saveRoomPetPosition() {
-  safeStudentStorageSet(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
-}
 function openPetPlayground() {
   openWorkspacePanel('pet')
-}
-function handleRoomPetMove(event) {
-  if (showSplash.value || showPetCompanionPanel.value) return
-  const target = event.target
-  if (target?.closest?.('button, a, input, textarea, select, .hot-zone, .bottom-nav, .room-status-bar, .room-onboarding-cue, .room-action-bar, .transport-panel, .profile-panel, .chat-panel, .report-panel, .healing-panel, .treehole-panel')) return
-  const next = safeRoomPetPosition(event.clientX, event.clientY)
-  roomPetPosition.x = next.x
-  roomPetPosition.y = next.y
-  saveRoomPetPosition()
-  petIsMoving.value = true
-  if (petMoveTimer) clearTimeout(petMoveTimer)
-  petMoveTimer = setTimeout(() => { petIsMoving.value = false }, 720)
 }
 function showPetVisual(state, duration = 1800) {
   petVisualState.value = GUGUAN_ASSETS[state] ? state : 'idle'
@@ -2412,11 +2347,6 @@ function selectRoomFeature(id, event) {
   selectedRoomFeatureId.value = id
 }
 
-function openWindowJourney(event) {
-  roomFeatureTrigger = event?.currentTarget || roomFeatureTrigger
-  openWorkspacePanel('transport', roomFeatureTrigger)
-}
-
 function clearRoomFeature(restoreFocus = true) {
   selectedRoomFeatureId.value = ''
   if (restoreFocus) nextTick(() => focusWithoutScroll(roomFeatureTrigger))
@@ -2467,11 +2397,39 @@ function setPetStatus(status, message) {
   savePetCompanionState()
 }
 function petPetting() {
+  const firstPetToday = petCompanionState.pettedDate !== todayKey
   bumpPetAffinityOnce('pettedDate')
   petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 12, 0, 100)
-  rememberPetCare('你摸了摸咕团，它把这份靠近记在了星尾巴里。')
+  if (firstPetToday) rememberPetCare('你摸了摸咕团，它把这份靠近记在了星尾巴里。')
   showPetVisual('happy')
   setPetStatus('happy', '咕！它蹭了蹭你，星尾巴亮了一下。')
+}
+const PET_HOME_RESPONSES = [
+  '咕！它眯起眼睛，往你手心里蹭了蹭。',
+  '星尾巴亮了一下，它又靠近了你一点。',
+  '咕团软软地叫了一声，开心得原地跳了跳。',
+  '它把脑袋歪过来，像是在等你再摸一下。',
+]
+let petHomeResponseIndex = 0
+const petReactionActive = ref(false)
+const petReactionKey = ref(0)
+let petReactionTimer = null
+function petGuguanHome(event) {
+  petPetting()
+  setPetStatus('happy', PET_HOME_RESPONSES[petHomeResponseIndex % PET_HOME_RESPONSES.length])
+  petHomeResponseIndex = (petHomeResponseIndex + 1) % PET_HOME_RESPONSES.length
+  petReactionKey.value += 1
+  petReactionActive.value = true
+  if (petReactionTimer) clearTimeout(petReactionTimer)
+  petReactionTimer = setTimeout(() => { petReactionActive.value = false }, 1500)
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  event?.currentTarget?.querySelector('img')?.animate?.([
+    { transform: 'translateY(0) scale(1)' },
+    { transform: 'translateY(-18px) scale(1.06)', offset: .25 },
+    { transform: 'translateY(-4px) scale(1.01)', offset: .5 },
+    { transform: 'translateY(-12px) scale(1.04)', offset: .72 },
+    { transform: 'translateY(0) scale(1)' },
+  ], { duration: 640, easing: 'steps(6, end)' })
 }
 function feedPetSnack() {
   bumpPetAffinityOnce('fedDate')
@@ -2631,18 +2589,17 @@ function completeFirstRunAfterChat(message, reply) {
   guideStage.value = 'mood-card'
 }
 function focusGuideTarget() {
-  const selector = guideStage.value === 'confession' ? '.chat-panel .input-wrap input' : '.zone-monitor'
-  const target = document.querySelector(selector)
-  target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-  if (guideStage.value === 'confession') focusWithoutScroll(inputEl.value)
-  else selectRoomFeature('chat')
+  if (guideStage.value === 'confession') { handleGuideChatTarget(); return }
+  const target = chatNavButton.value
+  target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  target?.focus({ preventScroll: true })
 }
 function handleGuideChatTarget() {
-  goToChat()
   if (showFirstRunGuide.value && guideStage.value === 'computer') {
     guideStage.value = 'confession'
-    nextTick(() => focusWithoutScroll(inputEl.value))
+    try { sessionStorage.setItem('gy_guide_pending_chat', '1') } catch {}
   }
+  goToChat()
 }
 function openTreeHoleFromMoodCard() {
   showFirstRunGuide.value = false
@@ -2796,9 +2753,7 @@ function stopXianCityMusic() {
 
 function playMetroAudio(src) {
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 创建并播放地铁音乐
   if (!metroAudioEl.value) {
     metroAudioEl.value = new Audio()
@@ -2930,9 +2885,7 @@ function closeXianPanel() {
   shadowPuppetStep.value = 0
   // 停止西安城市音乐，恢复背景音乐
   stopXianCityMusic()
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
-  }
+  if (!isBgmMuted()) startBgm()
 }
 
 function startPuppetMaking() {
@@ -2949,9 +2902,7 @@ function closePuppetPopup() {
 function openVideoPlayer() {
   showVideoPlayer.value = true
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 暂停西安城市音乐
   if (xianMusicEl.value) {
     xianMusicEl.value.pause()
@@ -2966,16 +2917,16 @@ function closeVideoPlayer() {
   // 如果在西安面板内，恢复城市音乐而非BGM
   if (showXianPanel.value && xianMusicEl.value) {
     xianMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 function onVideoEnded() {
   // 视频播放结束，恢复音乐
   if (showXianPanel.value && xianMusicEl.value) {
     xianMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 
@@ -3070,9 +3021,7 @@ function closeLuoyangPanel() {
   closeRubbingPopup()
   // 停止洛阳城市音乐，恢复背景音乐
   stopLuoyangCityMusic()
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
-  }
+  if (!isBgmMuted()) startBgm()
 }
 function startRubbing() {
   showRubbingPopup.value = true
@@ -3099,9 +3048,7 @@ function resetRubbing() {
 function openLuoyangVideoPlayer() {
   showLuoyangVideoPlayer.value = true
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 暂停洛阳城市音乐
   if (luoyangMusicEl.value) {
     luoyangMusicEl.value.pause()
@@ -3116,15 +3063,15 @@ function closeLuoyangVideoPlayer() {
   // 如果在洛阳面板内，恢复城市音乐而非BGM
   if (showLuoyangPanel.value && luoyangMusicEl.value) {
     luoyangMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 function onLuoyangVideoEnded() {
   if (showLuoyangPanel.value && luoyangMusicEl.value) {
     luoyangMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 
@@ -3240,14 +3187,20 @@ function clearStatus() {
 const distribution = ref({})
 const totalMoodCount = computed(() => Object.values(distribution.value).reduce((a, b) => a + b, 0))
 
-// 情绪分布说明：数据只来自学生主动选择的心情记录，不从对话语气推断。
-const moodJudgeNote = {
-  '开心': '你主动选择“开心”的记录次数，占当前心情记录总数的比例',
-  '平静': '你主动选择“平静”的记录次数，占当前心情记录总数的比例',
-  '焦虑': '你主动选择“焦虑”的记录次数，占当前心情记录总数的比例',
-  '难过': '你主动选择“难过”的记录次数，占当前心情记录总数的比例',
-  '愤怒': '你主动选择“愤怒”的记录次数，占当前心情记录总数的比例',
+// 新七类是主动记录的唯一选项；旧标签保留用于历史记录与对话识别。
+const MOOD_EMOJI = {
+  '愤怒': '😠', '厌恶': '🤢', '恐惧': '😨', '开心': '😊', '中性': '😐', '悲伤': '😢', '惊讶': '😲',
+  '平静': '😌', '焦虑': '😟', '难过': '😢',
 }
+const MOOD_COLOR = {
+  '愤怒': '#D4776A', '厌恶': '#A98A5C', '恐惧': '#8B7BA6', '开心': '#6DB58B',
+  '中性': '#A8A29A', '悲伤': '#8EAFC4', '惊讶': '#E8C468',
+  '平静': '#7FB3A6', '焦虑': '#E8C468', '难过': '#8EAFC4',
+}
+// 情绪分布说明：数据只来自学生主动选择的心情记录，不从对话语气推断。
+const moodJudgeNote = Object.fromEntries(
+  Object.keys(MOOD_EMOJI).map(label => [label, `你主动选择“${label}”的记录次数，占当前心情记录总数的比例`]),
+)
 // 占比最大时的安慰/建议
 const moodComfort = {
   '开心': '太棒了！保持这份好心情，你值得每一刻的快乐 🌟',
@@ -3255,6 +3208,11 @@ const moodComfort = {
   '焦虑': '焦虑是大脑在提醒你重视某事，不是你的敌人。试着深呼吸，你已经做得很好了 💛',
   '难过': '难过没关系，它是你柔软内心的证明。如果愿意，我一直在这里倾听 🤍',
   '愤怒': '愤怒是边界被触碰的信号。允许自己生气，但别让情绪控制你。找个出口释放它吧 💪',
+  '厌恶': '厌恶感在提醒你，有些东西不适合你。先离远一点，保护好自己的边界 🛡️',
+  '恐惧': '害怕的时候，说明你在认真保护自己。先找一个让你安心的地方，慢慢呼吸 🫧',
+  '中性': '平静地记录也是一种照顾自己。没有强烈情绪的日子，同样值得被看见 🌿',
+  '悲伤': '悲伤让心里的重量慢下来。不用急着好起来，我会在这里陪你一会儿 🤍',
+  '惊讶': '惊讶说明生活里还有意想不到的事。先停一停，等心里的波纹散开 ✨',
 }
 const topMoodLabels = computed(() => {
   const dist = distribution.value
@@ -3524,11 +3482,18 @@ const emotionTendency = computed(() => {
   const dist = distribution.value
   if (!Object.keys(dist).length) return 0
   const total = totalMoodCount.value
-  const pos = (dist['开心'] || 0) + (dist['平静'] || 0) * 0.5
+  const pos = (dist['开心'] || 0) + (dist['中性'] || 0) * 0.5 + (dist['平静'] || 0) * 0.5
   const neg = (dist['焦虑'] || 0) + (dist['难过'] || 0) + (dist['愤怒'] || 0)
+    + (dist['厌恶'] || 0) + (dist['恐惧'] || 0) + (dist['悲伤'] || 0)
   if (total === 0) return 0
   return Math.round(((pos - neg) / total) * 100)
 })
+
+// 新情绪并入原有曲风亲和力维度；旧标签保留以兼容历史记录。
+const MUSIC_MOOD_BASE = { '厌恶': '愤怒', '恐惧': '焦虑', '悲伤': '难过', '中性': '平静', '惊讶': '开心' }
+function musicMoodAffinity(style, label) {
+  return style.affinity[label] ?? style.affinity[MUSIC_MOOD_BASE[label]] ?? 0
+}
 
 // ─── 核心推荐算法 ───
 const musicRecs = computed(() => {
@@ -3547,11 +3512,16 @@ const musicRecs = computed(() => {
   const tendency = emotionTendency.value
 
   const scored = musicStyles.map(s => {
-    const primaryMatch = s.affinity[primary] || 0
+    const primaryMatch = musicMoodAffinity(s, primary)
     const emotionScore = (primaryMatch / 10) * 50
 
-    const posAffinity = Math.max(s.affinity['开心'] || 0, s.affinity['平静'] || 0)
-    const negAffinity = Math.max(s.affinity['焦虑'] || 0, s.affinity['难过'] || 0, s.affinity['愤怒'] || 0)
+    const posAffinity = Math.max(
+      musicMoodAffinity(s, '开心'), musicMoodAffinity(s, '平静'), musicMoodAffinity(s, '中性'),
+    )
+    const negAffinity = Math.max(
+      musicMoodAffinity(s, '焦虑'), musicMoodAffinity(s, '难过'), musicMoodAffinity(s, '愤怒'),
+      musicMoodAffinity(s, '厌恶'), musicMoodAffinity(s, '恐惧'), musicMoodAffinity(s, '悲伤'),
+    )
     let tendencyBonus = 0
     if (tendency > 0) {
       tendencyBonus = (posAffinity / 10) * (tendency / 100) * 20
@@ -3602,10 +3572,7 @@ const topMood = computed(() => {
   if (!Object.keys(dist).length) return '--'
   return Object.entries(dist).sort((a, b) => b[1] - a[1])[0][0]
 })
-const topMoodEmoji = computed(() => {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[topMood.value] || '--'
-})
+const topMoodEmoji = computed(() => MOOD_EMOJI[topMood.value] || '--')
 const sortedDist = computed(() => {
   const dist = trendStats.value.distribution || {}
   return Object.fromEntries(Object.entries(dist).sort((a, b) => b[1] - a[1]))
@@ -3634,12 +3601,10 @@ const xLabels = computed(() => {
 })
 
 function getMoodEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[label] || '🙂'
+  return MOOD_EMOJI[label] || '🙂'
 }
 function getMoodColor(label) {
-  const c = { '开心': '#6DB58B', '平静': '#7FB3A6', '焦虑': '#E8C468', '难过': '#8EAFC4', '愤怒': '#D4776A' }
-  return c[label] || '#C8BEB4'
+  return MOOD_COLOR[label] || '#C8BEB4'
 }
 function getDistWidth(count) {
   const total = Object.values(trendStats.value.distribution || {}).reduce((a, b) => a + b, 0)
@@ -3714,8 +3679,7 @@ function buildStatusCalendar() {
 }
 
 function getEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[label] || '🙂'
+  return MOOD_EMOJI[label] || '🙂'
 }
 
 function getPercent(count) {
@@ -3765,73 +3729,26 @@ function openProfile() {
   loadStats()
 }
 
-// ─── 欢迎遮罩 & BGM ───
-const showSplash = ref(true)
+// ─── 欢迎遮罩 & BGM（与聊天 / 回顾 / 我的共用单例） ───
+const showSplash = ref(safeSessionGet(SPLASH_SEEN_KEY) !== '1')
+const musicOn = ref(isBgmOn())
 const audioEl = ref(null)
-const musicOn = ref(true)
+let unsubscribeBgm = () => {}
 
-// BGM播放列表
-const bgmPlaylist = [
-  '/audio/bgm.mp3',
-  '/audio/bgm-song2.mp3',
-  '/audio/bgm-song3.mp3',
-]
-const bgmIndex = ref(0)
-
-function initBgmPlaylist() {
-  if (!audioEl.value) return
-  audioEl.value.addEventListener('ended', () => {
-    bgmIndex.value = (bgmIndex.value + 1) % bgmPlaylist.length
-    audioEl.value.src = bgmPlaylist[bgmIndex.value]
-    if (musicOn.value) {
-      audioEl.value.play().catch(() => {})
-    }
-  })
+function safeSessionGet(key) {
+  try { return sessionStorage.getItem(key) } catch { return null }
 }
 
-function enterApp() {
+async function enterApp() {
   showSplash.value = false
-  // 用户触发点击，绕过浏览器自动播放限制
-  if (audioEl.value) {
-    bgmIndex.value = 0
-    audioEl.value.src = bgmPlaylist[0]
-    audioEl.value.volume = 0
-    audioEl.value.play().then(() => {
-      // 渐入音量
-      let vol = 0
-      const fade = setInterval(() => {
-        vol = Math.min(vol + 0.04, 0.45)
-        audioEl.value.volume = vol
-        if (vol >= 0.45) clearInterval(fade)
-      }, 80)
-    }).catch(() => {})
-    initBgmPlaylist()
-  }
+  try { sessionStorage.setItem(SPLASH_SEEN_KEY, '1') } catch {}
+  // 用户手势内启动，绕过浏览器自动播放限制
+  musicOn.value = await startBgm()
 }
 
-function toggleMusic() {
+async function toggleMusic() {
   listeningShelf.value?.pause()
-  if (!audioEl.value) return
-  if (musicOn.value) {
-    // 渐出后暂停
-    let vol = audioEl.value.volume
-    const fade = setInterval(() => {
-      vol = Math.max(vol - 0.05, 0)
-      audioEl.value.volume = vol
-      if (vol <= 0) { clearInterval(fade); audioEl.value.pause() }
-    }, 50)
-  } else {
-    // 恢复播放并渐入
-    audioEl.value.play().then(() => {
-      let vol = 0
-      const fade = setInterval(() => {
-        vol = Math.min(vol + 0.04, 0.45)
-        audioEl.value.volume = vol
-        if (vol >= 0.45) clearInterval(fade)
-      }, 80)
-    }).catch(() => {})
-  }
-  musicOn.value = !musicOn.value
+  musicOn.value = await toggleBgm()
 }
 
 // ─── 调试模式 ───
@@ -3839,13 +3756,25 @@ const debugTime = ref('auto')
 const debugWeather = ref('auto')
 
 // ─── 时间 ───
-const currentHour = ref(new Date().getHours())
+const currentHour = ref(devHourOverride() ?? new Date().getHours())
 const currentTime = ref('')
+const celestialNow = ref(fixPreviewHour(new Date()))
 let timer = null
 
+function fixPreviewHour(now) {
+  const hour = devHourOverride()
+  if (hour === null) return now
+  const fixed = new Date(now)
+  fixed.setHours(hour, 0, 0, 0)
+  return fixed
+}
+
 function tick() {
-  const now = new Date()
-  if (debugTime.value === 'auto') currentHour.value = now.getHours()
+  const now = fixPreviewHour(new Date())
+  celestialNow.value = now
+  const previewHour = devHourOverride()
+  if (previewHour !== null) currentHour.value = previewHour
+  else if (debugTime.value === 'auto') currentHour.value = now.getHours()
   currentTime.value = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -3857,19 +3786,96 @@ const timeOfDay = computed(() => {
 })
 const petHomeScene = computed(() => timeOfDay.value === 'day' ? petHomeDay : timeOfDay.value === 'evening' ? petHomeDusk : petHomeNight)
 
-// ─── 屏幕尺寸检测 ───
-const isDesktop = ref(window.innerWidth >= 768)
-function onResize() { isDesktop.value = window.innerWidth >= 768 }
+// ─── 天象：太阳走日间弧线，月亮走夜间弧线并按真实月相盈亏 ───
+const SYNODIC_MONTH = 29.530588853
+const NEW_MOON_EPOCH = Date.UTC(2000, 0, 6, 18, 14)
 
-// ─── 昼夜背景图 ───
-const bgImage = computed(() => {
-  if (isDesktop.value) {
-    if (timeOfDay.value === 'day') return '/images/电脑端-白天.webp'
-    if (timeOfDay.value === 'evening') return '/images/电脑端-傍晚.webp'
-    return '/images/电脑端-夜晚.webp'
+function lerpHex(from, to, t) {
+  const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const [fr, fg, fb] = channels(from)
+  const [tr, tg, tb] = channels(to)
+  const mix = (a, b) => Math.round(a + (b - a) * t).toString(16).padStart(2, '0')
+  return `#${mix(fr, tr)}${mix(fg, tg)}${mix(fb, tb)}`
+}
+
+function discRows(radius, step, fill, opacity) {
+  const rows = []
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const half = Math.sqrt(Math.max(0, radius * radius - (y + h / 2) ** 2))
+    if (half < 1) continue
+    rows.push({ x: Math.round(-half), y: Math.round(y), w: Math.round(half * 2), h: Math.round(h), fill, opacity })
   }
-  if (timeOfDay.value === 'day') return '/images/白天.webp'
-  return '/images/夜晚.webp'
+  return rows
+}
+
+function ringRows(radius, thickness, step, fill, opacity) {
+  const rows = []
+  const inner = radius - thickness
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const mid = y + h / 2
+    const outer = Math.sqrt(Math.max(0, radius * radius - mid * mid))
+    if (outer < 1) continue
+    const innerHalf = Math.abs(mid) < inner ? Math.sqrt(Math.max(0, inner * inner - mid * mid)) : 0
+    const band = Math.max(0, Math.round(outer - innerHalf))
+    if (band < 1) continue
+    rows.push({ x: Math.round(-outer), y: Math.round(y), w: band, h: Math.round(h), fill, opacity })
+    if (innerHalf > 1) rows.push({ x: Math.round(innerHalf), y: Math.round(y), w: band, h: Math.round(h), fill, opacity })
+  }
+  return rows
+}
+
+function moonLitRows(radius, step, phase, fill, opacity) {
+  const angle = phase * Math.PI * 2
+  const waxing = phase < 0.5
+  const cosine = Math.cos(waxing ? angle : Math.PI * 2 - angle)
+  const rows = []
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const half = Math.sqrt(Math.max(0, radius * radius - (y + h / 2) ** 2))
+    if (half < 1) continue
+    const boundary = Math.round(cosine * half)
+    const start = waxing ? boundary : -Math.round(half)
+    const end = waxing ? Math.round(half) : -boundary
+    if (end - start < 1) continue
+    rows.push({ x: start, y: Math.round(y), w: end - start, h: Math.round(h), fill, opacity })
+  }
+  return rows
+}
+
+const celestialState = computed(() => {
+  const now = celestialNow.value
+  const hour = now.getHours() + now.getMinutes() / 60
+  const rects = []
+  let kind = 'sun'
+  let x = 800
+  let y = 430
+  if (hour >= 6 && hour < 18) {
+    const progress = (hour - 6) / 12
+    x = 560 + 480 * progress
+    y = 430 - 220 * Math.sin(Math.PI * progress)
+    const horizon = Math.min(1, Math.abs(progress * 2 - 1))
+    const main = lerpHex('#f3d69d', '#e9a05b', horizon)
+    const ring = lerpHex('#d8a967', '#bf7a42', horizon)
+    rects.push(...discRows(196, 12, ring, 0.07))
+    rects.push(...ringRows(166, 7, 10, ring, 0.4))
+    rects.push(...discRows(150, 10, main, 0.55))
+  } else {
+    kind = 'moon'
+    const progress = hour >= 18 ? (hour - 18) / 12 : (hour + 6) / 12
+    x = 1040 - 480 * progress
+    y = 430 - 220 * Math.sin(Math.PI * progress)
+    const days = (now.getTime() - NEW_MOON_EPOCH) / 86400000
+    const age = ((days % SYNODIC_MONTH) + SYNODIC_MONTH) % SYNODIC_MONTH
+    const phase = age / SYNODIC_MONTH
+    const illumination = (1 - Math.cos(phase * Math.PI * 2)) / 2
+    rects.push(...discRows(150, 12, '#e3c27d', 0.05))
+    rects.push(...ringRows(128, 6, 9, '#cba968', 0.12 + 0.2 * illumination))
+    rects.push(...discRows(110, 9, '#f2e3c0', 0.05))
+    rects.push(...moonLitRows(110, 9, phase, '#f8ebca', 0.94))
+  }
+  return { kind, x: Math.round(x), y: Math.round(y), rects }
 })
 
 const greeting = computed(() => {
@@ -3918,14 +3924,26 @@ function refreshWeather() {
   }
 }
 
-// ─── 导航 ───
-function goToChat()  { openChatPanel() }
-function goToTrend() { openTrendPanel() }
-function goProfile() { openProfile() }
+// ─── 导航：房间只负责场景，倾诉 / 回顾 / 我的各自是路由页 ───
+function goToChat()  { router.push('/chat') }
+async function goToTrend() { await router.push('/trend') }
+function goProfile() { router.push('/profile') }
 
 // ═══ 聊天面板 ═══
 const chatInput = ref('')
 const externalAiConsent = ref(false)
+const companionEngine = ref(null)
+const consentTitle = computed(() => {
+  if (!externalAiConsent.value) return '当前使用本地安全回应'
+  return companionEngine.value === 'legacy_xunfei' ? '讯飞策略协作已启用' : 'DeepSeek 小满对话已启用'
+})
+const consentDetail = computed(() => {
+  if (!externalAiConsent.value) return '模型服务暂不可用，系统会继续提供本地安全回应。'
+  if (companionEngine.value === 'legacy_xunfei') {
+    return '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。'
+  }
+  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
+})
 const voiceInputEnabled = ref(false)
 const chatMessages = ref([])
 const chatLoading = ref(false)
@@ -3988,11 +4006,10 @@ function onQuickMouseUp() {
 }
 
 function getEmotionEmoji(emotion) {
-  const map = {
-    '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴',
-    '孤独': '🌙', '委屈': '💧', '害怕': '🫧', '复杂': '🌀', '不确定': '…',
+  const extra = {
+    '疲惫': '😴', '孤独': '🌙', '委屈': '💧', '害怕': '🫧', '复杂': '🌀', '不确定': '…',
   }
-  return map[emotion] || '🙂'
+  return MOOD_EMOJI[emotion] || extra[emotion] || '🙂'
 }
 
 async function sendChatMsg(text) {
@@ -4022,13 +4039,23 @@ async function sendChatMsg(text) {
     await userStore.ensureStudentSession(true)
     const session = await startChatSession(false)
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
-    if (!chatSessionId.value) {
-      chatSessionId.value = session.data.session_id
-    }
+    chatSessionId.value = session.data.session_id
     const requestKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    let res
+    try {
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    } catch (err) {
+      if (err.response?.status !== 409 || !String(err.response.data?.detail || '').includes('隐私说明已更新')) throw err
+      const fresh = await startChatSession(true)
+      chatSessionId.value = fresh.data.session_id
+      externalAiConsent.value = !!fresh.data.external_ai_enabled
+      companionEngine.value = fresh.data.companion_engine || null
+      voiceInputEnabled.value = !!fresh.data.voice_input_enabled
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    }
     await nextTick()
     if (res.data?.reply) {
       chatMessages.value[userMessageIndex] = {
@@ -4041,11 +4068,13 @@ async function sendChatMsg(text) {
       completeFirstRunAfterChat(msg, res.data)
       showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
       studentAgentState.signal = res.data.conversation_signal || 'continue'
-      studentAgentState.source = res.data.analysis_source === 'xunfei_constrained'
-        ? 'xunfei_constrained'
-        : res.data.analysis_source === 'safety_override'
-          ? 'safety_override'
-          : 'deterministic'
+      studentAgentState.source = res.data.analysis_source === 'deepseek_companion'
+        ? 'deepseek_companion'
+        : res.data.analysis_source === 'xunfei_constrained'
+          ? 'xunfei_constrained'
+          : res.data.analysis_source === 'safety_override'
+            ? 'safety_override'
+            : 'deterministic'
       studentAgentState.emotion = res.data.emotion || ''
       studentAgentState.riskLevel = res.data.risk_level || 'routine'
       studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
@@ -4372,6 +4401,7 @@ async function startRecording() {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     if (!voiceInputEnabled.value) {
       alert('语音输入需要独立授权，当前请使用文字输入')
@@ -4440,6 +4470,7 @@ async function playTTS(text) {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     if (!externalAiConsent.value) throw new Error('authorization unavailable')
   } catch {
@@ -4466,6 +4497,7 @@ async function openChatPanel() {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
     externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
     voiceInputEnabled.value = !!session.data.voice_input_enabled
     applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
@@ -4486,18 +4518,32 @@ async function loadLatestConversationSummary() {
   } catch {}
 }
 
-onMounted(async () => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); await loadLatestConversationSummary(); await restoreLatestStudentAgentRun() })
+const hasOpenOverlay = computed(() => {
+  const panels = roomWorkspacePanels()
+  return Object.values(panels).some(panel => panel.value)
+    || showStatusPicker.value || showPwdModal.value
+    || showXianPanel.value || showXianTransition.value
+    || showLuoyangPanel.value || showLuoyangTransition.value
+})
+watch(hasOpenOverlay, open => {
+  document.body.classList.toggle('lobby-modal-open', open)
+}, { immediate: true })
+
+onMounted(async () => {
+  unsubscribeBgm = subscribeBgm(value => { musicOn.value = value })
+  tick(); timer = setInterval(tick, 30000); refreshWeather(); buildStatusCalendar(); loadStats(); await loadLatestConversationSummary(); await restoreLatestStudentAgentRun()
+})
 onUnmounted(() => {
+  unsubscribeBgm()
   if (timer) clearInterval(timer)
   if (petVisualTimer) clearTimeout(petVisualTimer)
-  if (petMoveTimer) clearTimeout(petMoveTimer)
-  if (audioEl.value) audioEl.value.pause()
-  window.removeEventListener('resize', onResize)
+  if (petReactionTimer) clearTimeout(petReactionTimer)
+  document.body.classList.remove('lobby-modal-open')
 })
 </script>
 
 <style scoped>
-.music-panel .music-toggle-btn{display:none}.music-panel .trend-header{padding-right:42px}.chat-panel .msg-row .bubble{font-size:14px}.music-panel{border-radius:16px!important}
+.music-panel .music-toggle-btn{display:none}.music-panel .trend-header{padding-right:42px}.chat-panel .msg-row .bubble{font-size:14px}.music-panel{border-radius:6px!important}
 .music-direct-entry{display:none}
 .conversation-starters{display:flex;flex-direction:column;gap:6px;margin:0 0 18px 42px}.conversation-starters button{display:flex;align-items:baseline;gap:12px;padding:12px;text-align:left;border:1px solid #70634e;border-radius:8px;background:#302923;color:#f4eddf;cursor:pointer;font:inherit}.conversation-starters button strong{font-size:13px;white-space:nowrap}.conversation-starters button span{font-size:12px;line-height:1.6;color:#dbceb8}.conversation-starters button:hover{background:#403729}.conversation-starters button:focus-visible{outline:3px solid #ead29b;outline-offset:2px}.music-recommendation-details{color:#d7cbb7;margin:12px 0}.music-recommendation-details summary{cursor:pointer;min-height:36px}.chat-panel .msg-row .bubble{white-space:pre-wrap;line-height:1.85}.chat-panel .welcome-bubble p{line-height:1.75}
 @media(min-width:900px){.music-direct-entry{display:flex}.music-panel{width:min(760px,92vw)!important}.chat-panel{width:min(720px,92vw)!important}.chat-panel .chat-messages{padding:20px 24px}.chat-panel .bubble-wrap{max-width:85%}.chat-panel .chat-ai-consent{margin-bottom:20px}}
@@ -4507,8 +4553,6 @@ onUnmounted(() => {
   width: 100%; height: 100vh; position: relative; overflow: hidden;
   font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
 }
-
-
 
 /* ═══════════ 复访引导：每日仪式 + 首次提示 ═══════════ */
 .engagement-stack {
@@ -4634,52 +4678,8 @@ onUnmounted(() => {
   transform: translateY(-1px);
   background: #fff0c6;
 }
-  .room-roaming-pet {
-  position: fixed;
-  z-index: 36;
-  width: 88px;
-  min-height: 92px;
-  transform: translate(-50%, -78%);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: left 0.68s cubic-bezier(0.22, 1, 0.36, 1), top 0.68s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
-  pointer-events: auto;
-}
-.room-roaming-pet img {
-  width: 86px;
-  height: 86px;
-  object-fit: contain;
-  filter: drop-shadow(0 14px 18px rgba(0,0,0,0.34));
-}
-.room-roaming-pet span {
-  position: absolute;
-  left: 50%;
-  top: -16px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: rgba(38, 30, 42, 0.78);
-  color: #fff8e8;
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.2);
-  opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.room-roaming-pet:hover span,
-.room-roaming-pet.moving span {
-  opacity: 1;
-  transform: translate(-50%, -4px);
-}
-.room-roaming-pet.moving img {
-  animation: pet-run-bob 0.34s ease-in-out infinite;
-}
-@keyframes pet-run-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-6px) scale(1.03); }
-}
+  
+
 .pet-companion-card {
   position: fixed;
   right: 24px;
@@ -4916,7 +4916,7 @@ onUnmounted(() => {
 .guide-target-badge { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); padding: 7px 12px; border-radius: 999px; background: rgba(35, 25, 14, 0.86); color: #fff4cc; font-size: 13px; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
 .nav-guide-badge { top: -36px; }
 @keyframes guide-target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
-@media (max-width: 760px) {
+@media (max-width: 760px){
   .pet-companion-card {
     left: 12px;
     right: 12px;
@@ -4939,8 +4939,8 @@ onUnmounted(() => {
   .pet-panel-avatar span { font-size: 32px; }
   .pet-panel-actions { grid-template-columns: 1fr; }
   .pet-playground-stage { min-height: 220px; }
-  .room-roaming-pet { width: 72px; min-height: 76px; }
-  .room-roaming-pet img { width: 70px; height: 70px; }
+  
+  
 }
 @media (max-width: 520px) {
   .engagement-stack {
@@ -5018,8 +5018,6 @@ onUnmounted(() => {
 .splash-fade-leave-to     { opacity: 0; filter: blur(8px); }
 
 /* ═══════════ 背景图 ═══════════ */
-.bg-wrap { position: absolute; inset: 0; z-index: 0; }
-.room-bg { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 
 /* ═══════════ 顶部信息栏 ═══════════ */
 .top-bar {
@@ -5073,95 +5071,12 @@ onUnmounted(() => {
 .music-toggle-btn:hover { background: rgba(255,255,255,0.15); color: #E8E2D8; }
 
 /* ═══════════ 交互热区 ═══════════ */
-.hot-zone {
-  position: absolute; z-index: 10;
-  cursor: pointer; border-radius: 8px; transition: background 0.3s;
-}
-.hot-zone:hover { background: rgba(255,255,255,0.06); }
-
 
 /* 窗户悬浮文字 */
-.window-label {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%) rotate(15deg) scale(0.96);
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(18, 24, 32, 0.48);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-shadow: 0 1px 8px rgba(0,0,0,0.6);
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.zone-window:hover .window-label {
-  opacity: 1;
-  transform: translate(-50%, -50%) rotate(15deg) scale(1.04);
-}
-
-.zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }
-.zone-bed     { bottom: 20%; left: 8%; width: 26%; height: 20%; transform: rotate(-38deg); }
-.zone-window  { top: 14%; left: 12%; width: 30%; height: 33%; transform: rotate(-15deg); }
-.zone-speaker { width: 3%; height: 10%; border-radius: 30%; }
-.zone-speaker-left { top: 45%; left: 38.6%; }
-.zone-speaker-right { top: 44%; right: 45%; }
-.zone-speaker .hover-tip { font-size: 10px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
-.zone-speaker:hover .hover-tip { opacity: 1; }
 
 /* ── 音响热区 — 音符飘浮动画 ── */
-.zone-speaker { overflow: visible; }
-.zone-speaker .speaker-notes { display: none; }
-.zone-speaker:hover .speaker-notes { display: block; }
-.zone-speaker .speaker-notes .note {
-  position: absolute; pointer-events: none;
-  font-size: 16px; opacity: 0; filter: drop-shadow(0 0 6px rgba(255,215,0,0.7));
-  animation: note-float-up 1.4s ease-out infinite;
-}
-.zone-speaker .speaker-notes .note.n1 { animation-delay: 0s;   left: -16px; top: 60%; }
-.zone-speaker .speaker-notes .note.n2 { animation-delay: 0.25s; left: 14px;  top: 50%; }
-.zone-speaker .speaker-notes .note.n3 { animation-delay: 0.5s;  left: -8px;  top: 40%; }
-.zone-speaker .speaker-notes .note.n4 { animation-delay: 0.75s; left: 16px;  top: 30%; }
-.zone-speaker .speaker-notes .note.n5 { animation-delay: 1.0s;  left: 0px;   top: 20%; }
-
-@keyframes note-float-up {
-  0%   { opacity: 0; transform: translateY(0) scale(0.6) rotate(0deg); }
-  15%  { opacity: 1; }
-  70%  { opacity: 0.7; }
-  100% { opacity: 0; transform: translateY(-36px) scale(1.4) rotate(15deg); }
-}
-
-.hover-tip {
-  position: absolute; bottom: -8px; left: 50%;
-  font-size: 12px; padding: 4px 14px; border-radius: 12px;
-  white-space: nowrap; opacity: 0;
-  pointer-events: none; backdrop-filter: blur(6px);
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity 0.25s, transform 0.25s;
-}
-.hot-zone:hover .hover-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
-.night .hover-tip   { background: rgba(0,0,0,0.5); color: #E0D4C8; }
-.day .hover-tip,
-.evening .hover-tip { background: rgba(255,255,255,0.75); color: #5A5450; }
 
 /* 床上悬浮文字标签 */
-.bed-label {
-  position: absolute;
-  top: 40%; left: 50%;
-  transform: translate(-50%, -50%) rotate(38deg);
-  font-size: 13px; font-weight: 500;
-  color: rgba(255,255,255,0.92);
-  text-shadow: 0 1px 6px rgba(0,0,0,0.35);
-  white-space: nowrap;
-  pointer-events: none;
-  letter-spacing: 1px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.hot-zone:hover .bed-label { opacity: 1; }
 
 /* ═══════════ 出去看看面板 ═══════════ */
 .transport-panel, .city-panel { padding-top: 14px; }
@@ -5246,61 +5161,7 @@ onUnmounted(() => {
   cursor: pointer; transition: all 0.2s;
 }
 .back-btn:hover { background: rgba(255,255,255,0.1); }
-.bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; align-items: center; justify-content: center;
-  gap: 10px; padding: 0 0 16px; z-index: 100;
-  background: transparent; pointer-events: none;
-}
-.bottom-nav::before {
-  content: ''; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-  width: 350px; height: 60px; border-radius: 30px;
-  background: rgba(0,0,0,0.25);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.2);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
-}
-.bnav-item {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px;
-  background: none; border: none; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  position: relative; z-index: 1;
-  width: 58px; height: 50px; border-radius: 14px;
-  color: rgba(255,255,255,0.7); transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
-  pointer-events: auto;
-}
-.bnav-item .icon-wrap {
-  width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 6px;
-  background: transparent; border: none;
-  transition: all 0.25s;
-}
-.bnav-item:hover {
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transform: scale(1.05);
-}
-.bnav-item:active { transform: scale(0.93); }
-.bnav-item.active {
-  color: #FFFFFF;
-  background: rgba(255,255,255,0.15);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12);
-}
-.bnav-item.active .icon-wrap { background: transparent; border: none; animation: none; }
-.bnav-item svg { width: 24px; height: 24px; }
-.bnav-item .bnav-label {
-  font-size: 13px; font-weight: 600;
-  opacity: 1; letter-spacing: 0.5px;
-  transition: opacity 0.2s;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.18);
-}
-.bnav-item.active .bnav-label { opacity: 1; font-weight: 600; }
+
 @keyframes tab-bounce {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.1); }
@@ -5308,20 +5169,10 @@ onUnmounted(() => {
 }
 
 /* 白天 */
-.day .bottom-nav::before { background: rgba(255,255,255,0.55); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border-color: rgba(255,255,255,0.5); box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.7); }
-.day .bnav-item           { color: rgba(30,35,40,0.90); }
-.day .bnav-item:hover     { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.day .bnav-item.active    { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.5); }
+
 /* 傍晚 */
-.evening .bottom-nav::before { background: rgba(40,30,20,0.3); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); border-color: rgba(255,255,255,0.15); box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
-.evening .bnav-item       { color: rgba(255,255,255,0.7); }
-.evening .bnav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.evening .bnav-item.active{ color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1); }
+
 /* 夜晚 */
-.night .bottom-nav::before { background: rgba(0,0,0,0.25); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border-color: rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1); }
-.night .bnav-item         { color: rgba(255,255,255,0.7); }
-.night .bnav-item:hover   { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.night .bnav-item.active  { color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12); }
 
 /* ═══════════ 治愈面板 ═══════════ */
 .healing-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
@@ -5560,7 +5411,7 @@ onUnmounted(() => {
 .student-summary-orb:hover { transform: translateY(-50%) translateX(-3px); background: rgba(25,31,36,.96); }
 .student-summary-orb:focus-visible { outline: 3px solid #c8ead9; outline-offset: 4px; }
 .summary-orb-pixel { width: 40px; height: 40px; padding: 3px; border-radius: 9px 9px 9px 3px; background: rgba(188,217,202,.18); }
-.summary-orb-pixel img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; image-rendering: pixelated; }
+.summary-orb-pixel img { width: 100%; height: 100%; border-radius: 6px; object-fit: contain; image-rendering: pixelated; }
 .summary-orb-copy { display: grid; gap: 2px; text-align: left; }
 .summary-orb-copy strong { font-size: 13px; line-height: 1.2; }
 .summary-orb-copy small { color: rgba(245,240,232,.74); font-size: 10px; }
@@ -6274,12 +6125,16 @@ onUnmounted(() => {
 }
 .trend-panel .go-chat-btn:hover { background: #7A9A8C; }
 
-/* ══════════ 聊天面板 AI logo ══════════ */
+/* ══════════ 聊天面板 咕团头像 ══════════ */
 .ai-logo {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
+  padding: 2px;
+  border-radius: 4px;
+  border: 2px solid rgba(240, 216, 170, .3);
+  background: rgba(240, 216, 170, .12);
+  object-fit: contain;
+  image-rendering: pixelated;
   flex-shrink: 0;
 }
 
@@ -6302,21 +6157,18 @@ onUnmounted(() => {
 .night .weather-float { background: rgba(0,0,0,0.35); color: #C8D4E0; }
 
 /* ═══════════ 响应式 — 电脑端（≥768px）══════════ */
-@media (min-width: 768px) {
+@media (min-width: 768px){
   /* 全屏布局 */
   .room { max-width: 100%; }
-  .bg-wrap { inset: 0; }
-  .room-bg { object-fit: cover; object-position: center; }
+  
+  
 
   /* 电脑端热区适配（16:9 横屏图） */
-  .zone-monitor { top: 40%; left: 42%; width: 10%; height: 14%; }
-  .zone-bed     { top: 60%; left: 20%; width: 20%; height: 38%; transform: rotate(-44deg); }
+  
+  
 
   /* 床上文字适配 */
-  .bed-label {
-    transform: translate(-50%, -50%) rotate(44deg);
-    font-size: 16px;
-  }
+  
 
   /* 顶部信息栏放大 */
   .top-bar { top: 24px; }
@@ -6333,7 +6185,7 @@ onUnmounted(() => {
   .music-panel { max-height: 78vh; }
 
   /* 底部导航居中 */
-  .bottom-nav { max-width: 100%; left: 0; transform: none; }
+  
   /* 电脑端面板居中 */
   .profile-overlay { align-items: center; }
   .profile-panel {
@@ -6524,6 +6376,7 @@ onUnmounted(() => {
 }
 .chat-panel .chat-safety-resolve { width: 100%; margin-top: 4px; cursor: pointer; }
 .chat-panel .chat-safety-resolve:disabled { opacity: .45; cursor: not-allowed; }
+.chat-panel .chat-resolve-hint { color: #ffd2c8; font-size: 12px; line-height: 1.55; margin-top: 2px; }
 .chat-panel .chat-urgent-calls a:focus-visible,
 .chat-panel .chat-safety-resolve:focus-visible,
 .chat-panel .chat-urgent-support input:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
@@ -7452,52 +7305,7 @@ onUnmounted(() => {
 .pet-body p { color: var(--room-muted); font-size: 11px; }
 .pet-actions { margin-top: 4px; }
 .pet-actions .pet-open-btn { min-width: 0; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; box-shadow: none; }
-.bottom-nav { bottom: calc(18px + env(safe-area-inset-bottom)); }
-.bottom-nav::before {
-  width: 316px;
-  height: 64px;
-  border: 1px solid rgba(237, 251, 246, .46);
-  border-radius: 15px;
-  background: linear-gradient(135deg, rgba(221, 240, 233, .34), rgba(173, 168, 211, .24)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66), inset 0 -1px 0 rgba(91, 108, 118, .18) !important;
-  backdrop-filter: blur(22px) saturate(1.28) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.28) !important;
-}
-.day .bottom-nav::before { background: linear-gradient(135deg, rgba(255,255,255,.62), rgba(198,226,216,.42)) !important; }
-.evening .bottom-nav::before { background: linear-gradient(135deg, rgba(226,211,219,.42), rgba(153,174,196,.34)) !important; }
-.night .bottom-nav::before { background: linear-gradient(135deg, rgba(112,133,154,.46), rgba(113,104,151,.4)) !important; }
-.heart-island-door {
-  position: fixed;
-  right: clamp(92px, 12vw, 184px);
-  top: 38%;
-  z-index: 32;
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  width: 86px;
-  min-height: 112px;
-  padding: 8px;
-  border: 0;
-  color: #fff9e8;
-  background: transparent;
-  cursor: pointer;
-  text-shadow: 0 2px 5px rgba(8, 11, 21, .72);
-}
-.heart-island-door-glow {
-  width: 54px;
-  height: 68px;
-  border: 5px solid rgba(38, 31, 64, .86);
-  border-bottom-width: 7px;
-  border-radius: 28px 28px 8px 8px;
-  background: linear-gradient(180deg, rgba(189, 174, 238, .94), rgba(115, 195, 174, .88));
-  box-shadow: 0 0 0 3px rgba(235, 210, 141, .7), 0 0 24px rgba(167, 216, 196, .64), inset 0 0 20px rgba(255,255,255,.38);
-  image-rendering: pixelated;
-}
-.heart-island-door-copy { display: grid; gap: 1px; padding: 5px 8px; border-radius: 8px; background: rgba(15, 20, 29, .76); backdrop-filter: blur(10px); }
-.heart-island-door-copy strong { font-size: 12px; }
-.heart-island-door-copy small { color: rgba(255, 249, 232, .74); font-size: 9px; }
-.heart-island-door:hover .heart-island-door-glow { filter: brightness(1.12); transform: translateY(-2px); }
-.heart-island-door:focus-visible { outline: 3px solid #f1d48c; outline-offset: 4px; border-radius: 12px; }
+
 .profile-space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .profile-space-grid button { min-height: 62px; padding: 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; color: #fff; background: rgba(255,255,255,.06); cursor: pointer; text-align: left; font-weight: 700; }
 .profile-space-grid button small { display: block; margin-top: 4px; color: rgba(247,244,237,.65); font-size: 10px; font-weight: 500; }
@@ -7521,7 +7329,7 @@ onUnmounted(() => {
   backdrop-filter: blur(16px) saturate(1.14);
 }
 
-@media (max-width: 899px) {
+@media (max-width: 899px){
   .top-bar { left: 12px; min-width: 0; padding: 8px 11px; transform: none; align-items: flex-start; text-align: left; }
   .greeting-sub { display: none; }
   .guardian-workbench-entry { top: 12px; right: 12px; }
@@ -7531,12 +7339,7 @@ onUnmounted(() => {
   .pet-companion-card { display: none; }
   .student-summary-orb { right: 154px; bottom: calc(84px + env(safe-area-inset-bottom)); }
   .student-support-drawer { border-radius: 16px; }
-  .heart-island-door { right: 14px; top: 44%; transform: scale(.86); transform-origin: right center; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .heart-island-door-glow { transition: none; }
-  .heart-island-door:hover .heart-island-door-glow { transform: none; }
+  
 }
 
 @media (max-width: 520px) {
@@ -7546,7 +7349,7 @@ onUnmounted(() => {
   .student-summary-orb { right: 150px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (prefers-reduced-motion: reduce){
   .room *,
   .room *::before,
   .room *::after {
@@ -7555,67 +7358,10 @@ onUnmounted(() => {
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
   }
-  .room-roaming-pet,
-  .room-roaming-pet img,
-  .splash-fade-leave-active { transition: none; animation: none; }
+  
 }
 
 /* v5.1.0-alpha.3：主界面减法系统。场景承担导航，控制层只保留一个状态条和按需操作条。 */
-.room-status-bar {
-  position: fixed;
-  top: 14px;
-  left: 14px;
-  right: 132px;
-  z-index: 224;
-  display: flex;
-  align-items: center;
-  width: max-content;
-  max-width: calc(100vw - 160px);
-  min-height: 46px;
-  padding: 5px;
-  border-radius: 14px;
-  color: #f7f4ed;
-  background: rgba(16, 22, 28, .84);
-  box-shadow: 0 5px 8px rgba(5, 8, 12, .25);
-  backdrop-filter: blur(18px) saturate(1.14);
-  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
-}
-.room-status-greeting {
-  display: grid;
-  min-width: 174px;
-  padding: 3px 12px;
-}
-.room-status-greeting time { color: rgba(247, 244, 237, .68); font-size: 10px; }
-.room-status-greeting strong { margin-top: 1px; font-size: 13px; line-height: 1.35; }
-.room-status-checkin,
-.room-status-utility {
-  min-height: 36px;
-  border: 0;
-  border-radius: 10px;
-  color: rgba(247, 244, 237, .9);
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-}
-.room-status-checkin {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 10px;
-  border-inline: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 0;
-}
-.room-status-checkin > span:first-child { font-size: 17px; }
-.room-status-checkin > span:last-child { display: grid; text-align: left; }
-.room-status-checkin small { color: rgba(247, 244, 237, .62); font-size: 9px; }
-.room-status-checkin strong { margin-top: 1px; font-size: 11px; }
-.room-status-utility { display: flex; align-items: center; gap: 4px; padding: 0 9px; font-size: 11px; }
-.room-status-checkin:hover,
-.room-status-utility:hover { background: rgba(255, 255, 255, .1); }
-.room-status-checkin:focus-visible,
-.room-status-utility:focus-visible,
-.hot-zone:focus-visible,
-.room-onboarding-cue button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
 
 .room-onboarding-cue {
   position: fixed;
@@ -7665,43 +7411,6 @@ onUnmounted(() => {
 }
 .room-onboarding-cue .room-onboarding-skip { width: 36px; padding: 0; color: #f7f4ed; background: rgba(255, 255, 255, .08); font-size: 18px; }
 
-.hot-zone {
-  appearance: none;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-.hot-zone::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  pointer-events: none;
-  transition: border-color .18s ease, background-color .18s ease;
-}
-.hot-zone:hover::after,
-.hot-zone:focus-visible::after,
-.hot-zone.is-selected::after { border-color: rgba(240, 213, 142, .82); background: rgba(240, 213, 142, .08); }
-.hot-zone:focus-visible .hover-tip,
-.hot-zone:focus-visible .bed-label,
-.hot-zone:focus-visible .window-label { opacity: 1; }
-.hot-zone .hover-tip,
-.hot-zone .bed-label,
-.hot-zone .window-label {
-  padding: 6px 9px;
-  border-radius: 8px;
-  color: #f7f4ed;
-  background: rgba(16, 22, 28, .88);
-  font-size: 10px;
-  white-space: nowrap;
-  box-shadow: none;
-}
-.zone-bed .bed-label,
-.zone-window .window-label { pointer-events: none; }
-.room-roaming-pet span { max-width: 164px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beian-footer {
   right: 14px;
   bottom: 14px;
@@ -7711,24 +7420,17 @@ onUnmounted(() => {
 }
 .beian-footer a { font-size: 11px; }
 
-@media (max-width: 760px) {
-  .room-status-bar {
-    top: 10px;
-    left: 10px;
-    right: 112px;
-    max-width: calc(100vw - 124px);
-    min-height: 42px;
-  }
-  .room-status-greeting { min-width: 0; padding-inline: 8px; }
-  .room-status-greeting time { display: none; }
-  .room-status-greeting strong { max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .room-status-checkin { border-inline-end: 0; }
-  .room-status-checkin > span:first-child,
-  .room-status-checkin small { display: none; }
-  .room-status-checkin strong { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .room-status-utility { display: none; }
-  .zone-speaker-left { top: 46%; left: 26%; width: 12%; height: 12%; }
-  .zone-speaker-right { display: none; }
+@media (max-width: 760px){
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   .room-onboarding-cue { top: 64px; left: 10px; width: calc(100vw - 20px); }
   .room-onboarding-cue small { display: none; }
   .beian-footer {
@@ -7742,17 +7444,16 @@ onUnmounted(() => {
 }
 
 @media (max-width: 440px) {
-  .room-onboarding-cue { grid-template-columns: auto minmax(0, 1fr) auto; }
+  /* 小屏保持单行：步骤 / 标题 / 主按钮 / 关闭，收紧间距而不是把 × 挤到第二行 */
+  .room-onboarding-cue { gap: 6px; padding: 6px; }
+  .room-onboarding-step { min-width: 28px; height: 28px; padding-inline: 5px; font-size: 9px; }
+  .room-onboarding-cue strong { font-size: 11.5px; }
+  .room-onboarding-cue button { min-height: 32px; padding: 0 9px; font-size: 10.5px; }
+  .room-onboarding-cue .room-onboarding-skip { width: 28px; height: 32px; }
 }
 
 /* v5.1.0-alpha.7：原创宠物「咕团」与统一休闲探索工作区。 */
-.room-roaming-pet img,
-.pet-panel-frame,
-.pet-stage-frame,
-.pet-chat-head img {
-  image-rendering: pixelated;
-}
-.room-roaming-pet img { object-position: center bottom; }
+
 .pet-panel-overlay {
   background: rgba(7, 12, 18, .58);
   backdrop-filter: blur(12px) saturate(.88);
@@ -8018,7 +7719,7 @@ onUnmounted(() => {
 
 /* v5.1.0-alpha.30 desktop-only taste pass.
    The room remains the primary canvas; controls recede until requested. */
-@media (min-width: 900px) {
+@media (min-width: 900px){
   .room {
     --room-control: rgba(35, 27, 24, .78);
     --room-control-strong: rgba(35, 27, 24, .9);
@@ -8028,81 +7729,1442 @@ onUnmounted(() => {
     --room-control-mint: var(--ui-mint-200, #bedbce);
   }
 
-  .room-status-bar {
-    top: 16px;
-    left: 18px;
-    min-height: 50px;
-    padding: 6px;
-    border: 0;
-    border-radius: 14px;
-    color: var(--room-control-ink);
-    background: var(--room-control);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 6px 8px rgba(8,6,5,.22);
-    -webkit-backdrop-filter: blur(24px) saturate(1.18);
-    backdrop-filter: blur(24px) saturate(1.18);
-  }
-  .room-status-greeting { min-width: 180px; padding-inline: 13px; }
-  .room-status-greeting time { color: var(--room-control-muted); }
-  .room-status-checkin { border-color: rgba(255, 248, 235, .13); }
-  .room-status-checkin small { color: var(--room-control-muted); }
-  .room-status-checkin:hover,
-  .room-status-utility:hover { background: rgba(255, 250, 240, .1); }
+  
+  
+  
+  
+  
+  
 
-  .bottom-nav::before {
-    width: 330px;
-    height: 66px;
-    border: 0;
-    border-radius: 15px;
-    background: rgba(42, 32, 28, .54) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 6px 8px rgba(8,6,5,.2) !important;
-    -webkit-backdrop-filter: blur(26px) saturate(1.2) !important;
-    backdrop-filter: blur(26px) saturate(1.2) !important;
-  }
-  .day .bottom-nav::before { background: rgba(238, 241, 235, .68) !important; }
-  .evening .bottom-nav::before { background: rgba(79, 54, 44, .56) !important; }
-  .night .bottom-nav::before { background: rgba(35, 29, 35, .62) !important; }
-  .bnav-item {
-    color: rgba(255, 250, 240, .72);
-    transition: color var(--ui-duration-fast, 180ms) ease, background-color var(--ui-duration-fast, 180ms) ease, transform var(--ui-duration-fast, 180ms) var(--ui-ease-out, cubic-bezier(.22,1,.36,1));
-  }
-  .day .bnav-item { color: #41534c; }
-  .bnav-item:hover,
-  .bnav-item.active { color: var(--room-control-ink); background: rgba(255, 250, 240, .11); }
-  .day .bnav-item:hover,
-  .day .bnav-item.active { color: #21453a; background: rgba(55, 100, 86, .1); }
-  .bnav-item.active .icon-wrap { color: var(--room-control-gold); }
-  .day .bnav-item.active .icon-wrap { color: #356c5c; }
-  .bnav-item:focus-visible { outline-color: #f6dea2; }
-  .day .bnav-item:focus-visible { outline-color: var(--ui-forest-950, #15382f); }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
-  .hot-zone::after { border-radius: 8px; }
-  .hot-zone:hover::after,
-  .hot-zone:focus-visible::after,
-  .hot-zone.is-selected::after {
-    border-color: rgba(239, 215, 156, .78);
-    background: rgba(239, 215, 156, .07);
-  }
-  .hot-zone .hover-tip,
-  .hot-zone .bed-label,
-  .hot-zone .window-label {
-    color: var(--room-control-ink);
-    background: var(--room-control-strong);
-    -webkit-backdrop-filter: blur(16px) saturate(1.12);
-    backdrop-filter: blur(16px) saturate(1.12);
-  }
+  
+  
+  
 
-  .heart-island-door-glow {
-    border-color: rgba(44, 35, 30, .9);
-    background: linear-gradient(180deg, #d8c58f, #82b9a3);
-    box-shadow: 0 0 0 3px rgba(239, 215, 156, .62), 0 0 18px rgba(130, 185, 163, .48), inset 0 1px 0 rgba(255,255,255,.45);
-  }
-  .heart-island-door-copy {
-    color: var(--room-control-ink);
-    background: var(--room-control-strong);
-    -webkit-backdrop-filter: blur(16px) saturate(1.12);
-    backdrop-filter: blur(16px) saturate(1.12);
-  }
-  .heart-island-door-copy small { color: var(--room-control-muted); }
+  
+  
+  
   .beian-footer { background: rgba(35, 27, 24, .64); backdrop-filter: blur(14px); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   首页减法 2.0：场景退后一层，主操作只保留一个金色按钮。
+   背景压暗 + 边缘渐隐负责降噪；控件统一暖可可玻璃，避免与
+   像素画的高饱和色混在一起。
+   ══════════════════════════════════════════════════════════ */
+
+/* 顶部状态条：更重的一块玻璃，边界清楚，不再和书架融在一起 */
+
+/* 首次引导：收成一条居中的窄提示，不再压住场景左上角 */
+.room-onboarding-cue {
+  top: 76px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 28px));
+  padding: 7px 8px;
+  border: 1px solid rgba(239, 215, 156, .26);
+  background: rgba(25, 18, 14, .9);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .34);
+  z-index: 226;
+}
+.room-onboarding-step {
+  min-width: 34px;
+  height: 30px;
+  color: #f0d29a;
+  background: rgba(240, 216, 170, .12);
+  border: 1px solid rgba(240, 216, 170, .28);
+}
+.room-onboarding-cue button {
+  min-height: 34px;
+  color: #2b2015;
+  background: linear-gradient(180deg, #f4dba6, #dcb876);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .26);
+  white-space: nowrap;
+}
+.room-onboarding-cue button:hover { filter: brightness(1.04); }
+.room-onboarding-cue .room-onboarding-skip {
+  width: 32px;
+  height: 34px;
+  color: rgba(247, 244, 237, .62);
+  background: transparent;
+  box-shadow: none;
+}
+.room-onboarding-cue .room-onboarding-skip:hover { background: rgba(255, 255, 255, .08); color: #f7f4ed; }
+
+/* 引导徽标：金色小胶囊 + 指向标注，替代原来的高声量红点 */
+/* 引导标注不再用实心金块，避免和主按钮抢注意力 */
+.guide-target-badge {
+  top: -32px;
+  padding: 5px 10px;
+  border: 1px solid rgba(240, 213, 142, .5);
+  border-radius: 999px;
+  color: #f5dda9;
+  background: rgba(28, 20, 15, .94);
+  font-size: 10.5px;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .34);
+}
+.guide-target-badge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: rgba(28, 20, 15, .94);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* 底部导航：唯一的深色锚点；倾诉是唯一的主按钮 */
+
+/* 金色主按钮：倾诉 */
+
+/* 心岛入口：收成一个小门，不再和 Agent 抢右侧视线 */
+
+/* 页脚与宠物气泡：降一级，不参与主视觉 */
+.beian-footer { opacity: .68; padding: 5px 8px; }
+.beian-footer:hover,
+.beian-footer:focus-within { opacity: 1; }
+.beian-footer a { font-size: 10px; }
+
+@media (max-width: 760px){
+  
+  
+  
+  .room-onboarding-cue {
+    top: 62px;
+    width: calc(100vw - 20px);
+    gap: 8px;
+    padding: 7px;
+  }
+  
+  
+  
+  
+  
+  
+  .beian-footer { bottom: calc(82px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 420px){
+  /* 小屏只保留问候与 Agent，签到收进「我的」与场景操作条 */
+  
+}
+
+/* ══════════════════════════════════════════════════════════
+   主题大厅 3.1：像素心岛背景铺底，保留光场、发丝线与低对比卡片。
+   首屏只留一个实心金铜主按钮，其余入口全部降为低对比卡片。
+   ══════════════════════════════════════════════════════════ */
+.room.lobby-home {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  background: var(--lobby-bg);
+  color: var(--lobby-ink);
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --lobby-pixel-font: 'Fusion Pixel Lobby', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.lobby-home.day {
+  --lobby-bg: #f7f1e7;
+  --lobby-ink: #2c2119;
+  --lobby-muted: #7a6a58;
+  --lobby-gold: #b07a45;
+  --lobby-card: rgba(255, 252, 246, .92);
+  --lobby-line: rgba(90, 62, 38, .14);
+  --lobby-grid-line: rgba(90, 62, 38, .07);
+  --lobby-glow: rgba(214, 162, 96, .32);
+  --lobby-veil: rgba(255, 255, 255, .34);
+  --lobby-cta-hi: #dfb578;
+  --lobby-cta-lo: #b3813f;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(160, 108, 48, .38);
+  --lobby-shadow: 0 22px 54px rgba(96, 66, 38, .13);
+  --lobby-pixel-line: rgba(59, 42, 27, .52);
+  --lobby-pixel-shadow: rgba(59, 42, 27, .2);
+  --lobby-ambient-cloud: rgba(178, 138, 92, .3);
+  --lobby-ambient-star: rgba(255, 250, 238, 0);
+  --lobby-ambient-firefly: rgba(196, 140, 74, .55);
+  --lobby-ambient-firefly-halo: rgba(196, 140, 74, .16);
+  --lobby-ambient-shooting: rgba(255, 250, 238, 0);
+  --lobby-ambient-glow: rgba(244, 206, 146, .38);
+  --lobby-scene: url('/images/lobby/lobby-scene-day.svg');
+}
+.lobby-home.evening {
+  --lobby-bg: #211713;
+  --lobby-ink: #f4e8d6;
+  --lobby-muted: #c9b49a;
+  --lobby-gold: #e2c084;
+  --lobby-card: rgba(48, 34, 27, .88);
+  --lobby-line: rgba(226, 192, 132, .18);
+  --lobby-grid-line: rgba(226, 192, 132, .08);
+  --lobby-glow: rgba(226, 184, 116, .22);
+  --lobby-veil: rgba(255, 240, 214, .05);
+  --lobby-cta-hi: #f0d49a;
+  --lobby-cta-lo: #cfa460;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(0, 0, 0, .5);
+  --lobby-shadow: 0 24px 62px rgba(0, 0, 0, .32);
+  --lobby-pixel-line: rgba(232, 207, 160, .46);
+  --lobby-pixel-shadow: rgba(0, 0, 0, .5);
+  --lobby-ambient-cloud: rgba(244, 212, 164, .16);
+  --lobby-ambient-star: rgba(255, 244, 219, .75);
+  --lobby-ambient-firefly: rgba(244, 206, 132, .95);
+  --lobby-ambient-firefly-halo: rgba(244, 206, 132, .22);
+  --lobby-ambient-shooting: rgba(255, 240, 210, .28);
+  --lobby-ambient-glow: rgba(240, 190, 120, .34);
+  --lobby-scene: url('/images/lobby/lobby-scene-evening.svg');
+}
+.lobby-home.night {
+  --lobby-bg: #130f0d;
+  --lobby-ink: #f1e6d2;
+  --lobby-muted: #bda98f;
+  --lobby-gold: #e3c27d;
+  --lobby-card: rgba(38, 28, 23, .9);
+  --lobby-line: rgba(227, 194, 125, .16);
+  --lobby-grid-line: rgba(227, 194, 125, .075);
+  --lobby-glow: rgba(227, 184, 105, .18);
+  --lobby-veil: rgba(255, 240, 214, .035);
+  --lobby-cta-hi: #eccd90;
+  --lobby-cta-lo: #c39a58;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(0, 0, 0, .55);
+  --lobby-shadow: 0 26px 68px rgba(0, 0, 0, .4);
+  --lobby-pixel-line: rgba(231, 203, 148, .42);
+  --lobby-pixel-shadow: rgba(0, 0, 0, .58);
+  --lobby-ambient-cloud: rgba(226, 208, 178, .11);
+  --lobby-ambient-star: rgba(255, 248, 230, .95);
+  --lobby-ambient-firefly: rgba(246, 214, 146, 1);
+  --lobby-ambient-firefly-halo: rgba(246, 214, 146, .26);
+  --lobby-ambient-shooting: rgba(255, 248, 232, .75);
+  --lobby-ambient-glow: rgba(238, 198, 126, .26);
+  --lobby-scene: url('/images/lobby/lobby-scene-night.svg');
+}
+.lobby-home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--lobby-bg);
+  background-image:
+    radial-gradient(52% 40% at 50% 22%, var(--lobby-glow), transparent 72%),
+    radial-gradient(90% 60% at 50% 108%, rgba(0, 0, 0, .16), transparent 62%),
+    linear-gradient(180deg, var(--lobby-veil), transparent 34%),
+    var(--lobby-scene);
+  background-repeat: no-repeat;
+  background-size: auto, auto, auto, cover;
+  background-position: center, center, center, center bottom;
+}
+.lobby-home::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--lobby-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lobby-grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(74% 62% at 50% 36%, #000 12%, transparent 82%);
+  mask-image: radial-gradient(74% 62% at 50% 36%, #000 12%, transparent 82%);
+}
+
+/* 动态天象层：与背景 cover / center bottom 对齐，只画日月。 */
+.lobby-celestial {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lobby-celestial rect { shape-rendering: crispEdges; }
+
+/* 动态环境层：像素云、星点、萤火与呼吸光。只动 transform/opacity。 */
+.lobby-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lobby-ambient > span {
+  position: absolute;
+  display: block;
+}
+.ambient-glow {
+  left: 50%;
+  top: 18%;
+  width: min(78vw, 1040px);
+  height: min(58vw, 720px);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(50% 50% at 50% 50%, var(--lobby-ambient-glow), transparent 72%);
+  opacity: .6;
+  animation: lobby-ambient-breathe 12s steps(12, end) infinite alternate;
+}
+.ambient-clouds {
+  inset: 0;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 30%, transparent 40% 60%, #000 70% 100%);
+  mask-image: linear-gradient(90deg, #000 0 30%, transparent 40% 60%, #000 70% 100%);
+}
+.ambient-cloud {
+  position: absolute;
+  left: 0;
+  width: 12px;
+  height: 8px;
+  color: var(--lobby-ambient-cloud);
+  background: currentColor;
+  box-shadow:
+    12px 0 0 currentColor,
+    -12px 0 0 currentColor,
+    24px 0 0 currentColor,
+    0 -8px 0 currentColor,
+    12px -8px 0 currentColor,
+    0 8px 0 currentColor,
+    12px 8px 0 currentColor,
+    24px 8px 0 currentColor,
+    -12px 8px 0 currentColor;
+  animation: lobby-cloud-drift 56s linear infinite;
+}
+.ambient-cloud-a {
+  top: 11%;
+  animation-delay: -6s;
+  scale: 1.15;
+}
+.ambient-cloud-b {
+  top: 21%;
+  animation-duration: 78s;
+  animation-delay: -28s;
+  scale: 1.6;
+}
+.ambient-cloud-c {
+  top: 31%;
+  animation-duration: 100s;
+  animation-delay: -52s;
+  scale: 1.35;
+}
+.ambient-stars,
+.ambient-fireflies {
+  inset: 0;
+}
+.ambient-stars b,
+.ambient-fireflies b {
+  position: absolute;
+  display: block;
+}
+.ambient-stars b {
+  --star-size: 3px;
+  width: var(--star-size);
+  height: var(--star-size);
+  color: var(--lobby-ambient-star);
+  background: currentColor;
+  box-shadow:
+    var(--star-size) 0 0 currentColor,
+    calc(var(--star-size) * -1) 0 0 currentColor,
+    0 var(--star-size) 0 currentColor,
+    0 calc(var(--star-size) * -1) 0 currentColor;
+  opacity: .7;
+  animation: lobby-star-twinkle calc(3.2s + var(--n) * .18s) steps(2, end) infinite;
+  animation-delay: calc(var(--n) * -.53s);
+}
+.ambient-stars b:nth-child(3n) {
+  --star-size: 4px;
+}
+.ambient-stars b:nth-child(1) { left: 4%; top: 9%; }
+.ambient-stars b:nth-child(2) { left: 9%; top: 18%; }
+.ambient-stars b:nth-child(3) { left: 14%; top: 6%; }
+.ambient-stars b:nth-child(4) { left: 20%; top: 14%; }
+.ambient-stars b:nth-child(5) { left: 26%; top: 7%; }
+.ambient-stars b:nth-child(6) { left: 32%; top: 20%; }
+.ambient-stars b:nth-child(7) { left: 38%; top: 10%; }
+.ambient-stars b:nth-child(8) { left: 44%; top: 5%; }
+.ambient-stars b:nth-child(9) { left: 50%; top: 16%; }
+.ambient-stars b:nth-child(10) { left: 57%; top: 8%; }
+.ambient-stars b:nth-child(11) { left: 63%; top: 19%; }
+.ambient-stars b:nth-child(12) { left: 69%; top: 12%; }
+.ambient-stars b:nth-child(13) { left: 7%; top: 28%; }
+.ambient-stars b:nth-child(14) { left: 58%; top: 28%; }
+.ambient-fireflies b {
+  width: 5px;
+  height: 5px;
+  color: var(--lobby-ambient-firefly);
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--lobby-ambient-firefly-halo);
+  animation:
+    lobby-firefly-drift calc(8s + var(--n) * 1.1s) steps(12, end) infinite alternate,
+    lobby-firefly-blink calc(3.2s + var(--n) * .35s) steps(2, end) infinite;
+  animation-delay: calc(var(--n) * -1.9s), calc(var(--n) * -.7s);
+}
+.ambient-fireflies b:nth-child(1) { left: 7%; top: 56%; }
+.ambient-fireflies b:nth-child(2) { left: 89%; top: 62%; }
+.ambient-fireflies b:nth-child(3) { left: 13%; top: 78%; }
+.ambient-fireflies b:nth-child(4) { left: 82%; top: 81%; }
+.ambient-fireflies b:nth-child(5) { left: 68%; top: 48%; }
+.ambient-fireflies b:nth-child(6) { left: 30%; top: 68%; }
+.ambient-shooting-star {
+  left: 14%;
+  top: 10%;
+  width: 3px;
+  height: 3px;
+  color: var(--lobby-ambient-shooting);
+  background: currentColor;
+  box-shadow:
+    5px 5px 0 currentColor,
+    10px 10px 0 currentColor,
+    15px 15px 0 currentColor,
+    20px 20px 0 currentColor;
+  opacity: 0;
+  animation: lobby-shooting-star 19s steps(24, end) infinite;
+  animation-delay: -6s;
+}
+@keyframes lobby-cloud-drift {
+  from { transform: translate3d(-24vw, 0, 0); }
+  to   { transform: translate3d(124vw, 0, 0); }
+}
+@keyframes lobby-star-twinkle {
+  0%, 100% { opacity: .18; }
+  50%      { opacity: 1; }
+}
+@keyframes lobby-firefly-drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  30%  { transform: translate3d(16px, -26px, 0); }
+  60%  { transform: translate3d(-12px, -44px, 0); }
+  100% { transform: translate3d(22px, -14px, 0); }
+}
+@keyframes lobby-firefly-blink {
+  0%, 100% { opacity: .25; }
+  50%      { opacity: 1; }
+}
+@keyframes lobby-shooting-star {
+  0%, 88%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  90%       { opacity: .9; }
+  95%       { opacity: .55; }
+  98%, 100% { opacity: 0; transform: translate3d(44vw, 27vh, 0); }
+}
+@keyframes lobby-ambient-breathe {
+  from { opacity: .35; }
+  to   { opacity: .72; }
+}
+@media (max-width: 760px) {
+  .ambient-cloud-b,
+  .ambient-stars b:nth-child(n + 11) {
+    display: none;
+  }
+  .ambient-glow {
+    top: 22%;
+    width: 118vw;
+    height: 86vw;
+  }
+}
+.lobby {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 920px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(18px, env(safe-area-inset-top)) 24px max(20px, env(safe-area-inset-bottom));
+}
+.lobby-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 12px;
+}
+.lobby-hello {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.lobby-hello time {
+  color: var(--lobby-muted);
+  font-size: 10.5px;
+  letter-spacing: .22em;
+}
+.lobby-hello strong {
+  overflow: hidden;
+  color: var(--lobby-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lobby-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-utility {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-size: 11.5px;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .2s ease, color .2s ease, background .2s ease, transform .16s ease, box-shadow .16s ease;
+}
+.lobby-utility:hover {
+  border-color: var(--lobby-gold);
+  color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-utility:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-profile {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 24px;
+  font-weight: 400;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .2s ease, transform .16s ease, box-shadow .16s ease;
+}
+.lobby-profile:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-profile:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(14px, 2.2vh, 36px);
+  text-align: center;
+}
+.lobby-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 clamp(12px, 2.2vh, 20px);
+  color: var(--lobby-muted);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .18em;
+  -webkit-font-smoothing: none;
+}
+.lobby-eyebrow::before,
+.lobby-eyebrow::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+}
+.lobby-pet-halo {
+  position: absolute;
+  top: 2%;
+  left: 50%;
+  width: clamp(180px, 26vw, 300px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--lobby-glow) 0%, transparent 66%);
+  box-shadow: inset 0 0 0 1px var(--lobby-line);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.lobby-pet-stage img {
+  position: relative;
+  z-index: 1;
+  width: clamp(126px, 14vw, 162px);
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(4px 4px 0 var(--lobby-pixel-shadow));
+  transition: transform .5s cubic-bezier(.22, 1, .36, 1);
+}
+.lobby-pet-stage:hover img {
+  transform: translateY(-6px) scale(1.02);
+}
+.lobby-pet-caption {
+  position: relative;
+  z-index: 1;
+  display: -webkit-box;
+  max-width: 300px;
+  overflow: hidden;
+  padding: 7px 14px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 3px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.lobby-title {
+  margin: clamp(16px, 2.2vh, 24px) 0 0;
+  color: var(--lobby-ink);
+  font-family: var(--lobby-pixel-font);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1.16;
+  letter-spacing: .01em;
+  text-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  -webkit-font-smoothing: none;
+}
+.lobby-sub {
+  max-width: 500px;
+  margin: 10px 0 0;
+  color: var(--lobby-muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lobby-primary-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: min(520px, 100%);
+  min-height: 72px;
+  margin-top: clamp(16px, 2.2vh, 24px);
+  padding: 0 28px;
+  border: 2px solid var(--lobby-cta-ink);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--lobby-cta-hi), var(--lobby-cta-lo));
+  color: var(--lobby-cta-ink);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  box-shadow:
+    0 6px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+  transition: transform .16s steps(2, end), filter .16s ease, box-shadow .16s steps(2, end);
+}
+.lobby-primary-cta::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px dashed rgba(255, 247, 225, .45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.lobby-primary-cta:hover {
+  filter: brightness(1.04);
+  transform: translate(-1px, -2px);
+  box-shadow:
+    0 8px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+}
+.lobby-primary-cta:active {
+  transform: translate(2px, 4px);
+  box-shadow:
+    0 2px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .4),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+}
+.lobby-cta-label {
+  position: relative;
+  z-index: 1;
+  font-family: var(--lobby-pixel-font);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: .1em;
+  -webkit-font-smoothing: none;
+}
+.lobby-cta-arrow {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(42, 26, 12, .45);
+  border-radius: 2px;
+  background: rgba(42, 26, 12, .12);
+  font-size: 15px;
+}
+.lobby-hero.is-guide .lobby-primary-cta {
+  margin-top: 48px;
+}
+.lobby-primary-cta .guide-target-badge {
+  z-index: 2;
+}
+.lobby-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 760px;
+  margin: clamp(18px, 2.6vh, 30px) auto 0;
+}
+.lobby-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 132px;
+  padding: 22px 22px 20px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-ink);
+  text-align: left;
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+  transition: border-color .16s ease, transform .16s steps(2, end), box-shadow .16s steps(2, end);
+}
+.lobby-card::after {
+  content: '→';
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--lobby-muted);
+  font-size: 13px;
+  opacity: .5;
+  transition: color .2s ease, transform .16s steps(2, end), opacity .2s ease;
+}
+.lobby-card:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card:hover::after {
+  color: var(--lobby-gold);
+  opacity: 1;
+  transform: translateX(2px);
+}
+.lobby-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .14em;
+  -webkit-font-smoothing: none;
+}
+.lobby-card-kicker::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+.lobby-card strong {
+  color: var(--lobby-ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.lobby-card-hint {
+  color: var(--lobby-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.lobby-card.room-status-checkin {
+  display: grid;
+  align-content: start;
+  align-items: start;
+  gap: 6px;
+  min-height: 132px;
+  padding: 22px 22px 20px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-ink);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin[aria-pressed="true"] {
+  border-color: var(--lobby-gold);
+}
+.lobby-card.room-status-checkin > .lobby-card-kicker {
+  display: inline-flex;
+  font-size: 12px;
+}
+.lobby-card.room-status-checkin > strong {
+  max-width: none;
+  overflow: visible;
+  font-size: 18px;
+  text-overflow: clip;
+  white-space: normal;
+}
+.lobby-card.room-status-checkin > .lobby-card-hint {
+  display: block;
+  margin: 0;
+  font-size: 12px;
+}
+.lobby-tertiary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.lobby-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 3px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  letter-spacing: .08em;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .16s ease, color .16s ease, background .16s ease, transform .16s steps(2, end), box-shadow .16s steps(2, end);
+  -webkit-font-smoothing: none;
+}
+.lobby-pill:hover {
+  border-color: var(--lobby-gold);
+  background: var(--lobby-card);
+  color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pill:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-primary-cta:focus-visible,
+.lobby-card:focus-visible,
+.lobby-pill:focus-visible,
+.lobby-profile:focus-visible,
+.lobby-utility:focus-visible,
+.lobby-pet-stage:focus-visible {
+  outline: 3px dashed var(--lobby-gold);
+  outline-offset: 4px;
+}
+.lobby-home .beian-footer {
+  position: static;
+  align-self: stretch;
+  justify-content: center;
+  width: 100%;
+  margin: auto 0 0;
+  padding: 28px 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: none;
+  transform: none;
+}
+.lobby-home .beian-footer a {
+  color: var(--lobby-muted);
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+.lobby-home .beian-footer a:hover {
+  color: var(--lobby-gold);
+  opacity: 1;
+}
+.lobby-home .beian-footer a:focus-visible {
+  outline: 2px solid var(--lobby-gold);
+}
+.lobby-home .beian-divider {
+  color: var(--lobby-line);
+}
+.lobby-home .room-onboarding-cue {
+  left: 50%;
+  top: 84px;
+  width: min(520px, calc(100vw - 28px));
+  padding: 8px 9px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: rgba(24, 17, 13, .94);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow), 0 18px 42px rgba(0, 0, 0, .32);
+  transform: translateX(-50%);
+  z-index: 240;
+}
+.lobby-home .guide-target-badge {
+  top: -40px;
+  padding: 6px 10px;
+  border: 2px dashed rgba(245, 221, 169, .7);
+  border-radius: 3px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .45);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .guide-target-badge::after {
+  width: 6px;
+  height: 6px;
+  bottom: -5px;
+}
+
+/* 像素点缀 2.0：把同一套像素语言延伸到时间、引导条、卡片四角与标题周围。 */
+.lobby-hello time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  letter-spacing: .16em;
+  -webkit-font-smoothing: none;
+}
+.lobby-hello time::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-caption::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--lobby-pixel-line);
+  border-left: 2px solid var(--lobby-pixel-line);
+  background: var(--lobby-card);
+  transform: translateX(-50%) rotate(45deg);
+}
+.lobby-home .room-onboarding-step {
+  border-radius: 2px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, .35);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .room-onboarding-cue button {
+  border: 2px solid rgba(53, 36, 20, .48);
+  border-radius: 3px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: transform .16s steps(2, end), box-shadow .16s steps(2, end), filter .16s ease;
+  -webkit-font-smoothing: none;
+}
+.lobby-home .room-onboarding-cue button:hover {
+  filter: brightness(1.05);
+  transform: translate(-1px, -1px);
+}
+.lobby-home .room-onboarding-cue button:active {
+  transform: translate(1px, 3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.lobby-home .room-onboarding-cue .room-onboarding-skip {
+  border: 0;
+  box-shadow: none;
+}
+.lobby-home .splash {
+  background:
+    radial-gradient(58% 42% at 50% 38%, rgba(226, 192, 132, .16), transparent 70%),
+    rgba(18, 15, 12, .95);
+}
+.lobby-home .splash::before {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  z-index: -1;
+  pointer-events: none;
+  border: 2px solid rgba(240, 216, 170, .22);
+  border-radius: 4px;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, .32);
+  background:
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left top / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right top / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left bottom / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right bottom / 6px 6px no-repeat;
+  opacity: .6;
+}
+.lobby-home .splash-logo > span:first-child {
+  font-family: var(--lobby-pixel-font);
+  font-size: 48px;
+  font-weight: 400;
+  letter-spacing: .16em;
+  text-shadow: 4px 4px 0 rgba(0, 0, 0, .5);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .splash-version {
+  padding: 5px 10px;
+  border: 2px solid rgba(255, 255, 255, .34);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f4dba6, #d9b273);
+  color: #2b2015;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .42);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .splash-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-home .splash-sub::before,
+.lobby-home .splash-sub::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, .4);
+  opacity: .7;
+}
+.lobby-home .splash-hint {
+  animation: hint-blink 1.8s steps(2, end) infinite;
+}
+.lobby-card::before {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left top / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right top / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left bottom / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right bottom / 5px 5px no-repeat;
+  opacity: .4;
+  transition: opacity .2s ease;
+}
+.lobby-card:hover::before {
+  opacity: .95;
+}
+.lobby-card::after {
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+}
+.lobby-hero {
+  position: relative;
+}
+.lobby-hero::before,
+.lobby-hero::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow:
+    5px 0 0 var(--lobby-gold),
+    -5px 0 0 var(--lobby-gold),
+    0 5px 0 var(--lobby-gold),
+    0 -5px 0 var(--lobby-gold),
+    5px 5px 0 var(--lobby-pixel-shadow);
+  opacity: .55;
+  pointer-events: none;
+  animation: lobby-pixel-twinkle 2.8s steps(2, end) infinite;
+}
+.lobby-hero::before {
+  left: 12%;
+  top: 60%;
+}
+.lobby-hero::after {
+  right: 11%;
+  top: 36%;
+  animation-delay: 1.2s;
+}
+@keyframes lobby-pixel-twinkle {
+  0%, 100% { opacity: .3; }
+  50%      { opacity: .8; }
+}
+.lobby-pill {
+  gap: 8px;
+}
+.lobby-pill::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-stage img {
+  transition: transform .36s steps(3, end);
+}
+.lobby-pet-reaction {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.lobby-pet-reaction i {
+  position: absolute;
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 20px;
+  font-style: normal;
+  line-height: 1;
+  text-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+  animation: lobby-pet-heart 1.4s steps(6, end) forwards;
+}
+.lobby-pet-reaction i:nth-child(even) { color: #e8a08e; }
+.lobby-pet-reaction i:nth-child(1) { left: -68px; --pet-drift: -16px; animation-delay: .02s; }
+.lobby-pet-reaction i:nth-child(2) { left: -38px; --pet-drift: -4px; animation-delay: .1s; font-size: 13px; }
+.lobby-pet-reaction i:nth-child(3) { left: -8px; --pet-drift: 4px; animation-delay: .04s; font-size: 18px; }
+.lobby-pet-reaction i:nth-child(4) { left: 24px; --pet-drift: 12px; animation-delay: .14s; font-size: 13px; }
+.lobby-pet-reaction i:nth-child(5) { left: 52px; --pet-drift: 18px; animation-delay: .08s; }
+.lobby-pet-reaction i:nth-child(6) { left: 76px; --pet-drift: 24px; animation-delay: .16s; font-size: 12px; }
+.lobby-pet-stage.is-reacting .lobby-pet-caption {
+  animation: lobby-pet-caption-pop .5s steps(2, end);
+}
+@keyframes lobby-pet-caption-pop {
+  0%   { transform: translateY(4px); border-color: var(--lobby-gold); }
+  100% { transform: translateY(0); border-color: var(--lobby-pixel-line); }
+}
+@keyframes lobby-pet-heart {
+  0%   { opacity: 0; transform: translate(0, 10px) scale(.6); }
+  18%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--pet-drift, 0), -76px) scale(1.1); }
+}
+.lobby-pet-stage.is-reacting .lobby-pet-halo {
+  animation: lobby-pet-halo-pop .7s steps(3, end);
+}
+@keyframes lobby-pet-halo-pop {
+  0%   { transform: translateX(-50%) scale(1); opacity: .9; }
+  45%  { transform: translateX(-50%) scale(1.08); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: .9; }
+}
+.lobby-home .beian-divider {
+  width: 4px;
+  height: 4px;
+  overflow: hidden;
+  color: transparent;
+  background: var(--lobby-line);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+
+@media (min-width: 900px) and (max-width: 1360px) {
+  .lobby-top { padding-right: 214px; }
+}
+@media (max-width: 899px) {
+  .lobby-top { padding-right: 124px; }
+}
+@media (max-width: 760px) {
+  .lobby {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+  .lobby-utility-weather { display: none; }
+  .lobby-hero { margin-top: 20px; }
+  .lobby-hero::before,
+  .lobby-hero::after { display: none; }
+  .lobby-title { font-size: 36px; }
+  .lobby-sub { font-size: 13.5px; }
+  .lobby-primary-cta {
+    width: 100%;
+    min-height: 62px;
+    font-size: 17.5px;
+  }
+  .lobby-grid {
+    gap: 12px;
+    margin-top: 26px;
+  }
+  .lobby-card,
+  .lobby-card.room-status-checkin {
+    min-height: 116px;
+    padding: 18px 16px 16px;
+    border-radius: 4px;
+  }
+  .lobby-card::after {
+    top: 16px;
+    right: 16px;
+  }
+  .lobby-card strong { font-size: 16.5px; }
+  .lobby-card.room-status-checkin > strong { font-size: 16.5px; }
+  .lobby-card-hint { font-size: 11.5px; }
+  .lobby-home .room-onboarding-cue {
+    top: 72px;
+    width: calc(100vw - 20px);
+  }
+  .lobby-home .beian-footer {
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    padding: 24px 0 2px;
+    transform: none;
+  }
+  .lobby-home .beian-footer a { font-size: 11px; }
+}
+@media (max-width: 440px) {
+  .lobby {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .lobby-hello strong { max-width: 132px; }
+  .lobby-pet-caption { max-width: 250px; }
+  .lobby-home .room-onboarding-cue {
+    top: 66px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lobby-home *,
+  .lobby-home *::before,
+  .lobby-home *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lobby-ambient {
+    display: none;
+  }
+}
+:global(body.lobby-modal-open) {
+  overflow: hidden;
+}
+
+/* 像素皮肤 3.0 · 房间浮层 */
+.profile-panel,
+.pet-panel-card,
+.student-support-drawer,
+.student-summary-orb,
+.chat-panel {
+  --px-line: rgba(240, 216, 170, .3);
+  --px-gold: #f0d29a;
+  --px-shadow: rgba(0, 0, 0, .52);
+}
+.profile-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px 6px 0 0;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.panel-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.panel-close:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.profile-panel .trend-header h2 { font-family: var(--px-font); }
+.pet-panel-card.pet-playground-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-panel-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.pet-panel-close:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.pet-home-title > div:last-child > span { font-family: var(--px-font); letter-spacing: .08em; }
+.pet-home-title h2 { font-family: var(--px-font); }
+.pet-bond-chip {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-home-scene { border-radius: 4px; }
+.pet-scene-message {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.pet-scene-message small,
+.pet-scene-message strong { font-family: var(--px-font); }
+.pet-scene-dock {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.pet-scene-dock button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.pet-scene-dock button:hover:not(:disabled) { border-color: var(--px-line); }
+.pet-scene-dock button.is-primary { border-color: var(--px-gold); }
+.pet-scene-dock button span { border-radius: 2px; }
+.pet-hide-game {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-hide-game button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.pet-home-sidebar {
+  --px-line: rgba(79, 58, 42, .32);
+  --px-gold: #735a43;
+  --px-shadow: rgba(61, 40, 26, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-home-today > div:first-child strong,
+.pet-section-title span { font-family: var(--px-font); }
+.pet-home-journey button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-chat-entry,
+.pet-chat-input-row button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-chat-workflow li,
+.pet-chat-msg,
+.pet-chat-messages,
+.pet-chat-prompts button,
+.pet-chat-input-row input {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.pet-chat-msg { box-shadow: none; }
+.pet-panel-card button:focus-visible,
+.pet-panel-card input:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+@media (max-width: 680px) {
+  .pet-panel-card.pet-playground-card {
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 6px 6px 0 0;
+  }
+}
+.student-summary-orb {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.student-summary-orb:hover { box-shadow: 4px 4px 0 var(--px-shadow); }
+.student-summary-orb:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 4px; }
+.summary-orb-pixel { border-radius: 3px; }
+.summary-orb-copy strong { font-family: var(--px-font); font-size: 13px; }
+.student-support-drawer {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.support-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.support-eyebrow { font-family: var(--px-font); letter-spacing: .1em; }
+.student-support-drawer h2 { font-family: var(--px-font); font-size: 24px; }
+.support-emotion-state,
+.support-need-block,
+.support-professional-note,
+.support-next-step,
+.support-card-preview { border-radius: 4px; }
+.student-support-drawer textarea { border-width: 2px; border-radius: 4px; }
+.support-needs button,
+.support-decision-row button,
+.support-person-grid button,
+.support-summary-controls button { border-width: 2px; border-radius: 4px; }
+.support-card-preview { border-width: 2px; }
+.student-support-drawer .support-primary { box-shadow: 3px 3px 0 var(--px-shadow); }
+.student-support-drawer button:focus-visible,
+.student-support-drawer textarea:focus-visible,
+.student-support-drawer input:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.chat-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.chat-panel .chat-header { border-bottom: 2px solid var(--px-line); }
+.chat-panel .chat-end-button { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .welcome-bubble,
+.chat-panel .bubble,
+.chat-panel .chat-ai-consent,
+.chat-panel .chat-end-confirm {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.chat-panel .msg-row.user .bubble,
+.chat-panel .msg-row.assistant .bubble { border-radius: 4px; }
+.chat-panel .emotion-tag { border-radius: 4px; }
+.chat-panel .quick-btn { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .input-bar { border-top: 2px solid var(--px-line); }
+.chat-panel .input-wrap { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .voice-btn,
+.chat-panel .send-btn { border-width: 2px; border-radius: 4px; }
+.chat-panel .send-btn { box-shadow: 3px 3px 0 var(--px-shadow); }
+.chat-panel .chat-end-actions button { border-radius: 4px; }
+.chat-panel .chat-urgent-support { border-radius: 4px; }
+.chat-panel .chat-urgent-calls a,
+.chat-panel .chat-safety-resolve { border-radius: 4px; }
+.chat-panel .chat-end-button:focus-visible,
+.chat-panel .quick-btn:focus-visible,
+.chat-panel .voice-btn:focus-visible,
+.chat-panel .send-btn:focus-visible,
+.chat-panel .tts-btn:focus-visible,
+.chat-panel .chat-end-actions button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 2px; }
+.trend-panel .tab-bar button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.trend-panel .stat-card,
+.trend-panel .card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
 }
 </style>

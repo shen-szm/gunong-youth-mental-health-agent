@@ -282,7 +282,7 @@ const recommendation = computed(() => recommendationMap[selectedNeed.value] || {
   reason: 'Agent 会根据你的主动选择安排玩法，而不是猜测你的情绪。',
 })
 const nextStep = computed(() => ({
-  lighter: '把这点轻松留住就好。可以回房间，也可以只再玩一小轮。',
+  lighter: '把这点轻松留住就好。可以回首页，也可以只再玩一小轮。',
   same: '没有变化也很正常。若心里还有话，可以回到倾诉；不想说也可以先休息。',
   switch: activeGame.value === 'garden' ? '可以换到慢钓台，或打开放松工具。' : activeGame.value === 'fishing' ? '可以换到小田园，做一件步骤明确的小事。' : '可以回到心岛继续走走，或打开放松工具。',
 })[afterFeeling.value] || '')
@@ -637,6 +637,156 @@ button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
   .pixel-pond { height: 180px; }
   .fishing-action { align-items: flex-start; flex-direction: column; }
 }
+
+/* 像素皮肤 3.0 · 像素休闲角 */
+.leisure-hub {
+  --px-line: rgba(240, 216, 170, .28);
+  --px-gold: #e8d49b;
+  --px-shadow: rgba(0, 0, 0, .5);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.leisure-header p { font-family: var(--px-font); font-size: 11px; }
+.leisure-header h2 { font-family: var(--px-font); font-size: 21px; }
+.panel-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.panel-close:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--px-shadow); }
+.panel-close:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.island-entry {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  font-size: 13px;
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.island-entry:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.island-entry:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.need-picker legend,
+.after-play legend { font-family: var(--px-font); font-size: 11px; }
+.need-picker button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end), border-color 160ms steps(2, end);
+}
+.need-picker button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.need-picker button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.need-picker button.active { border-color: var(--px-gold); }
+.need-picker strong { font-family: var(--px-font); }
+.pixel-mark { border-radius: 4px; }
+.agent-recommendation {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.recommendation-mark { border-radius: 4px; }
+.agent-recommendation small { font-family: var(--px-font); }
+.agent-recommendation button,
+.fishing-action button,
+.happiness-exchange button,
+.happiness-reply button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.agent-recommendation button:hover,
+.fishing-action button:not(:disabled):hover,
+.happiness-exchange button:not(:disabled):hover,
+.happiness-reply button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.agent-recommendation button:active,
+.fishing-action button:not(:disabled):active,
+.happiness-exchange button:not(:disabled):active,
+.happiness-reply button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.game-tabs {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.game-tabs button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), border-color 160ms steps(2, end);
+}
+.game-tabs button.active { border-color: var(--px-gold); }
+.game-tabs button span { border-radius: 3px; }
+.game-board {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.game-copy h3 { font-family: var(--px-font); font-size: 17px; }
+.game-copy p { font-family: var(--px-font); font-size: 10px; }
+.seed-picker > span,
+.fish-book > span { font-family: var(--px-font); }
+.seed-picker button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.seed-picker button:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--px-shadow); }
+.seed-picker i { border-radius: 3px; }
+.fish-book div {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.fish-book i { border-radius: 3px; }
+.happiness-exchange {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.happiness-exchange label { font-family: var(--px-font); }
+.happiness-exchange textarea {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.happiness-exchange textarea:focus { outline: 2px dashed var(--px-gold); outline-offset: 3px; }
+.happiness-reply {
+  border: 2px solid var(--px-gold);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.happiness-safety {
+  border-width: 2px;
+  border-radius: 6px;
+}
+.happiness-safety a,
+.happiness-safety button {
+  border: 2px solid rgba(255, 225, 178, .42);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.happiness-book li {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.after-play {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.after-play button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.after-play button.active { border-color: var(--px-gold); }
+.leisure-agent {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.leisure-agent header p { font-family: var(--px-font); }
+.leisure-agent header h3 { font-family: var(--px-font); font-size: 15px; }
+.leisure-agent li > span { border-radius: 4px; }
+.agent-lamp { border-radius: 0; }
+button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

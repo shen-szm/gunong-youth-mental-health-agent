@@ -7,7 +7,7 @@ const actionBar = fs.readFileSync(new URL('../src/components/RoomActionBar.vue',
 
 test('student room uses one scene action system instead of stacked home cards', () => {
   const template = room.slice(0, room.indexOf('<script setup>'))
-  assert.match(template, /room-status-bar/)
+  assert.match(template, /lobby-top/)
   assert.match(template, /<RoomActionBar/)
   assert.doesNotMatch(template, /guardian-workbench-entry/)
   assert.doesNotMatch(template, /daily-return-card/)
@@ -16,14 +16,10 @@ test('student room uses one scene action system instead of stacked home cards', 
   assert.doesNotMatch(template, /weather-float/)
 })
 
-test('room hotspots share keyboard behavior and the window opens its real journey directly', () => {
-  for (const id of ['chat', 'trend', 'music', 'pet', 'daily']) {
-    assert.match(room, new RegExp(`selectRoomFeature\\('${id}'`))
-  }
-  assert.match(room, /<button type="button" :class="\['hot-zone zone-monitor'/)
-  assert.match(room, /aria-label="床头：回顾近期情绪"/)
-  assert.match(room, /aria-label="窗户：打开窗外漫游"/)
-  assert.match(room, /function openWindowJourney[\s\S]*?openWorkspacePanel\('transport'/)
+test('lobby entries share keyboard behavior and the window opens its real journey directly', () => {
+  assert.match(room, /selectRoomFeature\('daily', \$event\)/)
+  assert.match(room, /function runSelectedRoomFeature[\s\S]*?handleGuideChatTarget\(\)/)
+  assert.match(room, /function runSelectedRoomFeature[\s\S]*?openWorkspacePanel\('transport'\)/)
   assert.match(room, /function startWindowJourney[\s\S]*?selectCity\(city\)/)
   assert.match(room, /function startWindowJourney[\s\S]*?showTransportPanel\.value = false/)
   assert.match(room, /去西安[\s\S]*?皮影工坊/)
@@ -39,12 +35,10 @@ test('room hotspots share keyboard behavior and the window opens its real journe
   assert.match(actionBar, /querySelector\('\.room-action-moods button'\)/)
   assert.match(room, /focusWithoutScroll\(roomFeatureTrigger\)/)
   assert.match(actionBar, /:disabled="feature\.actionDisabled"/)
-  assert.match(room, /function safeRoomPetPosition/)
-  assert.match(room, /window\.innerHeight \* \.58/)
-  assert.match(room, /const next = safeRoomPetPosition\(event\.clientX, event\.clientY\)/)
-  assert.match(room, /\.hot-zone:focus-visible \.hover-tip/)
-  assert.match(room, /\.zone-speaker-left \{ top: 46%; left: 26%; width: 12%; height: 12%; \}/)
-  assert.match(room, /\.zone-speaker-right \{ display: none; \}/)
+  assert.match(room, /\.lobby-primary-cta:focus-visible/)
+  assert.match(room, /\.lobby-card:focus-visible/)
+  assert.match(room, /\.lobby-pet-stage:focus-visible/)
+  assert.doesNotMatch(room, /\.hot-zone|\.heart-island-door|\.room-roaming-pet/)
 })
 
 test('opening a primary workspace closes competing overlays', () => {
@@ -66,7 +60,7 @@ test('the action system adapts to mobile and reduced motion', () => {
   assert.match(actionBar, /env\(safe-area-inset-bottom\)/)
   assert.match(actionBar, /@media \(max-width: 640px\)/)
   assert.match(actionBar, /@media \(prefers-reduced-motion: reduce\)/)
-  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.room-status-bar/)
+  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.lobby-primary-cta/)
 })
 
 test('student trends remain descriptive and unassessed before any expression', () => {

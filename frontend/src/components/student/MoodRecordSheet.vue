@@ -1,11 +1,12 @@
 <template>
   <div class="mrs-overlay" @click.self="$emit('close')">
     <section
+      ref="cardEl"
       class="mrs-card"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mrs-title"
-      @keydown.esc="$emit('close')"
+      tabindex="-1"
     >
       <header class="mrs-head">
         <h2 id="mrs-title">记录此刻的心情</h2>
@@ -44,19 +45,34 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useUserStore } from '../../stores/user'
 import { recordMood } from '../../api/mood'
+import { activateDialog } from '../../utils/dialogFocus'
 
 const emit = defineEmits(['close', 'saved'])
 const userStore = useUserStore()
 
+const cardEl = ref(null)
+let releaseDialog = null
+
+onMounted(() => {
+  releaseDialog = activateDialog(cardEl.value, { onClose: () => emit('close') })
+})
+
+onBeforeUnmount(() => {
+  releaseDialog?.()
+  releaseDialog = null
+})
+
 const MOODS = [
+  { label: '愤怒', emoji: '😠', score: 3 },
+  { label: '厌恶', emoji: '🤢', score: 2 },
+  { label: '恐惧', emoji: '😨', score: 2 },
   { label: '开心', emoji: '😊', score: 9 },
-  { label: '平静', emoji: '😌', score: 6 },
-  { label: '焦虑', emoji: '😰', score: 4 },
-  { label: '难过', emoji: '😢', score: 3 },
-  { label: '愤怒', emoji: '😡', score: 3 },
+  { label: '中性', emoji: '😐', score: 6 },
+  { label: '悲伤', emoji: '😢', score: 3 },
+  { label: '惊讶', emoji: '😲', score: 6 },
 ]
 
 const selected = ref('')
@@ -128,7 +144,7 @@ async function save() {
 
 .mrs-moods {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin: 16px 0;
 }
@@ -153,6 +169,8 @@ async function save() {
 .mrs-moods button:nth-child(3) { animation-delay: 120ms; }
 .mrs-moods button:nth-child(4) { animation-delay: 160ms; }
 .mrs-moods button:nth-child(5) { animation-delay: 200ms; }
+.mrs-moods button:nth-child(6) { animation-delay: 240ms; }
+.mrs-moods button:nth-child(7) { animation-delay: 280ms; }
 .mrs-moods button:hover { border-color: #CFE3DA; }
 .mrs-moods button:active { transform: scale(.94); }
 .mrs-moods button span { font-size: 22px; }
@@ -223,6 +241,61 @@ async function save() {
   font-size: 11px;
   color: var(--m-ink-3);
 }
+
+/* 像素皮肤 3.0 · 心情记录浮层 */
+.mrs-card {
+  border: 2px solid var(--px-line, var(--m-line));
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow, var(--m-shadow));
+}
+.mrs-head h2 { font-family: var(--px-font); font-size: 17px; }
+.mrs-moods button {
+  border: 2px solid var(--px-line, var(--m-line));
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow, var(--m-shadow));
+  transition: border-color 160ms steps(2, end), background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.mrs-moods button:hover {
+  border-color: var(--px-gold, var(--m-accent));
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow, var(--m-shadow));
+}
+.mrs-moods button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow, var(--m-shadow));
+}
+.mrs-moods button.active {
+  border-color: var(--px-gold, var(--m-accent));
+  box-shadow: 2px 2px 0 var(--px-shadow, var(--m-shadow));
+}
+.mrs-note textarea {
+  border: 2px solid var(--px-line, var(--m-line));
+  border-radius: 4px;
+}
+.mrs-note textarea:focus {
+  border-color: var(--px-gold, var(--m-accent));
+  box-shadow: none;
+  outline: 2px dashed var(--px-gold, var(--m-accent));
+  outline-offset: 3px;
+}
+.mrs-actions button {
+  border: 2px solid var(--px-line, var(--m-line));
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow, var(--m-shadow));
+  font-family: var(--px-font);
+  transition: border-color 160ms steps(2, end), background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.mrs-actions button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow, var(--m-shadow)); }
+.mrs-actions button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow, var(--m-shadow)); }
+.mrs-save {
+  border-color: var(--px-gold, var(--m-accent));
+  background: var(--px-gold, var(--m-accent));
+  color: #221a12;
+  font-family: var(--px-font);
+}
+.mrs-save:not(:disabled):hover { border-color: var(--px-gold, var(--m-accent-strong)); background: var(--px-gold, var(--m-accent-strong)); }
+.mrs-cancel { background: transparent; }
+.mrs-actions button:focus-visible { outline: 3px dashed var(--px-gold, var(--m-accent)); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

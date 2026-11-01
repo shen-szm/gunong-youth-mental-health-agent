@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from "vue-router";
-import MinimalHomeView from "./views/MinimalHomeView.vue";
 import RoomHomeView from "./views/RoomHomeView.vue";
 import HomeView from "./views/HomeView.vue";
 import LoginView from "./views/LoginView.vue";
@@ -14,8 +13,8 @@ import GuardianFollowUpsView from "./views/GuardianFollowUpsView.vue";
 import { useUserStore } from "./stores/user";
 
 const routes = [
-  { path: "/", name: "Home", component: MinimalHomeView },
-  { path: "/room", name: "Room", component: RoomHomeView },
+  { path: "/", name: "Home", component: RoomHomeView },
+  { path: "/room", redirect: "/" },
   { path: "/home", name: "OldHome", component: HomeView },
   { path: "/login", redirect: "/" },
   { path: "/teacher-login", name: "Login", component: LoginView },

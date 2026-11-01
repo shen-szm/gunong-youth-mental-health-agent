@@ -14,10 +14,10 @@ test('desktop student room uses one restrained warm material system', () => {
   assert.match(globalStyles, /--ui-forest-950/)
   assert.match(globalStyles, /--ui-radius-panel/)
   assert.match(room, /@media \(min-width: 900px\)[\s\S]*?--room-control:/)
-  assert.match(room, /\.bottom-nav::before[\s\S]*?backdrop-filter: blur\(26px\)/)
-  assert.match(room, /\.heart-island-door-glow[\s\S]*?#82b9a3/)
+  assert.match(room, /\.lobby-card \{[\s\S]*?backdrop-filter: blur\(14px\)/)
+  assert.match(room, /\.lobby-pet-halo \{[\s\S]*?radial-gradient\(circle, var\(--lobby-glow\)/)
   assert.match(room, /var\(--ui-gold-300/)
-  assert.match(room, /\.day \.bnav-item:focus-visible \{ outline-color: var\(--ui-forest-950/)
+  assert.match(room, /\.lobby-primary-cta:focus-visible,[\s\S]*?outline: 2px solid var\(--lobby-gold\)/)
   assert.match(actionBar, /Desktop-only room command surface/)
 })
 

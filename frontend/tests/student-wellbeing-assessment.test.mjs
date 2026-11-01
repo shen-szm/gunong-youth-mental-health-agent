@@ -31,3 +31,12 @@ test('emotion review does not present a synthetic average score', () => {
   assert.match(trend, /较常记录的情绪/)
   assert.match(trend, /主动记录时间线|近期主动记录/)
 })
+
+test('emotion review keeps the report window aligned with the selected range', () => {
+  assert.match(trend, /reportDays = computed/)
+  assert.match(trend, /getEmotionReport\(reportDays\.value\)/)
+  assert.match(trend, /watch\(activeTab, \(\) => \{ loadData\(\); loadReport\(\) \}\)/)
+  assert.match(trend, /倾诉线索会进入回顾报告/)
+  assert.match(trend, /近7天情绪小结/)
+  assert.doesNotMatch(trend, /AI 情绪洞察/)
+})

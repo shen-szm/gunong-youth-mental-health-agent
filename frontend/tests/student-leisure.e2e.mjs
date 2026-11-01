@@ -25,7 +25,7 @@ test('heart island supports lazy loading, repeated lifecycle, keyboard focus and
     })
 
     try {
-      await page.goto(new URL('/room', baseURL).href, { waitUntil: 'networkidle' })
+      await page.goto(new URL('/', baseURL).href, { waitUntil: 'networkidle' })
       const splash = page.locator('.splash')
       if (await splash.isVisible().catch(() => false)) await splash.click()
       assert.equal(await page.locator('.island-game-host canvas').count(), 0)

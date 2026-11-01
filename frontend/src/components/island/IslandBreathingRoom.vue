@@ -408,6 +408,83 @@ onBeforeUnmount(() => {
   .complete-btn { border-radius: 9px; color: #2d241c; background: var(--island-accent, #efb96f); }
 }
 
+/* 像素皮肤 3.0 · 星灯呼吸小屋 */
+.breathing-room {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent, #efb96f);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.breath-header strong { font-family: var(--px-font); }
+.mode-card {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.mode-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.mode-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.mode-card.active { border-color: var(--px-gold); }
+.mode-icon { border-radius: 4px; }
+.mode-card strong { font-family: var(--px-font); }
+.start-btn {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  background: var(--px-gold);
+  color: #2d241c;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.start-btn:hover {
+  background: #f3c789;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.start-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.breath-text { font-family: var(--px-font); }
+.stop-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.stop-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.stop-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.complete-card {
+  --px-line: rgba(74, 58, 42, .3);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(74, 58, 42, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.complete-card strong { font-family: var(--px-font); }
+.complete-btn {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  background: var(--px-gold);
+  color: #fff8ea;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.breathing-room button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
 @media (prefers-reduced-motion: reduce) {
   .breathing-room *, .complete-icon { animation: none !important; transition-duration: .01ms !important; }
 }

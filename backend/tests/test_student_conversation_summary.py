@@ -36,10 +36,16 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         self.old_student_ai_access_mode = settings.STUDENT_AI_ACCESS_MODE
         self.old_platform_governance_ack = settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK
         self.old_ask_spark = chat_api.ask_spark
+        self.old_ask_deepseek = chat_api.ask_deepseek
+        self.old_companion_engine = settings.STUDENT_COMPANION_ENGINE
+        self.old_spark_password = settings.SPARK_API_PASSWORD
         settings.ALLOW_EXTERNAL_AI = False
         settings.ALLOW_STUDENT_EXTERNAL_AI = False
         settings.STUDENT_AI_ACCESS_MODE = "teacher_authorized"
         settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = False
+        # 这一组用例保留旧星火链路的回归覆盖；DeepSeek 链路在独立的 companion 用例里跑。
+        settings.STUDENT_COMPANION_ENGINE = "legacy_xunfei"
+        settings.SPARK_API_PASSWORD = "test-spark-password"
         self.app = FastAPI()
         self.app.include_router(user_router)
         self.app.include_router(chat_router)
@@ -75,6 +81,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             row = StudentExternalAiAuthorization(student_user_id=user_id, authorized_by_user_id=self.teacher_id)
             db.add(row)
         row.status = "active" if active else "revoked"
+        row.statement_version = "teacher-ai-authorization-v3"
         row.expires_at = datetime.now() + timedelta(days=30)
         row.revoked_at = None if active else datetime.now()
         db.commit()
@@ -87,7 +94,10 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         settings.ALLOW_STUDENT_EXTERNAL_AI = self.old_student_external_ai
         settings.STUDENT_AI_ACCESS_MODE = self.old_student_ai_access_mode
         settings.PLATFORM_STUDENT_AI_GOVERNANCE_ACK = self.old_platform_governance_ack
+        settings.STUDENT_COMPANION_ENGINE = self.old_companion_engine
+        settings.SPARK_API_PASSWORD = self.old_spark_password
         chat_api.ask_spark = self.old_ask_spark
+        chat_api.ask_deepseek = self.old_ask_deepseek
         self.engine.dispose()
 
     def test_normal_chat_stays_open_until_confirmed_whole_session_summary(self):
@@ -327,7 +337,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         db = self.Session()
         try:
             session = db.query(StudentChatSession).filter_by(session_code=session_id).one()
-            self.assertEqual(session.external_ai_consent_version, "platform-direct-deidentified-v1")
+            self.assertEqual(session.external_ai_consent_version, "platform-direct-transcript-v3")
             audit = db.query(SensitiveAccessLog).filter_by(action="external_model_transfer_chat").one()
             self.assertEqual(audit.result, "platform_direct_deidentified_derived_features_only")
         finally:
@@ -726,6 +736,20 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         completed = self.client_one.post(f"/api/chat/sessions/{session_id}/complete")
         self.assertEqual(completed.status_code, 200)
         self.assertEqual(completed.json()["status"], "ready")
+
+    def test_session_count_deduplicates_sessions_and_hides_other_students(self):
+        first_session = self.client_one.post("/api/chat/sessions", json={"force_new": True}).json()["session_id"]
+        for message in ["最近有点累", "想早点睡"]:
+            self.client_one.post("/api/chat/send", json={
+                "user_id": self.user_one_id, "session_id": first_session, "message": message
+            })
+        self.client_one.post("/api/chat/sessions", json={"force_new": True})
+        self.client_two.post("/api/chat/sessions", json={"force_new": True})
+
+        counted = self.client_one.get("/api/chat/sessions/count")
+        self.assertEqual(counted.status_code, 200)
+        self.assertEqual(counted.json()["count"], 1)
+        self.assertEqual(self.client_two.get("/api/chat/sessions/count").json()["count"], 0)
 
 
 if __name__ == "__main__":

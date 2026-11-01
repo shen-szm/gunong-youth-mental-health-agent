@@ -29,7 +29,8 @@ def selected(name):
 
 def main():
     names = subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd=ROOT).decode().split('\0')
-    names = sorted(set(name for name in names if name and selected(name)))
+    deleted = set(subprocess.check_output(['git', 'ls-files', '-z', '--deleted'], cwd=ROOT).decode().split('\0'))
+    names = sorted(set(name for name in names if name and name not in deleted and selected(name)))
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     label = 'shengyu-web-latest-source-' + stamp
     output = ROOT / 'artifacts' / (label + '.zip')

@@ -470,6 +470,82 @@ onBeforeUnmount(() => {
   .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(12px); }
 }
 
+/* 像素皮肤 3.0 · 咕团家园 */
+.pet-home {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent, #efb96f);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.pet-header strong { font-family: var(--px-font); }
+.pet-bubble {
+  --px-line: rgba(74, 58, 42, .3);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(74, 58, 42, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.action-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.action-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.action-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.talk-btn { border-color: var(--px-gold); }
+.talk-panel {
+  --px-line: rgba(74, 58, 42, .3);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(74, 58, 42, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.talk-msg span { border-radius: 4px; }
+.talk-input input {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.talk-input input:focus {
+  border-color: var(--px-gold);
+  outline: 2px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+.talk-input button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.intimacy-hint {
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.pet-home button:focus-visible,
+.pet-home input:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+@media (min-width: 901px) {
+  .pet-header {
+    border: 2px solid var(--px-line);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 var(--px-shadow);
+  }
+  .pet-actions {
+    border: 2px solid var(--px-line);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 var(--px-shadow);
+  }
+  .action-icon { border-radius: 4px; }
+  .talk-btn { color: #2d241c; background: var(--px-gold); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pet-home *, .pet-sprite { animation: none !important; transition-duration: .01ms !important; }
 }

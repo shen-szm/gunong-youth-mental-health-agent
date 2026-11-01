@@ -19,17 +19,22 @@ test('heart island exposes direct constrained model use and the actual generatio
   assert.match(workspace, /agent-safety-action/)
 })
 
-test('student chat directly enables constrained strategy selection without a per-student authorization control', () => {
+test('student chat directly enables companion dialogue and states raw-text transfer truthfully', () => {
   const room = read('../src/views/RoomHomeView.vue')
+  const chatView = read('../src/views/StudentChatView.vue')
   const api = read('../src/api/chat.js')
-  assert.match(room, /讯飞策略协作已启用/)
-  assert.match(room, /无需单独申请即可对话/)
-  assert.doesNotMatch(room + api, /student-ai-v1|update_external_ai_consent|updateChatAiConsent/)
-  assert.match(room, /文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索/)
-  assert.match(room, /聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型/)
+  assert.match(room + chatView, /DeepSeek 小满对话已启用/)
+  assert.match(room + chatView, /讯飞策略协作已启用/)
+  assert.match(room + chatView, /对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结/)
+  assert.match(room + chatView, /姓名、学校、联系方式、精确地址和原始录音不会发送/)
+  assert.match(room + chatView, /危机判断与风险等级始终由本地安全规则优先处理/)
+  assert.doesNotMatch(room + chatView, /小结仍只使用去标识化线索/)
+  assert.match(room + chatView, /const fresh = await startChatSession\(true\)/)
+  assert.doesNotMatch(room + chatView + api, /student-ai-v1|update_external_ai_consent|updateChatAiConsent/)
   assert.match(room, /voiceInputEnabled\.value = !!session\.data\.voice_input_enabled/)
   assert.doesNotMatch(room, /v-if="chatMessages\.length === 0" class="chat-ai-consent"/)
   assert.match(room, /const session = await startChatSession\(false\)[\s\S]*externalAiConsent\.value = !!session\.data\.external_ai_enabled/)
+  assert.match(room, /companionEngine\.value = session\.data\.companion_engine/)
 })
 
 test('teacher work product stays local while student model access is globally governed', () => {
@@ -42,13 +47,12 @@ test('teacher work product stays local while student model access is globally go
   assert.match(api, /external-ai-authorization/)
 })
 
-test('student agent rail distinguishes model, deterministic, safety and fallback sources on desktop', () => {
+test('student agent rail distinguishes companion, model, deterministic, safety and fallback sources on desktop', () => {
   const room = read('../src/views/RoomHomeView.vue')
   const rail = read('../src/components/StudentAgentRail.vue')
   assert.match(room, /studentAgentState\.source = res\.data\.analysis_source/)
-  for (const label of ['讯飞策略协作', '本地确定性规则', '安全规则强制覆盖', '规则安全降级']) assert.match(rail, new RegExp(label))
+  for (const label of ['DeepSeek 小满对话', '讯飞策略协作', '本地确定性规则', '安全规则强制覆盖', '规则安全降级']) assert.match(rail, new RegExp(label))
   assert.match(rail, /<details class="agent-technical-details">/)
-  assert.match(rail, /模型依据去标识化结构线索选择情绪、支持需要与回应策略/)
-  assert.match(rail, /学生可见文字由后端审核话术库实现/)
-  assert.match(rail, /聊天原文不外发/)
+  assert.match(rail, /本轮回应由 DeepSeek 小满对话生成/)
+  assert.doesNotMatch(rail, /聊天原文不外发/)
 })

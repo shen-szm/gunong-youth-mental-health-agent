@@ -107,11 +107,13 @@ const moodNote = ref("");
 const savingMood = ref(false);
 
 const moodOptions = [
+  { emoji: "😠", label: "愤怒", score: 3, color: "#D4766A" },
+  { emoji: "🤢", label: "厌恶", score: 2, color: "#A98A5C" },
+  { emoji: "😨", label: "恐惧", score: 2, color: "#8B7BA6" },
   { emoji: "😊", label: "开心", score: 9, color: "#6DB58B" },
-  { emoji: "😌", label: "平静", score: 7, color: "#7FB3A6" },
-  { emoji: "😰", label: "焦虑", score: 4, color: "#E8C468" },
-  { emoji: "😢", label: "难过", score: 3, color: "#8EAFC4" },
-  { emoji: "😡", label: "愤怒", score: 2, color: "#D4766A" },
+  { emoji: "😐", label: "中性", score: 6, color: "#A8A29A" },
+  { emoji: "😢", label: "悲伤", score: 3, color: "#8EAFC4" },
+  { emoji: "😲", label: "惊讶", score: 6, color: "#E8C468" },
 ];
 
 async function saveMood() {
@@ -141,12 +143,20 @@ async function saveMood() {
   }
 }
 const emotionColor = computed(() => {
-  const colors = {"开心":"#B5E0C8","平静":"#C8E0D8","焦虑":"#F0E0A8","难过":"#B8C8D8","愤怒":"#E8BEB8"};
+  const colors = {
+    "愤怒":"#E8BEB8", "厌恶":"#DDD2BE", "恐惧":"#D8D0E4", "开心":"#B5E0C8",
+    "中性":"#DCD9D2", "悲伤":"#B8C8D8", "惊讶":"#F0E0A8",
+    "平静":"#C8E0D8", "焦虑":"#F0E0A8", "难过":"#B8C8D8",
+  };
   return colors[todayEmotion.value.label] || "#C8E0D8";
 });
 
 function getMoodColor(label) {
-  const colors = {"开心":"#6DB58B","平静":"#7FB3A6","焦虑":"#E8C468","难过":"#8EAFC4","愤怒":"#D4766A"};
+  const colors = {
+    "愤怒":"#D4766A", "厌恶":"#A98A5C", "恐惧":"#8B7BA6", "开心":"#6DB58B",
+    "中性":"#A8A29A", "悲伤":"#8EAFC4", "惊讶":"#E8C468",
+    "平静":"#7FB3A6", "焦虑":"#E8C468", "难过":"#8EAFC4",
+  };
   return colors[label] || "#aaa";
 }
 
@@ -223,9 +233,9 @@ onMounted(async () => {
   box-shadow: 0 8px 32px rgba(0,0,0,0.1);
 }
 .modal h3 { font-size: 18px; margin-bottom: 16px; text-align: center; color: var(--text); }
-.mood-options { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.mood-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
 .mood-option {
-  flex: 1; text-align: center; padding: 12px 4px;
+  text-align: center; padding: 12px 4px;
   border: 2px solid var(--border); border-radius: 12px; cursor: pointer;
   transition: all 0.2s; background: #fff;
 }

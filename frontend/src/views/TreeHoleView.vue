@@ -926,4 +926,88 @@ function openDriftBottle() {
 
 .inline-title { text-align: center; margin-bottom: 16px; }
 .inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
+
+/* 像素皮肤 3.0 · 树洞（inline 深色） */
+.treehole-page.inline-mode {
+  --px-line: rgba(240, 216, 170, .24);
+  --px-gold: #e8cf9a;
+  --px-shadow: rgba(0, 0, 0, .55);
+}
+.treehole-page .inline-title h2 { font-family: var(--px-font); }
+.treehole-page .daily-warmth { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .companion-entry {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.treehole-page .companion-entry:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.treehole-page .companion-entry:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.treehole-page .ce-title { font-family: var(--px-font); font-size: 14px; }
+.treehole-page .post-area {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.treehole-page .mood-btn { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .mood-btn.active { border-color: var(--px-gold); }
+.treehole-page .input-row input { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .post-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .post-btn:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.treehole-page .post-btn:not(:disabled):active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.treehole-page .treehole-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.treehole-page .treehole-card:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.treehole-page .thc-resonance,
+.treehole-page .thc-delete { border-radius: 4px; }
+.treehole-page .companion-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px 6px 0 0;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.treehole-page .cp-header h3 { font-family: var(--px-font); }
+.treehole-page .cp-close { border-radius: 4px; }
+.treehole-page .cp-item { border-radius: 4px; }
+.treehole-page .drift-again {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .cc-header { border-bottom: 2px solid var(--px-line); }
+.treehole-page .cc-header span { font-family: var(--px-font); }
+.treehole-page .ccm-bubble { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .cc-msg.user .ccm-bubble,
+.treehole-page .cc-msg.assistant .ccm-bubble { border-radius: 4px; }
+.treehole-page .cc-input { border-top: 2px solid var(--px-line); }
+.treehole-page .cc-input input { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .cc-input button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .cc-urgent { border-radius: 4px; }
+.treehole-page .cc-urgent a,
+.treehole-page .cc-urgent button { border-radius: 4px; }
+.treehole-page .companion-entry:focus-visible,
+.treehole-page .mood-btn:focus-visible,
+.treehole-page .input-row input:focus-visible,
+.treehole-page .post-btn:focus-visible,
+.treehole-page .treehole-card:focus-visible,
+.treehole-page .thc-resonance:focus-visible,
+.treehole-page .thc-delete:focus-visible,
+.treehole-page .cp-close:focus-visible,
+.treehole-page .cp-item:focus-visible,
+.treehole-page .drift-again:focus-visible,
+.treehole-page .cc-input button:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
 </style>

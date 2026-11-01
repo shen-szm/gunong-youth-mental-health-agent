@@ -30,7 +30,7 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
     }, { userId: registeredStudent.user_id })
 
     try {
-      await page.goto(new URL('/room', baseURL).href, { waitUntil: 'networkidle' })
+      await page.goto(new URL('/', baseURL).href, { waitUntil: 'networkidle' })
       const splash = page.locator('.splash')
       if (await splash.isVisible().catch(() => false)) await splash.click()
       await page.waitForFunction(async () => {
@@ -62,21 +62,19 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
         await page.setViewportSize({ width: 390, height: 844 })
         await page.waitForTimeout(250)
         await page.screenshot({ path: path.join(screenshotDir, '.codex-alpha52-room-mobile.png') })
-        const mobileMonitorBox = await page.locator('.zone-monitor').boundingBox()
-        const mobileSpeakerBox = await page.locator('.zone-speaker-left').boundingBox()
-        assert.ok(mobileSpeakerBox.width >= 44 && mobileSpeakerBox.height >= 44)
-        const hotspotsOverlap = mobileSpeakerBox.x < mobileMonitorBox.x + mobileMonitorBox.width
-          && mobileSpeakerBox.x + mobileSpeakerBox.width > mobileMonitorBox.x
-          && mobileSpeakerBox.y < mobileMonitorBox.y + mobileMonitorBox.height
-          && mobileSpeakerBox.y + mobileSpeakerBox.height > mobileMonitorBox.y
-        assert.equal(hotspotsOverlap, false)
-        assert.equal(await page.locator('.zone-speaker-right').isHidden(), true)
-        await page.locator('.zone-speaker-left').focus()
+        const mobileCtaBox = await page.locator('.lobby-primary-cta').boundingBox()
+        const mobileIslandBox = await page.locator('.lobby-card-island').boundingBox()
+        assert.ok(mobileCtaBox.height >= 60)
+        assert.ok(mobileIslandBox.height >= 110)
+        const entriesOverlap = mobileIslandBox.y < mobileCtaBox.y + mobileCtaBox.height
+          && mobileIslandBox.y + mobileIslandBox.height > mobileCtaBox.y
+        assert.equal(entriesOverlap, false)
+        await page.locator('.lobby-primary-cta').focus()
         await page.keyboard.press('Tab')
         await page.keyboard.press('Shift+Tab')
-        assert.equal(await page.locator('.zone-speaker-left').evaluate(element => document.activeElement === element), true)
+        assert.equal(await page.locator('.lobby-primary-cta').evaluate(element => document.activeElement === element), true)
         await page.waitForTimeout(350)
-        assert.equal(await page.locator('.zone-speaker-left .hover-tip').evaluate(element => getComputedStyle(element).opacity), '1')
+        assert.notEqual(await page.locator('.lobby-primary-cta').evaluate(element => getComputedStyle(element).outlineWidth), '0px')
         await page.setViewportSize({ width: 1280, height: 820 })
         await page.waitForTimeout(250)
       }
@@ -106,11 +104,12 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
       }
       await agentRail.getByRole('button', { name: '收起智能体进度' }).click()
       await agentRail.waitFor({ state: 'detached' })
-      const monitorHotspot = page.locator('.zone-monitor')
-      await monitorHotspot.focus()
+      const primaryCta = page.locator('.lobby-primary-cta')
+      await primaryCta.focus()
       await page.keyboard.press('Enter')
-      const roomActionBar = page.locator('.room-action-bar')
-      await roomActionBar.waitFor({ state: 'visible' })
+      await page.waitForURL('**/chat')
+      const panel = page.locator('.sc-page')
+      await panel.waitFor({ state: 'visible' })
       if (screenshotDir) {
         await page.waitForTimeout(250)
         await page.screenshot({ path: path.join(screenshotDir, '.codex-alpha52-action-desktop.png') })
@@ -120,27 +119,13 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
         await page.setViewportSize({ width: 1280, height: 820 })
         await page.waitForTimeout(250)
       }
-      await page.keyboard.press('Enter')
-      const panel = page.locator('.chat-panel')
-      await panel.waitFor({ state: 'visible' })
-      const chatClose = panel.getByRole('button', { name: '关闭倾诉面板' })
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '关闭倾诉面板')
-      assert.equal(await chatClose.evaluate(element => document.activeElement === element), true)
-      await page.keyboard.press('Escape')
-      await panel.waitFor({ state: 'detached' })
-      await page.waitForFunction(() => document.activeElement?.classList.contains('zone-monitor'))
-      assert.equal(await monitorHotspot.evaluate(element => document.activeElement === element), true)
-      await page.keyboard.press('Enter')
-      await roomActionBar.waitFor({ state: 'visible' })
-      await page.keyboard.press('Enter')
-      await panel.waitFor({ state: 'visible' })
 
-      const input = panel.locator('.input-wrap input')
+      const input = panel.locator('.sc-iinput input')
       const sendAndWait = async message => {
-        const previousReplies = await panel.locator('.msg-row.assistant').count()
+        const previousReplies = await panel.locator('.sc-row.assistant').count()
         await input.fill(message)
-        await panel.locator('.send-btn').click()
-        await page.waitForFunction(expected => document.querySelectorAll('.chat-panel .msg-row.assistant').length > expected, previousReplies)
+        await panel.locator('.sc-send').click()
+        await page.waitForFunction(expected => document.querySelectorAll('.sc-page .sc-row.assistant').length > expected, previousReplies)
       }
 
       await sendAndWait('考试让我很焦虑，最近也总睡不着')
@@ -148,29 +133,26 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
       assert.equal(await page.locator('.student-summary-orb').count(), 0)
 
       await sendAndWait('谢谢你，但我还想继续说')
-      assert.equal(await page.locator('.chat-end-confirm').count(), 0)
+      assert.equal(await page.locator('.sc-endconfirm').count(), 0)
 
       await sendAndWait('谢谢你')
-      const confirmation = page.locator('.chat-end-confirm')
+      const confirmation = page.locator('.sc-endconfirm')
       await confirmation.waitFor({ state: 'visible' })
       await confirmation.getByRole('button', { name: '继续聊' }).click()
       assert.equal(await confirmation.count(), 0)
       assert.equal(await input.evaluate(element => document.activeElement === element), true)
 
-      await panel.getByRole('button', { name: '结束本次倾诉' }).click()
-      const oldUserMessageCount = await page.locator('.chat-panel .msg-row.user').count()
+      await panel.locator('.sc-end').click()
+      const oldUserMessageCount = await page.locator('.sc-page .sc-row.user').count()
       const originalMessage = page.getByText('考试让我很焦虑，最近也总睡不着', { exact: true })
       assert.equal(await originalMessage.count(), 1)
       await confirmation.getByRole('button', { name: '生成小结' }).click()
-      const orb = page.locator('.student-summary-orb:not(:disabled)')
+      const orb = page.locator('.sc-orb:not(:disabled)')
       await orb.waitFor({ state: 'visible' })
-      await panel.waitFor({ state: 'hidden' })
-      assert.equal(await panel.isVisible(), false)
 
       await orb.click()
-      const drawer = page.locator('.student-support-drawer')
+      const drawer = page.locator('.sc-drawer')
       await drawer.waitFor({ state: 'visible' })
-      await agentRail.waitFor({ state: 'detached' })
       assert.equal(await page.evaluate(() => window.scrollY), 0)
       await drawer.getByText('不是心理诊断或量表结果', { exact: false }).waitFor()
       if (screenshotDir) {
@@ -184,20 +166,19 @@ test('student summary browser flow keeps chat open, confirms ending, restores co
       }
       await drawer.getByRole('button', { name: '继续倾诉' }).first().click()
       await panel.waitFor({ state: 'visible' })
-      assert.equal(await page.locator('.chat-panel .msg-row.user').count(), oldUserMessageCount)
+      assert.equal(await page.locator('.sc-page .sc-row.user').count(), oldUserMessageCount)
       assert.equal(await originalMessage.count(), 1)
 
       await orb.click()
       await drawer.getByRole('button', { name: '开始新话题' }).click()
       await panel.waitFor({ state: 'visible' })
-      await page.waitForFunction(() => document.querySelectorAll('.chat-panel .msg-row.user').length === 0)
-      assert.equal(await page.locator('.chat-panel .msg-row.user').count(), 0)
+      await page.waitForFunction(() => document.querySelectorAll('.sc-page .sc-row.user').length === 0)
+      assert.equal(await page.locator('.sc-page .sc-row.user').count(), 0)
 
-      await page.getByLabel('关闭倾诉面板').click()
       await orb.click()
       await drawer.getByRole('button', { name: '删除本次小结' }).click()
       await orb.waitFor({ state: 'detached' })
-      assert.equal(await page.locator('.bottom-nav button').first().evaluate(element => document.activeElement === element), true)
+      assert.equal(await input.evaluate(element => document.activeElement === element), true)
       assert.deepEqual(pageErrors, [])
     } finally {
       await browser.close()

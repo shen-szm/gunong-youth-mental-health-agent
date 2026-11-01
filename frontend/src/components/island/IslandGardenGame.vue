@@ -37,4 +37,42 @@ function apply(result, action) {
 
 <style scoped>
 .island-garden-game{color:#293f34;padding:24px;background:#f3f7f3;min-height:100%}.island-garden-game header{display:flex;justify-content:space-between;gap:20px}.island-garden-game h3{font-size:24px;margin:8px 0}.island-garden-game p{line-height:1.7;max-width:65ch;color:#4a6254}.island-garden-game header>span{white-space:nowrap;font-size:13px}.garden-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(220px,1fr);gap:28px;margin-top:18px}.garden-tools{display:flex;gap:8px;flex-wrap:wrap}.island-garden-game button,.garden-seed select{min-height:40px;border:1px solid #9aad9f;border-radius:8px;background:#fff;color:#293f34;padding:8px 12px;font:inherit;cursor:pointer}.garden-tools button[aria-pressed=true]{background:#315e47;color:white;border-color:#315e47}.garden-seed{display:flex;align-items:center;gap:12px;margin:14px 0;font-size:13px}.garden-plots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.garden-plots .plot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:116px;background:#dce9da}.garden-plots .tilled{background:#e8ddca;border-color:#bbaa8c}.garden-plots .mature{background:#f0e8b8;border-color:#ad9754}.plant{font-size:28px}.plot strong,.plot small{font-size:12px}.garden-message{min-height:48px;margin:14px 0}.garden-layout aside{border-left:1px solid #cbd9ce;padding-left:24px}.garden-layout h4{margin:8px 0 12px}.garden-stock{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #cbd9ce;padding:12px 0;font-size:13px}.garden-stock small{display:block;margin-top:5px;color:#4a6254}.garden-stock button{font-size:12px}.garden-boundary{font-size:12px}.island-garden-game button:disabled{opacity:.55;cursor:default}.island-garden-game button:hover:not(:disabled){filter:brightness(.96)}.island-garden-game :focus-visible{outline:3px solid #315e47;outline-offset:3px}@media(max-width:700px){.garden-layout{grid-template-columns:1fr}.garden-layout aside{border-left:0;border-top:1px solid #cbd9ce;padding:18px 0}.island-garden-game{padding:16px}.island-garden-game header{display:block}.island-garden-game h3{font-size:20px}.garden-plots .plot{padding:8px;min-height:110px}}
+
+/* 像素皮肤 3.0 · 云顶暖房 */
+.island-garden-game{
+  --px-line: rgba(41, 63, 52, .28);
+  --px-gold: #315e47;
+  --px-shadow: rgba(41, 63, 52, .22);
+}
+.island-garden-game header small,
+.island-garden-game h3,
+.island-garden-game h4{font-family:var(--px-font)}
+.garden-tools button,
+.garden-seed select,
+.island-garden-game .garden-help,
+.garden-layout aside button{
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.garden-tools button:hover:not(:disabled),
+.island-garden-game .garden-help:hover:not(:disabled),
+.garden-layout aside button:hover:not(:disabled){
+  filter: none;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.garden-tools button:active:not(:disabled),
+.island-garden-game .garden-help:active:not(:disabled),
+.garden-layout aside button:active:not(:disabled){
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.garden-tools button[aria-pressed=true]{border-color:var(--px-gold)}
+.garden-plots .plot{border-radius:4px}
+.garden-layout aside{border-left-color:var(--px-line)}
+.garden-stock{border-bottom-color:var(--px-line)}
+.island-garden-game :focus-visible{outline:3px dashed var(--px-gold);outline-offset:3px}
 </style>

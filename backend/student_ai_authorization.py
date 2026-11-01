@@ -5,8 +5,8 @@ from config import settings
 from models import StudentExternalAiAuthorization
 
 
-AUTHORIZATION_VERSION = "teacher-ai-authorization-v1"
-PLATFORM_DIRECT_VERSION = "platform-direct-deidentified-v1"
+AUTHORIZATION_VERSION = "teacher-ai-authorization-v3"
+PLATFORM_DIRECT_VERSION = "platform-direct-transcript-v3"
 
 
 def get_student_ai_authorization(db: Session, student_user_id: int) -> StudentExternalAiAuthorization | None:
@@ -28,7 +28,7 @@ def student_ai_authorization_payload(db: Session, student_user_id: int) -> dict:
             "authorized_by_user_id": None,
             "basis": "platform_governance",
             "statement_version": PLATFORM_DIRECT_VERSION,
-            "purpose": "student_support_agents_deidentified",
+            "purpose": "student_support_agents_transcript",
             "expires_at": None,
         }
     row = get_student_ai_authorization(db, student_user_id)
@@ -36,14 +36,27 @@ def student_ai_authorization_payload(db: Session, student_user_id: int) -> dict:
 
 
 def _authorization_payload_from_row(row: StudentExternalAiAuthorization | None) -> dict:
-    active = bool(row and row.status == "active" and row.expires_at > china_now_naive())
+    version_current = bool(row and row.statement_version == AUTHORIZATION_VERSION)
+    active = bool(
+        row and row.status == "active" and row.expires_at > china_now_naive() and version_current
+    )
+    if active:
+        status = "active"
+    elif row and row.status == "active" and not version_current:
+        status = "reauthorization_required"
+    elif row and row.status == "active":
+        status = "expired"
+    elif row:
+        status = row.status
+    else:
+        status = "not_configured"
     return {
         "active": active,
-        "status": "active" if active else "expired" if row and row.status == "active" else row.status if row else "not_configured",
+        "status": status,
         "authorized_by_user_id": row.authorized_by_user_id if row else None,
         "basis": row.basis if row else None,
         "statement_version": row.statement_version if row else AUTHORIZATION_VERSION,
-        "purpose": row.purpose if row else "student_support_agents",
+        "purpose": row.purpose if row else "student_support_agents_transcript",
         "expires_at": row.expires_at.isoformat() if row else None,
     }
 
@@ -76,3 +89,8 @@ def student_ai_governance_version(db: Session, student_user_id: int) -> str | No
 
 def student_ai_audit_basis() -> str:
     return "platform_direct_deidentified" if settings.STUDENT_AI_ACCESS_MODE == "platform_direct" else "teacher_authorized"
+
+
+def student_ai_transcript_audit_basis() -> str:
+    """对话原文外发时使用的审计口径，和去标识化结构路径区分开。"""
+    return "platform_direct_transcript" if settings.STUDENT_AI_ACCESS_MODE == "platform_direct" else "teacher_authorized_transcript"

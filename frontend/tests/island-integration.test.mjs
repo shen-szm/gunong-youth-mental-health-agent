@@ -21,7 +21,7 @@ test('heart island is lazy loaded and Phaser is not imported by the student room
   const pkg = JSON.parse(pkgText)
   assert.equal(pkg.dependencies.phaser, '3.90.0')
   assert.doesNotMatch(room, /from ['"]phaser['"]/)
-  assert.match(room, /openWorkspacePanel\('leisure', \$event\.currentTarget, 'island'\)/)
+  assert.match(room, /openWorkspacePanel\('leisure', \$event\.currentTarget\)/)
   assert.match(workspace, /await import\('\.\.\/\.\.\/game\/island\/createIslandGame\.js'\)/)
   assert.match(workspace, /game\?\.destroy\(true\)/)
   assert.match(workspace, /role="dialog"/)
@@ -115,9 +115,6 @@ test('heart island and room critical images stay within the performance budget',
     ['island/heart-island-base.webp', 250_000],
     ['island/student-back.webp', 20_000],
     ['guguan/guguan-idle.webp', 50_000],
-    ['电脑端-白天.webp', 250_000],
-    ['电脑端-傍晚.webp', 250_000],
-    ['电脑端-夜晚.webp', 250_000],
   ])
   for (const [asset, budget] of budgets) {
     const metadata = await stat(new URL(asset, publicImagesUrl))

@@ -18,6 +18,7 @@ def _bounded_support_contract(
     risk_level: str,
     external_ai_enabled: bool,
     derived_features: dict | None,
+    companion_engine: bool = False,
 ) -> tuple[dict, dict]:
     """Build a small, auditable plan from derived voluntary-expression cues only."""
     features = derived_features or {}
@@ -42,7 +43,9 @@ def _bounded_support_contract(
         "危机规则始终优先于普通计划",
         "不作医学诊断或量表结论",
         (
-            "外部模型仅可在受限枚举中选择回应策略"
+            "外部模型接收本轮对话原文用于生成朋友式回应；姓名、学校、联系方式和精确地址不发送"
+            if companion_engine
+            else "外部模型仅可在受限枚举中选择回应策略"
             if external_ai_enabled
             else "本轮使用本地确定性策略，不向外部模型传输数据"
         ),
@@ -63,8 +66,15 @@ def _bounded_support_contract(
         "support_theme": theme,
         "functional_impact": impacts,
         "risk_level": risk_level,
-        "execution_mode": "constrained_model" if external_ai_enabled else "local_deterministic",
-        "cue_policy": "student_voluntary_structured_only",
+        "execution_mode": (
+            "companion_model" if companion_engine
+            else "constrained_model" if external_ai_enabled
+            else "local_deterministic"
+        ),
+        "cue_policy": (
+            "student_voluntary_transcript_and_structured" if companion_engine
+            else "student_voluntary_structured_only"
+        ),
     }
     return contract, scope
 
@@ -200,8 +210,14 @@ def _verify_delivery(
             check(
                 "structured_cues_only",
                 "最小必要数据边界",
-                any(step.get("scope", {}).get("cue_policy") == "student_voluntary_structured_only" for step in plan),
-                "验收器仅接收学生主动表达的派生主题、功能影响和风险分流",
+                any(
+                    step.get("scope", {}).get("cue_policy") in {
+                        "student_voluntary_structured_only",
+                        "student_voluntary_transcript_and_structured",
+                    }
+                    for step in plan
+                ),
+                "验收器只使用学生主动表达的派生主题、功能影响和风险分流；对话原文仅用于生成回应",
             ),
             check(
                 "responsibility_assigned",
@@ -220,6 +236,7 @@ def _plan(
     risk_level: str,
     external_ai_enabled: bool,
     derived_features: dict | None = None,
+    companion_engine: bool = False,
 ) -> tuple[list[dict], list[str]]:
     plan = [
         {"id": "safety", "agent": "StudentSafetyGate", "tool": "deterministic_safety_rules"},
@@ -234,7 +251,9 @@ def _plan(
         return plan, tools
     plan.append({"id": "observation", "agent": "ConversationObserver", "tool": "derived_feature_extractor"})
     tools.append("derived_feature_extractor")
-    task_contract, scope = _bounded_support_contract(risk_level, external_ai_enabled, derived_features)
+    task_contract, scope = _bounded_support_contract(
+        risk_level, external_ai_enabled, derived_features, companion_engine,
+    )
     plan.append({
         "id": "task_plan",
         "agent": "StudentTaskPlanner",
@@ -248,7 +267,11 @@ def _plan(
     if risk_level in {"watch", "professional"}:
         plan.append({"id": "resource", "agent": "ResourceNavigator", "tool": "local_support_resource_registry"})
         tools.append("local_support_resource_registry")
-    generator = "xunfei_response_strategy_selector" if external_ai_enabled else "deterministic_response_template"
+    generator = (
+        "deepseek_companion_generator" if companion_engine
+        else "xunfei_response_strategy_selector" if external_ai_enabled
+        else "deterministic_response_template"
+    )
     plan.extend([
         {"id": "response", "agent": "ResponseAgent", "tool": generator},
         {"id": "review", "agent": "StudentResponseReviewer", "tool": "generated_content_validator"},
@@ -268,6 +291,7 @@ def start_chat_support_run(
     risk_level: str,
     derived_features: dict,
     external_ai_enabled: bool,
+    companion_engine: bool = False,
     idempotency_key: str | None = None,
     context_message_count: int = 0,
     request_fingerprint: str = "",
@@ -276,7 +300,7 @@ def start_chat_support_run(
     existing = db.query(StudentSupportRun).filter_by(idempotency_key=key).first()
     if existing:
         return existing
-    plan, tools = _plan(risk_level, external_ai_enabled, derived_features)
+    plan, tools = _plan(risk_level, external_ai_enabled, derived_features, companion_engine)
     run = StudentSupportRun(
         run_code=f"SSR-{datetime.now():%Y%m%d}-{secrets.token_hex(5).upper()}",
         user_id=user_id,
@@ -419,10 +443,24 @@ def complete_chat_support_run(
             "resource": ("ResourceNavigator", "local_support_resource_registry", f"已从本地审计注册表匹配 {len(resources)} 个支持入口"),
             "response": (
                 "ResponseAgent",
-                "xunfei_response_strategy_selector" if source == "xunfei_constrained" else "deterministic_response_template",
-                "模型已选择受限回应策略，后端完成安全话术实现" if source == "xunfei_constrained" else "本地规则已生成非诊断性安全回应",
+                "deepseek_companion_generator" if source == "deepseek_companion"
+                else "xunfei_response_strategy_selector" if source == "xunfei_constrained"
+                else "deterministic_response_template",
+                "小满对话引擎已生成朋友式回应，安全边界由后端校验"
+                if source == "deepseek_companion"
+                else "模型已选择受限回应策略，后端完成安全话术实现"
+                if source == "xunfei_constrained"
+                else "本地规则已生成非诊断性安全回应",
             ),
-            "review": ("StudentResponseReviewer", "generated_content_validator", "枚举策略与后端话术已完成结构、安全及重复内容复核" if source == "xunfei_constrained" else "规则回应已完成诊断措辞与危险建议校验"),
+            "review": (
+                "StudentResponseReviewer",
+                "generated_content_validator",
+                "对话回应已完成诊断措辞、危险建议与重复内容校验"
+                if source == "deepseek_companion"
+                else "枚举策略与后端话术已完成结构、安全及重复内容复核"
+                if source == "xunfei_constrained"
+                else "规则回应已完成诊断措辞与危险建议校验",
+            ),
             "verify": (
                 "OutcomeVerifier",
                 "student_delivery_verifier",
@@ -444,7 +482,7 @@ def complete_chat_support_run(
                     f"support_theme:{scope.get('support_theme', '最近发生的事情')}",
                     f"functional_impact:{'|'.join(scope.get('functional_impact') or []) or 'not_declared'}",
                     f"execution_mode:{scope.get('execution_mode', 'local_deterministic')}",
-                    "cue_policy:student_voluntary_structured_only",
+                    f"cue_policy:{scope.get('cue_policy', 'student_voluntary_structured_only')}",
                 ]
             elif step["id"] == "resource":
                 evidence = [item["id"] for item in resources]
@@ -462,12 +500,16 @@ def complete_chat_support_run(
                     else "completed"
                 ),
                 summary=summary,
-                source="model" if step["id"] == "response" and source == "xunfei_constrained" else "deterministic",
+                source="model" if step["id"] == "response" and source in {"xunfei_constrained", "deepseek_companion"} else "deterministic",
                 evidence_json=json.dumps(evidence, ensure_ascii=False),
             ))
             sequence += 1
         run.status = "completed" if verification["status"] == "verified" else "attention"
-        run.model_name = "xunfei-response-strategy-selector" if source == "xunfei_constrained" else "deterministic-student-support"
+        run.model_name = (
+            "deepseek-companion" if source == "deepseek_companion"
+            else "xunfei-response-strategy-selector" if source == "xunfei_constrained"
+            else "deterministic-student-support"
+        )
     run.risk_level = risk_level
     run.output_message_id = output_message_id
     run.emotion_basis_json = json.dumps(emotion_basis or [], ensure_ascii=False)

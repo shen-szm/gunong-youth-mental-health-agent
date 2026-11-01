@@ -98,7 +98,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(enabled.status_code, 200)
         self.assertTrue(enabled.json()["active"])
         self.assertEqual(enabled.json()["basis"], "school_guardian_authority")
-        self.assertEqual(enabled.json()["statement_version"], "teacher-ai-authorization-v1")
+        self.assertEqual(enabled.json()["statement_version"], "teacher-ai-authorization-v3")
         listed = self.teacher_client.get("/api/teacher/student-list").json()["students"]
         self.assertTrue(next(item for item in listed if item["id"] == self.student_id)["external_ai_authorization"]["active"])
 

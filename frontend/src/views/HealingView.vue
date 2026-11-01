@@ -364,4 +364,46 @@ function playRecommendSong() {
 .healing-page.inline-mode .nc-status { color: #7FB3A6; }
 .inline-title { text-align: center; margin-bottom: 16px; }
 .inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
+
+/* 像素皮肤 3.0 · 疗愈（inline 深色） */
+.healing-page.inline-mode {
+  --px-line: rgba(240, 216, 170, .24);
+  --px-gold: #e8cf9a;
+  --px-shadow: rgba(0, 0, 0, .55);
+}
+.healing-page .inline-title h2 { font-family: var(--px-font); }
+.healing-page .energy-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.healing-page .energy-bar,
+.healing-page .energy-fill { border-radius: 0; }
+.healing-page .section h2 { font-family: var(--px-font); font-size: 15px; }
+.healing-page .music-recommend,
+.healing-page .noise-card,
+.healing-page .checklist-item,
+.healing-page .travel-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.healing-page .noise-card:hover,
+.healing-page .checklist-item:hover,
+.healing-page .travel-card:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.healing-page .noise-card.playing { border-color: var(--px-gold); }
+.healing-page .mr-play {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.healing-page .mr-tag { border-radius: 4px; }
+.healing-page .noise-card:focus-visible,
+.healing-page .checklist-item:focus-visible,
+.healing-page .travel-card:focus-visible,
+.healing-page .mr-play:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
 </style>

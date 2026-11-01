@@ -326,5 +326,112 @@ legend small { color:#8a7769; font-weight:500; }
   .desktop-agent-lifecycle>p { grid-column:1/-1; margin:0; font-size:11px; }
 }
 @media (max-width:720px) { .wellbeing-card { padding:16px; border-radius:20px; }.wellbeing-head { display:block; }.risk-chip { display:inline-block; margin-top:10px; }.domain-grid { grid-template-columns:1fr; }.frequency-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.frequency-options span { text-align:center; }.assessment-actions { flex-direction:column-reverse; }.assessment-actions button { width:100%; } }
+
+/* 像素皮肤 3.0 · 支持需求自评 */
+.wellbeing-card {
+  --px-line: rgba(104, 74, 51, .28);
+  --px-gold: #8a6041;
+  --px-shadow: rgba(74, 52, 32, .24);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.wellbeing-head h3 { font-family: var(--px-font); font-size: 21px; }
+.eyebrow, .next-action-card > span, .result-hero > span { font-family: var(--px-font); font-size: 12px; }
+.assessment-boundary,
+.ai-consent {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.method-details summary { font-family: var(--px-font); }
+.assessment-primary,
+.assessment-secondary,
+.hotline-actions a {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.assessment-primary { border-color: var(--px-gold); background: var(--px-gold); color: #fffaf2; }
+.assessment-secondary { background: rgba(255, 255, 255, .7); }
+.assessment-primary:not(:disabled):hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  background: #7a5238;
+}
+.assessment-secondary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.assessment-primary:not(:disabled):active,
+.assessment-secondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.period-note { border: 2px solid var(--px-line); border-left: 4px solid #d4a36f; border-radius: 4px; }
+.frequency-options span,
+.emotion-options span {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end), color 160ms steps(2, end);
+}
+.frequency-options label:hover span,
+.emotion-options label:hover span {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.frequency-options label.selected span,
+.emotion-options label.selected span {
+  border-color: var(--px-gold);
+  background: var(--px-gold);
+}
+.frequency-options input:focus-visible + span,
+.emotion-options input:focus-visible + span {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+.safety-section {
+  border-width: 2px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.safety-section h4 { font-family: var(--px-font); }
+.result-hero {
+  border-width: 2px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.result-hero h4 { font-family: var(--px-font); }
+.risk-chip { border-radius: 4px; border-width: 2px; font-family: var(--px-font); }
+.review-card,
+.domain-grid article,
+.next-action-card,
+.agent-progress,
+.urgent-actions {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.next-action-card,
+.urgent-actions { border-color: rgba(255, 250, 242, .28); }
+.next-action-card { background: #4e5949; }
+.desktop-agent-lifecycle {
+  border-width: 2px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.desktop-agent-lifecycle li { border-radius: 4px; }
+.desktop-agent-lifecycle li i { border-radius: 4px; }
+.agent-progress li > span { border-radius: 0; }
+.assessment-primary:focus-visible,
+.assessment-secondary:focus-visible,
+.hotline-actions a:focus-visible,
+.method-details summary:focus-visible,
+.method-details a:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
 @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
 </style>

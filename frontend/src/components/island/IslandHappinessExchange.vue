@@ -188,4 +188,100 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 3px sol
   .happiness-safety, .storage-warning { border: 0; border-radius: 10px; background: #653b34; }
 }
 @media (max-width: 900px) { .activity-copy dl { display: none; } .exchange-layout { grid-template-columns: 1fr; } .happiness-book ul { grid-template-columns: 1fr; } }
+
+/* 像素皮肤 3.0 · 幸福交换树 */
+.happiness-game {
+  --px-line: rgba(255, 248, 234, .24);
+  --px-gold: var(--island-accent, #efb96f);
+  --px-shadow: rgba(0, 0, 0, .5);
+}
+.activity-copy small,
+.activity-copy h3 { font-family: var(--px-font); }
+.activity-copy dl div {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.activity-copy dd { font-family: var(--px-font); }
+.exchange-form {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.exchange-form label { font-family: var(--px-font); }
+.exchange-form textarea {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.exchange-form textarea:focus {
+  outline: 2px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+.exchange-form > button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+  transition: background 160ms steps(2, end), transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.exchange-form > button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.exchange-form > button:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.card-stage {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.card-stage :deep(.swiper-slide) { border-radius: 4px; }
+.happiness-card {
+  --px-line: rgba(74, 43, 34, .3);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(45, 23, 27, .3);
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.happiness-card small { font-family: var(--px-font); }
+.empty-card {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.empty-card > span {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.happiness-safety {
+  border: 2px solid #e49078;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, .34);
+}
+.happiness-safety a,
+.happiness-safety button {
+  border: 2px solid rgba(255, 224, 169, .4);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .34);
+}
+.happiness-book h4 { font-family: var(--px-font); }
+.happiness-book header button,
+.happiness-book li button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+}
+.happiness-book header button:hover,
+.happiness-book li button:hover { border-color: var(--px-line); }
+.happiness-book li {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.storage-warning { border-radius: 4px; }
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
 </style>

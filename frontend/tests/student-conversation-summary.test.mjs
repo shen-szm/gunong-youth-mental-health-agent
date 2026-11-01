@@ -29,9 +29,8 @@ test('summary orb exposes complete, restore, delete and accessible states', () =
   assert.match(room, /prefers-reduced-motion: reduce/)
   assert.match(api, /completeChatSession/)
   assert.match(api, /latest-summary/)
-  assert.match(room, /return '\/images\/白天\.webp'/)
-  assert.match(room, /return '\/images\/夜晚\.webp'/)
   assert.doesNotMatch(room, /手机版-(?:白天|傍晚|夜晚)\.jpg/)
+  assert.doesNotMatch(room, /白天\.webp|夜晚\.webp/)
 })
 
 test('backend uses whole-session strict non-clinical summary workflow', () => {
@@ -46,7 +45,7 @@ test('backend uses whole-session strict non-clinical summary workflow', () => {
 
 test('student emotion report combines constrained conversation signals and explicit activity feedback', () => {
   assert.match(room, /externalAiConsent/)
-  assert.match(room, /讯飞策略协作已启用/)
+  assert.match(room, /DeepSeek 小满对话已启用/)
   assert.doesNotMatch(room, /student-ai-v1/)
   assert.match(room, /emotion_intensity/)
   assert.match(room, /emotion_basis/)

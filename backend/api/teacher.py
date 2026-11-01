@@ -10,11 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import screening_engine
 from auth import require_admin_teacher, require_teacher
 from app_time import china_day_start_naive, china_now_naive
 from database import get_db
 from guardian_engine import _context_has_urgent_meaning
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentSupportRun, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentScreeningRun, StudentSupportRun, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, TeacherWorkProductTaskDecision, User, UserSession
 from student_ai_authorization import AUTHORIZATION_VERSION, get_student_ai_authorization, student_ai_authorization_payload, student_ai_authorization_payloads, student_external_ai_allowed
 from teacher_review_engine import build_teacher_review_report
 from teacher_review_pdf import generate_teacher_review_pdf
@@ -228,7 +229,15 @@ def _has_urgent_signal(db: Session, student_id: int, since: datetime | None = No
         StudentWellbeingAssessment.deleted_at.is_(None),
         StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).first()
-    return bool(urgent_assessment) or any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
+    urgent_screening = db.query(StudentScreeningRun.id).filter(
+        StudentScreeningRun.user_id == student_id,
+        StudentScreeningRun.created_at >= since,
+        StudentScreeningRun.item9_positive == 1,
+        StudentScreeningRun.safety_flag_active == 1,
+        StudentScreeningRun.deleted_at.is_(None),
+        StudentScreeningRun.expires_at > china_now_naive(),
+    ).first()
+    return bool(urgent_assessment or urgent_screening) or any(_context_has_urgent_meaning(text or "") for (text,) in [*mood_texts, *chat_texts])
 
 
 def _warning_followup_state(db: Session, teacher: User, student_id: int) -> tuple[str, datetime | None]:
@@ -265,8 +274,13 @@ def _risk_for_student(db: Session, student_id: int) -> tuple[str, float, int]:
         StudentWellbeingAssessment.deleted_at.is_(None),
         StudentWellbeingAssessment.expires_at > china_now_naive(),
     ).order_by(StudentWellbeingAssessment.created_at.desc()).first()
+    screening_risk = screening_engine.active_screening_risk(db, student_id)
+    if screening_risk in {"urgent", "professional"}:
+        return "high", 0.0, len(moods)
     if latest_assessment and latest_assessment.risk_level in {"urgent", "professional"}:
         return "high", 0.0, len(moods)
+    if screening_risk == "watch":
+        return "middle", 0.0, len(moods)
     if latest_assessment and latest_assessment.risk_level == "watch":
         return "middle", 0.0, len(moods)
     if _has_urgent_signal(db, student_id, since):
@@ -302,6 +316,21 @@ def _risk_summaries_for_students(db: Session, student_ids: list[int]) -> dict[in
         StudentWellbeingAssessment.deleted_at.is_(None),
         StudentWellbeingAssessment.expires_at > now,
     ).order_by(StudentWellbeingAssessment.user_id, StudentWellbeingAssessment.created_at).all()
+    screening_rows = screening_engine.latest_screenings_for_students(db, student_ids)
+    screening_levels = {
+        student_id: screening_engine.run_risk(row, now=now)
+        for student_id, row in screening_rows.items()
+    }
+    screening_high_ids = {
+        student_id for student_id, level in screening_levels.items()
+        if level in {"urgent", "professional"}
+    }
+    screening_middle_ids = {
+        student_id for student_id, level in screening_levels.items() if level == "watch"
+    }
+    screening_urgent_ids = {
+        student_id for student_id, level in screening_levels.items() if level == "urgent"
+    }
 
     mood_counts = {student_id: 0 for student_id in student_ids}
     negative_counts = {student_id: 0 for student_id in student_ids}
@@ -330,13 +359,22 @@ def _risk_summaries_for_students(db: Session, student_ids: list[int]) -> dict[in
             immediate_assessment_ids.add(student_id)
         if created_at and (student_id not in latest_signal_at or created_at > latest_signal_at[student_id]):
             latest_signal_at[student_id] = created_at
+    for student_id, row in screening_rows.items():
+        if row.created_at and (
+            student_id not in latest_signal_at or row.created_at > latest_signal_at[student_id]
+        ):
+            latest_signal_at[student_id] = row.created_at
 
     summaries = {}
     for student_id in student_ids:
         latest_level = latest_assessment.get(student_id)
-        if student_id in urgent_assessment_ids or student_id in urgent_text_ids:
+        if (
+            student_id in urgent_assessment_ids
+            or student_id in urgent_text_ids
+            or student_id in screening_high_ids
+        ):
             level = "high"
-        elif latest_level == "watch":
+        elif latest_level == "watch" or student_id in screening_middle_ids:
             level = "middle"
         elif negative_counts[student_id] >= 4:
             level = "high"
@@ -344,26 +382,35 @@ def _risk_summaries_for_students(db: Session, student_ids: list[int]) -> dict[in
             level = "middle"
         else:
             level = "low"
-        urgent = student_id in immediate_assessment_ids or student_id in urgent_text_ids
+        urgent = (
+            student_id in immediate_assessment_ids
+            or student_id in urgent_text_ids
+            or student_id in screening_urgent_ids
+        )
         summaries[student_id] = (level, mood_counts[student_id], urgent, latest_signal_at.get(student_id))
     return summaries
 
 
 def _activity_student_ids(db: Session, since: datetime | None = None) -> set[int]:
-    """固定三次集合查询，避免按学生逐个探测记录造成 N+1。"""
+    """固定集合查询，避免按学生逐个探测记录造成 N+1。"""
     mood_query = db.query(MoodRecord.user_id)
     chat_query = db.query(ChatMessage.user_id).filter(ChatMessage.role == "user")
     assessment_query = db.query(StudentWellbeingAssessment.user_id).filter(
         StudentWellbeingAssessment.deleted_at.is_(None),
         StudentWellbeingAssessment.expires_at > china_now_naive(),
     )
+    screening_query = db.query(StudentScreeningRun.user_id).filter(
+        StudentScreeningRun.deleted_at.is_(None),
+        StudentScreeningRun.expires_at > china_now_naive(),
+    )
     if since is not None:
         mood_query = mood_query.filter(MoodRecord.created_at >= since)
         chat_query = chat_query.filter(ChatMessage.created_at >= since)
         assessment_query = assessment_query.filter(StudentWellbeingAssessment.created_at >= since)
+        screening_query = screening_query.filter(StudentScreeningRun.created_at >= since)
     return {
         int(row[0])
-        for query in (mood_query, chat_query, assessment_query)
+        for query in (mood_query, chat_query, assessment_query, screening_query)
         for row in query.distinct().all()
     }
 
@@ -417,6 +464,7 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
     students = _visible_roster_students(db, student_query)
     student_ids = [student.id for student in students]
     risk_summaries = _risk_summaries_for_students(db, student_ids)
+    screening_rows = screening_engine.latest_screenings_for_students(db, student_ids)
     access_states = _student_access_states(db, teacher, student_ids)
     authorization_payloads = student_ai_authorization_payloads(db, student_ids)
     for student in students:
@@ -426,6 +474,7 @@ def student_list(db: Session = Depends(get_db), teacher: User = Depends(require_
             "nickname": student.nickname or f"学生{student.id}",
             "risk_level": risk,
             "mood_count": count,
+            "screening": screening_engine.to_teacher_summary(screening_rows.get(student.id)),
             "access": access_states[student.id],
             "external_ai_authorization": authorization_payloads[student.id],
         })
@@ -495,25 +544,36 @@ def warning_list(db: Session = Depends(get_db), teacher: User = Depends(require_
     students = _visible_roster_students(db, student_query)
     student_ids = [student.id for student in students]
     risk_summaries = _risk_summaries_for_students(db, student_ids)
+    screening_rows = screening_engine.latest_screenings_for_students(db, student_ids)
     access_states = _student_access_states(db, teacher, student_ids)
     statuses = _warning_statuses(db, teacher, risk_summaries)
     for student in students:
         risk, count, urgent, latest_signal_at = risk_summaries[student.id]
-        if risk in {"high", "middle"}:
-            rows.append({
-                "id": student.id,
-                "student_id": student.id,
-                "student_name": student.nickname or f"学生{student.id}",
-                "risk_level": risk,
-                "reason": "检测到需要立即核实安全的危机表达" if urgent else (
-                    f"近30天记录显示需要尽快核实支持需求（{count}条）"
-                    if risk == "high" else f"近30天有需要持续关注的自愿记录（{count}条）"
-                ),
-                "urgent": urgent,
-                "status": statuses[student.id],
-                "updated_at": latest_signal_at.isoformat() if latest_signal_at else None,
-                "access": access_states[student.id],
-            })
+        if risk not in {"high", "middle"}:
+            continue
+        screening = screening_engine.to_teacher_summary(screening_rows.get(student.id))
+        if screening and screening["safety_active"]:
+            reason = "标准筛查第9题有应答，需要立即线下核实安全"
+        elif screening and screening["risk_level"] in {"urgent", "professional"}:
+            reason = "标准筛查显示近期支持需求较高（中度/中重度），建议尽快核实"
+        elif screening and screening["risk_level"] == "watch":
+            reason = f"标准筛查结果为{screening['band_label']}（{screening['total_score']}/27），建议安排一次关怀沟通"
+        else:
+            reason = "检测到需要立即核实安全的危机表达" if urgent else (
+                f"近30天记录显示需要尽快核实支持需求（{count}条）"
+                if risk == "high" else f"近30天有需要持续关注的自愿记录（{count}条）"
+            )
+        rows.append({
+            "id": student.id,
+            "student_id": student.id,
+            "student_name": student.nickname or f"学生{student.id}",
+            "risk_level": risk,
+            "reason": reason,
+            "urgent": urgent,
+            "status": statuses[student.id],
+            "updated_at": latest_signal_at.isoformat() if latest_signal_at else None,
+            "access": access_states[student.id],
+        })
     return {"warnings": rows}
 
 
@@ -848,7 +908,17 @@ def student_work_product(
                 StudentWellbeingAssessment.deleted_at.is_(None),
                 StudentWellbeingAssessment.expires_at > china_now_naive(),
             ).first()
-            has_new_record = bool(new_moods or new_chats or has_new_assessment or new_urgent_assessment)
+            has_new_screening = db.query(StudentScreeningRun.id).filter(
+                StudentScreeningRun.user_id == student_id,
+                StudentScreeningRun.created_at > existing_direct_snapshot.content_cutoff,
+                StudentScreeningRun.created_at <= incremental_cutoff,
+                StudentScreeningRun.deleted_at.is_(None),
+                StudentScreeningRun.expires_at > china_now_naive(),
+            ).first()
+            has_new_record = bool(
+                new_moods or new_chats or has_new_assessment
+                or new_urgent_assessment or has_new_screening
+            )
             cutoff = incremental_cutoff if has_new_record else existing_direct_snapshot.content_cutoff
     elif approved is not None:
         safety_check_at = china_now_naive()
@@ -929,6 +999,26 @@ def student_work_product(
             "created_at": row.created_at.isoformat() if row.created_at else None,
         })
     records.extend(assessment_records)
+    screenings = db.query(StudentScreeningRun).filter(
+        StudentScreeningRun.user_id == student_id,
+        StudentScreeningRun.created_at >= scoped_since,
+        StudentScreeningRun.created_at <= scoped_cutoff,
+        StudentScreeningRun.deleted_at.is_(None),
+        StudentScreeningRun.expires_at > china_now_naive(),
+    ).order_by(StudentScreeningRun.created_at.desc()).all()
+    screening_records = []
+    for row in screenings:
+        content = f"标准筛查：{screening_engine.BAND_LABELS.get(row.band, '')}（{row.total_score}/27）"
+        if row.item9_positive:
+            content += "；第9题有应答，" + ("安全标记待核实" if row.safety_flag_active else "安全交接已完成")
+        screening_records.append({
+            "id": f"screening-{row.id}",
+            "source": "标准筛查",
+            "content": content,
+            "emotion": "",
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+    records.extend(screening_records)
     urgent_records = [
         *[{"id": f"mood-{row.id}", "source": "情绪记录", "content": row.content or f"选择了“{row.mood_label}”", "emotion": row.mood_label, "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_moods if _context_has_urgent_meaning(row.content or "")],
         *[{"id": f"chat-{row.id}", "source": "倾诉原文", "content": row.content, "emotion": row.emotion or "", "created_at": row.created_at.isoformat() if row.created_at else None} for row in all_chats if _context_has_urgent_meaning(row.content or "")],
@@ -937,8 +1027,12 @@ def student_work_product(
     records.extend(item for item in urgent_records if item["id"] not in known_ids)
     records.sort(key=lambda item: item.get("created_at") or "", reverse=True)
     assessment_trigger_ids = [f"assessment-{row.id}" for row in assessments if row.risk_level == "urgent"]
+    screening_trigger_ids = [
+        f"screening-{row.id}" for row in screenings if row.item9_positive and row.safety_flag_active
+    ]
     trigger_evidence_ids = [redacted_safety_revision["id"]] if redacted_safety_revision else []
     trigger_evidence_ids.extend(assessment_trigger_ids)
+    trigger_evidence_ids.extend(screening_trigger_ids)
     trigger_evidence_ids.extend(item["id"] for item in records if _context_has_urgent_meaning(str(item.get("content") or "")))
     trigger_evidence_ids = list(dict.fromkeys(trigger_evidence_ids))
     urgent = bool(trigger_evidence_ids)
@@ -946,11 +1040,12 @@ def student_work_product(
     chat_records = [item for item in records if item["source"] == "倾诉原文"]
     evidence_ids = list(dict.fromkeys([*trigger_evidence_ids, *[item["id"] for item in records[:8]]]))
     assessment_risks = [row.risk_level for row in assessments]
+    screening_risks = [screening_engine.run_risk(row) for row in screenings]
     negative_count = sum(item.mood_label in {"难过", "焦虑", "愤怒"} for item in all_moods)
     baseline_risk = "high" if negative_count >= 4 else "middle" if negative_count >= 1 else "low"
-    if any(level in {"urgent", "professional"} for level in assessment_risks):
+    if any(level in {"urgent", "professional"} for level in [*assessment_risks, *screening_risks]):
         baseline_risk = "high"
-    elif "watch" in assessment_risks and baseline_risk == "low":
+    elif "watch" in [*assessment_risks, *screening_risks] and baseline_risk == "low":
         baseline_risk = "middle"
     if urgent:
         decision = "立即启动校内安全流程：确认学生当下安全、不让其独处并远离危险物，联系家庭之外的可信成年人或教师并拨打12356；存在迫切危险时立即拨打110或120。"
@@ -1019,7 +1114,7 @@ def student_work_product(
         "records": records,
         "pipeline": [
             {"name": "安全分流", "status": "completed", "result": "发现明确紧急信号" if urgent else "未发现明确紧急信号"},
-            {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录、{len(assessment_records)}次主动评估"},
+            {"name": "记录归纳", "status": "completed", "result": f"纳入{len(chat_records)}条倾诉、{len(mood_records)}条情绪记录、{len(assessment_records)}次主动评估、{len(screening_records)}次标准筛查"},
             {"name": "证据定位", "status": "completed", "result": f"{len(evidence_ids)}条结论可回到原文"},
             {"name": "支持草案", "status": "completed", "result": "已生成，等待教师确认"},
             {
@@ -1047,6 +1142,7 @@ def student_work_product(
             "review_status": assessments[0].review_status,
             "created_at": assessments[0].created_at.isoformat() if assessments[0].created_at else None,
         } if assessments else None),
+        "screening_summary": screening_engine.to_teacher_summary(screenings[0] if screenings else None),
         "conflicts": [{"topic": "行动强度", "views": ["尽快介入", "先保持低压力接触"], "resolution": "安全规则优先" if urgent else "由教师结合线下观察确认", "evidence_ids": evidence_ids}],
         "decision": decision,
         "decision_evidence_ids": trigger_evidence_ids or evidence_ids,
@@ -1359,12 +1455,23 @@ def student_profile(student_id: int, request_id: int | None = None, db: Session 
             ChatMessage.created_at <= cutoff,
         ).all()
     ) or any(_context_has_urgent_meaning(item.content or "") for item in moods)
-    risk = "high" if urgent or negative_count >= 4 else "middle" if negative_count >= 1 else "low"
+    screening_summary = screening_engine.to_teacher_summary(
+        screening_engine.latest_screening(db, student_id, cutoff=cutoff)
+    )
+    screening_risk = screening_summary["risk_level"] if screening_summary else "routine"
+    risk = (
+        "high"
+        if urgent or negative_count >= 4 or screening_risk in {"urgent", "professional"}
+        else "middle"
+        if negative_count >= 1 or screening_risk == "watch"
+        else "low"
+    )
     count = len(moods)
     _audit(db, teacher, "view_student_support_profile", "student", str(student_id), "allowed")
     return {
         "risk_level": risk,
         "mood_count": count,
+        "screening_summary": screening_summary,
         "summary": "经授权整理的近30天主动记录摘要；只描述已有材料，不构成心理测评或诊断。",
         "keywords": [],
         "record_window_days": 30,

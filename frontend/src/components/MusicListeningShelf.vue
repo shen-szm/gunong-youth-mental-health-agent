@@ -49,4 +49,42 @@ defineExpose({ pause })
 
 <style scoped>
 .listening-shelf{padding:20px 0;color:#f4eddf;border-bottom:1px solid #756c60;margin-bottom:20px}.listening-shelf header{display:flex;align-items:center;gap:12px}.listening-shelf h3{margin:0;font-size:20px}.listening-shelf p{color:#d7cbb7;font-size:13px;line-height:1.6}.listening-tracks{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.listening-tracks button{flex:1;min-width:145px;display:grid;gap:8px;text-align:left;padding:14px;border:1px solid #82745f;border-radius:10px;background:#302923;color:#f4eddf;cursor:pointer}.listening-tracks button[aria-pressed=true]{border-color:#ead29b;background:#493e2d}.listening-tracks span,.listening-tracks small{color:#d7cbb7;font-size:12px}.listening-tracks em{font-size:11px;color:#efd79c;font-style:normal}.listening-player{display:flex;align-items:center;gap:14px}.listening-player>div{flex:1}.listening-player small{display:block;margin-top:4px;color:#d7cbb7}.listening-player button{display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:50%;background:#ead29b;color:#33291d;cursor:pointer}.listening-progress{display:flex;align-items:center;gap:12px;margin:15px 0;font-size:12px}.listening-progress input{flex:1;min-width:0}.listening-settings{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:12px}.listening-settings label{display:flex;align-items:center;gap:8px}.listening-settings input{width:100px}.listening-settings select{padding:7px;border-radius:6px;border:1px solid #82745f;background:#302923;color:#f4eddf}.listening-shelf input{accent-color:#ead29b}.listening-shelf :focus-visible{outline:3px solid #ead29b;outline-offset:3px}.listening-shelf button:disabled{opacity:.6;cursor:wait}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+/* 像素皮肤 3.0 · 音乐架 */
+.listening-shelf{
+  --px-line: rgba(240, 216, 170, .3);
+  --px-gold: #f0d29a;
+  --px-shadow: rgba(0, 0, 0, .52);
+  border: 2px solid var(--px-line);
+  border-bottom: 2px solid var(--px-line);
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.listening-shelf h3{font-family:var(--px-font);font-size:19px}
+.listening-tracks button{
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end), border-color 160ms steps(2, end);
+}
+.listening-tracks button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--px-shadow)}
+.listening-tracks button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--px-shadow)}
+.listening-tracks button[aria-pressed=true]{border-color:var(--px-gold)}
+.listening-tracks em{font-family:var(--px-font)}
+.listening-player button{
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  color: var(--px-gold);
+  background: transparent;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.listening-player button:first-child{color:#2a2117;background:var(--px-gold)}
+.listening-player button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--px-shadow)}
+.listening-player button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--px-shadow)}
+.listening-settings select{border:2px solid var(--px-line);border-radius:4px;font-family:var(--px-font)}
+.listening-shelf :focus-visible{outline:3px dashed var(--px-gold);outline-offset:3px}
 </style>

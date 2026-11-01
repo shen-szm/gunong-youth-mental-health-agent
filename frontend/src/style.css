@@ -1,3 +1,27 @@
+@font-face {
+  font-family: 'Fusion Pixel Lobby';
+  src: url('./assets/fonts/fusion-pixel-sc-lobby.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Fusion Pixel Student';
+  src: url('./assets/fonts/fusion-pixel-sc-student.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+}
+
+/* 学生端像素点缀 token。只被学生页面引用，教师端/守护端不引用 --px-*。 */
+:root {
+  --px-font: 'Fusion Pixel Student', 'Fusion Pixel Lobby', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --px-gold: #b07a45;
+  --px-line: rgba(90, 62, 38, .28);
+  --px-shadow: rgba(74, 52, 32, .28);
+  --px-hard-lg: 4px 4px 0 var(--px-shadow);
+  --px-hard-sm: 3px 3px 0 var(--px-shadow);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -46,6 +70,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: rgba(74, 122, 108, .18);
+}
+
 button {
   cursor: pointer;
   border: none;
@@ -59,7 +87,7 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { scroll-behavior: auto; }
+  html { scroll-behavior: auto; }
 }
 
 /* v5.1.0-alpha.38 student minimal skin（追加式：学生端新皮肤专用 token，
@@ -69,12 +97,12 @@ button {
   --m-surface: #FFFFFF;
   --m-ink: #22302B;
   --m-ink-2: #5C6B64;
-  --m-ink-3: #94A09A;
+  --m-ink-3: #68756F;
   --m-line: #E6EAE7;
-  --m-accent: #5B8C7E;
-  --m-accent-strong: #4A7A6C;
+  --m-accent: #4A7A6C;
+  --m-accent-strong: #3D6B5E;
   --m-accent-soft: #EAF2EE;
-  --m-danger: #C06860;
+  --m-danger: #A95851;
   --m-radius-lg: 18px;
   --m-radius-md: 12px;
   --m-radius-sm: 8px;
@@ -90,11 +118,11 @@ button {
   --m-dur-slow: 320ms;
   --m-enter-dur: 480ms;
   --m-drift-dur: 26s;
-  --m-hero-grad: linear-gradient(135deg, #639B89 0%, #4A7A6C 52%, #3D6B5E 100%);
-  --m-hero-shadow: 0 2px 4px rgba(74, 122, 108, .16), 0 16px 36px rgba(74, 122, 108, .26);
-  --m-hero-shadow-hover: 0 4px 10px rgba(74, 122, 108, .20), 0 24px 52px rgba(74, 122, 108, .34);
+  --m-hero-grad: linear-gradient(135deg, #4E7B6D 0%, #3F6C5F 52%, #33584D 100%);
+  --m-hero-shadow: 0 2px 4px rgba(61, 107, 94, .16), 0 16px 36px rgba(61, 107, 94, .26);
+  --m-hero-shadow-hover: 0 4px 10px rgba(61, 107, 94, .20), 0 24px 52px rgba(61, 107, 94, .34);
   --m-shadow-hover: 0 2px 4px rgba(34, 48, 43, .05), 0 14px 34px rgba(34, 48, 43, .10);
-  --m-ring: rgba(91, 140, 126, .16);
+  --m-ring: rgba(74, 122, 108, .18);
   --m-glow-mint: rgba(140, 200, 178, .38);
   --m-glow-gold: rgba(232, 196, 104, .28);
 }

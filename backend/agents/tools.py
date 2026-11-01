@@ -18,6 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+import screening_engine
 from guardian_engine import _context_has_urgent_meaning
 from models import (
     MoodRecord, StudentConversationSummary, StudentWellbeingAssessment,
@@ -283,10 +284,21 @@ def get_user_safety_state(db: Session, user_id: int) -> dict:
         )
         .first()
     )
+    screening_risk = screening_engine.active_screening_risk(db, user_id)
+    if screening_risk == "urgent":
+        return {"risk_level": "urgent", "evidence": "current_standard_screening"}
     if urgent_session or (assessment and assessment.risk_level == "urgent"):
         return {"risk_level": "urgent", "evidence": "shared_safety_state"}
-    if assessment and assessment.risk_level in {"professional", "watch"}:
-        return {"risk_level": assessment.risk_level, "evidence": "current_support_assessment"}
+    assessment_risk = assessment.risk_level if assessment and assessment.risk_level in {
+        "professional", "watch"} else "routine"
+    risk = screening_engine.merge_risk(assessment_risk, screening_risk)
+    if risk in {"professional", "watch"}:
+        evidence = (
+            "current_standard_screening"
+            if screening_engine.RISK_ORDER[screening_risk] >= screening_engine.RISK_ORDER[assessment_risk]
+            else "current_support_assessment"
+        )
+        return {"risk_level": risk, "evidence": evidence}
     return {"risk_level": "routine", "evidence": "no_active_escalation"}
 
 

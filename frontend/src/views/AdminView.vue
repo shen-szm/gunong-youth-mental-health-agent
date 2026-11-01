@@ -3,7 +3,7 @@
     <aside class="teacher-sidebar" aria-label="教师工作台导航">
       <div class="teacher-brand">
         <span aria-hidden="true">咕</span>
-        <div><strong>咕哝教师端</strong><small>校园支持数字员工 · v{{ teacherVersion }}</small><em>{{ userStore.isSuperAdmin ? '管理员教师' : '普通教师' }}</em></div>
+        <div><strong>咕哝教师端</strong><small>校园支持数字员工</small><div class="teacher-brand-meta"><em>{{ userStore.isSuperAdmin ? '管理员教师' : '普通教师' }}</em><span class="teacher-version">v{{ teacherVersion }}</span></div></div>
       </div>
       <nav ref="teacherNav" class="teacher-nav" data-guide="tabs">
         <button
@@ -75,7 +75,7 @@
             <div class="case-roster" aria-label="学生支持对象列表">
               <button v-for="student in filteredStudents" :key="student.id" :aria-pressed="caseStudent?.id === student.id" :class="['case-student', { selected: caseStudent?.id === student.id }]" @click="chooseCaseStudent(student)">
                 <span class="avatar">{{ firstChar(studentName(student)) }}</span>
-                <span class="case-student-main"><strong>{{ studentName(student) }}</strong><small>{{ riskText(student.risk_level) }} · {{ student.mood_count }} 条自愿记录</small></span>
+                <span class="case-student-main"><strong>{{ studentName(student) }}</strong><small>{{ riskText(student.risk_level) }} · {{ student.mood_count }} 条自愿记录<span v-if="student.screening"> · 筛查 {{ student.screening.band_label }} {{ student.screening.total_score }}/27</span></small></span>
                 <em :class="['access-pill', student.access?.status]">{{ student.access?.label }}</em>
               </button>
               <p v-if="!filteredStudents.length" class="empty-state">当前筛选下暂无支持工单。</p>
@@ -91,7 +91,7 @@
                 <div>
                   <span class="section-kicker">学生端 Agent 数据处理</span>
                   <h4 id="student-ai-authorization-title">学生端受约束模型对话全局启用</h4>
-                  <p>学生无需逐次申请或等待教师开通。文字对话仅发送去标识化结构特征，不发送聊天原文；安全分流仍由本地规则强制裁决。</p>
+                  <p>学生无需逐次申请或等待教师开通。对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结；安全分流、危机判断与风险等级仍由本地规则强制裁决。</p>
                   <small>平台运营方仍须完成适用的机构、监护与隐私治理，不由学生在聊天中重复操作。</small>
                 </div>
               </section>
@@ -172,6 +172,15 @@
                     </div>
                     <ul><li v-for="need in workProduct.assessment_summary.support_needs" :key="need">{{ need }}</li></ul>
                     <small>这是待专业人员审核的支持决策草案，不是经验证量表或医学诊断；“需要专业支持”须由校内心理教师或正规医疗机构进一步评估。</small>
+                  </section>
+                  <section v-if="workProduct.screening_summary" class="assessment-brief screening-brief">
+                    <div class="original-list-head"><div><span class="section-kicker">标准筛查</span><h4>最近一次筛查结果</h4></div><small>{{ formatDateTime(workProduct.screening_summary.created_at) }}</small></div>
+                    <div class="profile-metrics screening-metrics">
+                      <span>分级 <b>{{ workProduct.screening_summary.band_label }}</b></span>
+                      <span>总分 <b>{{ workProduct.screening_summary.total_score }}/27</b></span>
+                      <span>第9题安全标记 <b>{{ workProduct.screening_summary.safety_active ? '待线下核实' : workProduct.screening_summary.item9_positive ? '已完成安全交接' : '无应答' }}</b></span>
+                    </div>
+                    <small>PHQ-9 是筛查工具，不是诊断；总分只用于支持分流，不得用于纪律处理或贴标签。教师只能看到分级、总分、填写时间和第9题安全标记，看不到每道题的答案。</small>
                   </section>
                   <section class="agent-conflict" v-if="workProduct.conflicts?.length">
                     <span class="section-kicker">明确分歧</span>
@@ -315,6 +324,7 @@
             <div class="profile-metrics">
               <span>数据范围 <b>近30天主动记录</b></span>
               <span>高频词 <b>{{ profileKeywords }}</b></span>
+              <span>标准筛查 <b>{{ selectedScreening ? `${selectedScreening.band_label} · ${selectedScreening.total_score}/27` : '未完成' }}</b></span>
               <span>最近活跃 <b>{{ studentProfile.last_active || selectedStudent.last_active || '--' }}</b></span>
             </div>
           </article>
@@ -536,6 +546,7 @@ const profileKeywords = computed(() => {
   if (!words.length) return '--'
   return words.slice(0, 4).map((w) => w.word || w).join('、')
 })
+const selectedScreening = computed(() => studentProfile.value.screening_summary || selectedStudent.value?.screening || null)
 const dominantRecordLabel = computed(() => Object.keys(sortedDist.value)[0] || '--')
 const maxTrendCount = computed(() => Math.max(1, ...(detail.value.trend || []).map(item => Number(item.count || 0))))
 const analysisHeading = computed(() => analysisMeta.value.degraded ? '规则化记录整理' : 'Agent 记录整理')
@@ -1065,11 +1076,18 @@ function getDistPct(count) {
 }
 
 function getEmoji(label) {
-  return { 开心: '😊', 平静: '😌', 焦虑: '😟', 难过: '😢', 愤怒: '😠' }[label] || '🙂'
+  return {
+    愤怒: '😠', 厌恶: '🤢', 恐惧: '😨', 开心: '😊', 中性: '😐', 悲伤: '😢', 惊讶: '😲',
+    平静: '😌', 焦虑: '😟', 难过: '😢',
+  }[label] || '🙂'
 }
 
 function getMoodColor(label) {
-  return { 开心: '#5f9f75', 平静: '#6d9f93', 焦虑: '#d3a13f', 难过: '#769fbd', 愤怒: '#c76558' }[label] || '#7b9088'
+  return {
+    愤怒: '#c76558', 厌恶: '#8f7f52', 恐惧: '#7d6c99', 开心: '#5f9f75', 中性: '#7b9088',
+    悲伤: '#769fbd', 惊讶: '#d3a13f',
+    平静: '#6d9f93', 焦虑: '#d3a13f', 难过: '#769fbd',
+  }[label] || '#7b9088'
 }
 
 function riskText(level = 'low') {
@@ -1140,6 +1158,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', focusTeacherSearch))
 .panel-title p { color: #6f807a; line-height: 1.6; }
 .split-layout, .lesson-layout { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(360px, 1.1fr); gap: 18px; }
 .warning-list, .template-list, .account-list, .student-grid { display: grid; gap: 10px; }
+/* 提醒数少时不把单张卡片拉伸到详情栏高度 */
+.warning-list, .template-list { align-content: start; }
 .warning-item, .student-card, .template-list button, .account-row { width: 100%; text-align: left; display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 14px; background: #f7faf8; border: 1px solid #e2ebe6; }
 .warning-item.selected, .student-card.selected, .template-list button.selected { border-color: #4f7d70; background: #edf6f2; }
 .warning-main { flex: 1; display: grid; gap: 4px; }
@@ -1414,8 +1434,10 @@ textarea { min-height: 96px; resize: vertical; }
 .teacher-brand > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #18312a; background: #d9ca94; font: 900 16px/1 ui-monospace, Consolas, monospace; }
 .teacher-brand div { min-width: 0; display: grid; gap: 2px; }
 .teacher-brand strong { font-size: 14px; }
-.teacher-brand small { color: rgba(239, 246, 243, .62); font-size: 10px; }
+.teacher-brand small { color: rgba(239, 246, 243, .62); font-size: 10px; white-space: nowrap; }
 .teacher-brand em { color: #d9ca94; font-size: 9px; font-style: normal; }
+.teacher-brand-meta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.teacher-version { color: rgba(239, 246, 243, .42); font: 600 9px/1.5 ui-monospace, Consolas, monospace; letter-spacing: .02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .teacher-nav-hint { display: none; }
 .teacher-nav { display: grid; gap: 4px; }
 .teacher-nav button {

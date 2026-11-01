@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     SPARK_MODEL: str = "pro"  # pro / pro-128k / lite / max / max-32k / ultra
     SPARK_API_PASSWORD: str = ""  # 讯飞开放平台控制台获取的APIPassword
 
+    # 小满对话引擎：deepseek 走 OpenAI 兼容接口，legacy_xunfei 保留原星火枚举选择方案
+    STUDENT_COMPANION_ENGINE: Literal["deepseek", "legacy_xunfei"] = "deepseek"
+    DEEPSEEK_API_KEY: str = ""  # 只放服务端 .env，不下发浏览器
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # 标准筛查（PHQ-9）：默认关闭；中文措辞与教师可见口径复核后再开启。
+    STUDENT_SCREENING_ENABLED: bool = False
+
     # MySQL配置
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306

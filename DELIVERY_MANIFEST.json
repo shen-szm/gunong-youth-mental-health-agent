@@ -959,59 +959,9 @@
       "sha256": "2133402fd9bc75d49560c80a259dbefa2704d8e0001d9d4145bbe40a3ed1bd32"
     },
     {
-      "path": "frontend/public/images/夜晚.png",
-      "bytes": 4452772,
-      "sha256": "076ab6d1fedab77acf68bfd0d6a417631c22975cc5986ecccdab11b4e6205dd1"
-    },
-    {
-      "path": "frontend/public/images/夜晚.webp",
-      "bytes": 111374,
-      "sha256": "03b9e4b3a4fa763f7a12bf76ca329de93ded9ae6ce97576f4e023a4cc7df8ae4"
-    },
-    {
       "path": "frontend/public/images/洛阳.png",
       "bytes": 355713,
       "sha256": "bb32f7c3b07375fcd6abe2dcaaf7b5391e2017f2ad3511a7d7c607e2e4199a12"
-    },
-    {
-      "path": "frontend/public/images/电脑端-傍晚.jpg",
-      "bytes": 2367474,
-      "sha256": "3ef83d2cd386387e39494015fd3c8b191d5b5c47cf24a49baaab3ac3008448db"
-    },
-    {
-      "path": "frontend/public/images/电脑端-傍晚.webp",
-      "bytes": 163962,
-      "sha256": "56b527a928206b1b6c1efb17e26e50b201f61fe71a2bf4640afc7c26c2ef3edd"
-    },
-    {
-      "path": "frontend/public/images/电脑端-夜晚.jpg",
-      "bytes": 3665077,
-      "sha256": "dc9b8a234dca85fe480459468b9f7c0ec4c111b07ddb8c0fcae04c0c34d13e52"
-    },
-    {
-      "path": "frontend/public/images/电脑端-夜晚.webp",
-      "bytes": 153470,
-      "sha256": "cc342038db9eb524a1b80240129fbac71b35bbf1f5d62d81b081891b7c7366a1"
-    },
-    {
-      "path": "frontend/public/images/电脑端-白天.jpg",
-      "bytes": 3712383,
-      "sha256": "cbaae19bbc469b21f2db130f48f002f0ea71014000a3674e238bef2658889e37"
-    },
-    {
-      "path": "frontend/public/images/电脑端-白天.webp",
-      "bytes": 174930,
-      "sha256": "8a5bff0737bddfc41cb0189242d970a5c2e488c5cc227a98c104d6999d12e22e"
-    },
-    {
-      "path": "frontend/public/images/白天.png",
-      "bytes": 4724646,
-      "sha256": "32fa008aa5259f59312ef119808efdb1dab3e0212bd2e69b8fafa1de2f7d3582"
-    },
-    {
-      "path": "frontend/public/images/白天.webp",
-      "bytes": 125436,
-      "sha256": "2a6844e803f8570339f4493b02c8aafa6cb0bc2fd664215704b2a493613920db"
     },
     {
       "path": "frontend/public/images/西安.png",
