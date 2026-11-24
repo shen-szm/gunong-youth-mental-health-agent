@@ -117,3 +117,24 @@ export function updateTeacherAccount(accountId, userId, payload) {
 }
 
 export default instance
+
+export const getTeacherTaskCapabilities = () => instance.get('/tasks/capabilities', { timeout: 10000 })
+export const createTeacherCaseTask = payload => instance.post('/tasks/case-plans', payload, { timeout: 15000 })
+export const getTeacherCaseTask = id => instance.get(`/tasks/durable-plans/${encodeURIComponent(id)}`, { timeout: 15000 })
+export const decideTeacherCaseTask = (id, digest, approved) => instance.post(`/tasks/durable-plans/${encodeURIComponent(id)}/decision`, { digest, approved }, { timeout: 15000 })
+export const executeTeacherCaseTask = id => instance.post(`/tasks/durable-plans/${encodeURIComponent(id)}/execute`, null, { timeout: 90000 })
+export const getTeacherCaseExecution = id => instance.get(`/tasks/durable-plans/${encodeURIComponent(id)}/execution`, { timeout: 15000 })
+export const checkTeacherCaseRevision = id => instance.post(`/tasks/durable-plans/${encodeURIComponent(id)}/revision-check`, null, { timeout: 15000 })
+export const createTeacherCaseRevision = id => instance.post(`/tasks/durable-plans/${encodeURIComponent(id)}/revision-plans`, null, { timeout: 15000 })
+export const terminateTeacherCaseTask = (id, digest, reason) => instance.post(`/tasks/durable-plans/${encodeURIComponent(id)}/terminate`, { digest, reason, confirmed: true }, { timeout: 15000 })
+export const getExactTeacherReviewReport = (studentId, reportId, requestId) => instance.get(
+  `/students/${studentId}/review-reports/${encodeURIComponent(reportId)}/detail`,
+  { params: requestId ? { request_id: requestId } : {}, timeout: 15000 },
+)
+
+export const downloadTeacherCaseReport = (studentId, reportId, requestId) => instance.get(
+  studentReviewReportPdfUrl(studentId, reportId, requestId).replace('/api/teacher', ''),
+  { responseType: 'blob', timeout: 30000 },
+)
+export const getTeacherCaseHistory = (studentId, requestId) => instance.get('/tasks/case-history', { params: { student_id: studentId, access_request_id: requestId || undefined }, timeout: 15000 })
+export const previewTeacherIntent = goal => instance.post('/tasks/intent-preview', { goal, confirmed: true }, { timeout: 18000 })

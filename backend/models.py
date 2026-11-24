@@ -14,6 +14,20 @@ class User(Base):
     is_admin = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
+
+class RobotLink(Base):
+    """A revocable, student-owned credential for the desktop robot client."""
+
+    __tablename__ = "robot_links"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    token_hint = Column(String(8), nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+
 class MoodRecord(Base):
     __tablename__ = "mood_records"
 

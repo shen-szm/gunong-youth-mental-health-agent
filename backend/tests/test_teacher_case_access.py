@@ -49,8 +49,8 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.student_id, self.teacher_id, self.admin_id = self.student.id, self.teacher.id, self.admin.id
             self.unassigned_student_id = self.unassigned_student.id
             db.add(TeacherStudentAssignment(teacher_user_id=self.teacher.id, student_user_id=self.student.id, assigned_by_user_id=self.admin.id, active=1))
-            db.add(MoodRecord(user_id=self.student.id, mood_score=3, mood_label="难过", content="最近早上不太想去学校"))
-            db.add(ChatMessage(user_id=self.student.id, role="user", content="我和同学相处得有点累", emotion="难过"))
+            db.add(MoodRecord(user_id=self.student.id, mood_score=3, mood_label="难过", content="最近早上不太想去学校", created_at=china_now_naive()))
+            db.add(ChatMessage(user_id=self.student.id, role="user", content="我和同学相处得有点累", emotion="难过", created_at=china_now_naive()))
             db.commit()
         finally:
             db.close()
@@ -312,7 +312,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 expired_assessment_guest,
             ])
             db.flush()
-            db.add(MoodRecord(user_id=active_guest.id, mood_score=6, mood_label="平静", content="今天完成了一次主动记录"))
+            db.add(MoodRecord(user_id=active_guest.id, mood_score=6, mood_label="平静", content="今天完成了一次主动记录", created_at=local_now))
             db.add(ChatMessage(
                 user_id=chat_guest.id,
                 role="user",

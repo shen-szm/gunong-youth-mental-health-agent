@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
-    RELEASE_VERSION: str = "5.1.0-alpha.36"
+    RELEASE_VERSION: str = "5.1.0-alpha.37"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
     ALLOW_GUEST_SESSION: bool = False
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     AGENT_STEP_DELAY_MS: int = 180
     # 外部模型总开关；学生数据还必须通过教师端登记且未过期的授权记录。
     ALLOW_EXTERNAL_AI: bool = False
+    # Opt-in: confirmed task requirements or enum contracts only; no student records attached.
+    ALLOW_TEACHER_TASK_PLANNER_AI: bool = False
+    ENABLE_TEACHER_DURABLE_PLANS: bool = False
     # 学生自由倾诉包含高度敏感信息；除总开关外，必须有教师端登记且未过期的机构/监护授权依据。
     ALLOW_STUDENT_EXTERNAL_AI: bool = False
     # teacher_authorized=逐学生教师登记；platform_direct=学生无需逐次开通，由运营方在站点层完成合法授权治理。

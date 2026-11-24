@@ -73,6 +73,32 @@
     </div>
 
     <!-- 账号管理 -->
+    <div class="section" v-if="!userStore.isAdmin">
+      <div class="section-title">桌面机器人</div>
+      <div class="robot-link">
+        <div class="robot-link-head">
+          <div>
+            <strong>连接 OpenDeskBotV2</strong>
+            <p>机器人语音的转写文字和回复会保存在当前账号的倾诉记录中。客户端仍使用其配置的第三方语音识别与合成服务。回复由咕哝安全流程生成，不提供诊断或治疗。</p>
+          </div>
+          <span class="robot-state" :class="{ connected: robotLink.linked }">{{ robotLink.linked ? '已连接' : '未连接' }}</span>
+        </div>
+        <p v-if="robotLink.token_hint && !robotToken" class="robot-meta">当前密钥尾号 {{ robotLink.token_hint }} · {{ robotLink.expires_at?.slice(0, 10) }} 到期</p>
+        <div v-if="robotToken" class="robot-secret">
+          <label for="robot-key">连接密钥（仅显示这一次）</label>
+          <div class="robot-secret-row"><input id="robot-key" :value="robotToken" readonly aria-label="机器人连接密钥" /><button type="button" @click="copyRobotToken">复制</button></div>
+          <p>请在已应用咕哝语音补丁的 OpenDeskBotV2 客户端中，将密钥保存为 <code>GUUNOO_ROBOT_TOKEN</code>。客户端重启后，用户主动语音对话会进入此账号；语音识别和合成仍按客户端本机配置运行。</p>
+        </div>
+        <p v-if="robotError" class="robot-error" role="alert">{{ robotError }}</p>
+        <div class="robot-actions">
+          <button v-if="robotUnavailable" type="button" class="robot-primary" @click="router.push('/teacher-login')">登录或注册学生账号</button>
+          <button v-else type="button" class="robot-primary" :disabled="robotBusy" @click="issueRobotLink">{{ robotBusy ? '处理中…' : robotLink.linked ? '重新生成密钥' : '生成连接密钥' }}</button>
+          <button v-if="robotLink.linked" type="button" class="robot-revoke" :disabled="robotBusy" @click="disconnectRobot">撤销连接</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账号管理 -->
     <div class="section">
       <div class="section-title">账号管理</div>
       <div class="menu-card">
@@ -123,6 +149,7 @@ import { updateProfile } from '../api/user'
 import { changePassword } from '../api/user'
 import { getMoodStats } from '../api/mood'
 import { getChatHistory } from '../api/chat'
+import { getRobotLink, createRobotLink, revokeRobotLink } from '../api/robot'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -130,6 +157,62 @@ const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
 const distribution = ref({})
 const totalMoodCount = computed(() => Object.values(distribution.value).reduce((a, b) => a + b, 0))
+const robotLink = ref({ linked: false })
+const robotToken = ref('')
+const robotError = ref('')
+const robotBusy = ref(false)
+const robotUnavailable = ref(false)
+
+async function loadRobotLink() {
+  if (userStore.isAdmin) return
+  try {
+    robotLink.value = (await getRobotLink()).data
+  } catch (error) {
+    robotUnavailable.value = true
+    robotError.value = error.response?.status === 403
+      ? '请先登录正式学生账号，再连接桌面机器人。'
+      : '暂时无法读取机器人连接状态，请稍后重试。'
+  }
+}
+
+async function issueRobotLink() {
+  if (robotLink.value.linked && !window.confirm('重新生成后，旧密钥会立即失效。继续吗？')) return
+  robotBusy.value = true
+  robotError.value = ''
+  robotToken.value = ''
+  try {
+    const { data } = await createRobotLink()
+    robotToken.value = data.token
+    robotLink.value = data
+  } catch (error) {
+    robotError.value = error.response?.data?.detail || '生成失败，请稍后重试。'
+  } finally {
+    robotBusy.value = false
+  }
+}
+
+async function copyRobotToken() {
+  try {
+    await navigator.clipboard.writeText(robotToken.value)
+  } catch {
+    robotError.value = '无法自动复制，请手动选中密钥复制。'
+  }
+}
+
+async function disconnectRobot() {
+  if (!window.confirm('撤销后，客户端将无法继续访问这个账号。继续吗？')) return
+  robotBusy.value = true
+  robotError.value = ''
+  try {
+    await revokeRobotLink()
+    robotLink.value = { linked: false }
+    robotToken.value = ''
+  } catch (error) {
+    robotError.value = error.response?.data?.detail || '撤销失败，请稍后重试。'
+  } finally {
+    robotBusy.value = false
+  }
+}
 
 const badges = computed(() => [
   { icon: '🌱', name: '初次倾诉', desc: '完成第一次对话', unlocked: stats.chatCount >= 1 },
@@ -211,10 +294,28 @@ async function handleChangePwd() {
   }
 }
 
-onMounted(loadStats)
+onMounted(() => { loadStats(); loadRobotLink() })
 </script>
 
 <style scoped>
+.robot-link { background: white; border-radius: 16px; padding: 16px; color: #3A3530; }
+.robot-link-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.robot-link-head strong { font-size: 15px; }
+.robot-link-head p, .robot-secret p { margin: 7px 0 0; font-size: 12px; line-height: 1.6; color: #5A5450; }
+.robot-state { flex: none; font-size: 12px; color: #5A5450; background: #F3EFEB; padding: 4px 8px; border-radius: 8px; }
+.robot-state.connected { background: #E6F1EB; color: #386B54; }
+.robot-meta { margin: 10px 0 0; color: #5A5450; font-size: 12px; }
+.robot-secret { margin-top: 16px; padding: 12px; background: #F5F7F5; border-radius: 10px; }
+.robot-secret label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 7px; }
+.robot-secret-row { display: flex; gap: 8px; }
+.robot-secret-row input { min-width: 0; flex: 1; padding: 8px; border: 1px solid #B3C5BB; border-radius: 8px; font-size: 12px; color: #263F33; background: white; }
+.robot-secret-row button, .robot-primary { background: #5A8070; color: white; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.robot-secret code { overflow-wrap: anywhere; color: #263F33; }
+.robot-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.robot-revoke { color: #A04842; font-size: 12px; padding: 8px 6px; }
+.robot-error { color: #A04842; font-size: 12px; margin: 12px 0 0; }
+.robot-link button:disabled { opacity: .55; cursor: not-allowed; }
+.robot-link button:focus-visible, .robot-link input:focus-visible { outline: 2px solid #386B54; outline-offset: 2px; }
 .profile-page {
   background: #F5F0EC; min-height: 100vh; padding-bottom: 40px;
   font-family: 'PingFang SC','Microsoft YaHei',sans-serif;

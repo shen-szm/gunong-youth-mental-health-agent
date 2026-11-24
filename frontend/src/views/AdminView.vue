@@ -110,6 +110,13 @@
 
               <div v-else class="authorized-case">
                 <div class="privacy-notice"><strong>授权范围：近30天原文</strong><span>仅用于本工单，不得传播，不得作为诊断依据。所有敏感访问均记录审计。</span></div>
+                <TeacherCaseTaskPanel
+                  :key="`${userStore.userId}:${caseStudent.id}:${caseStudent.access?.request_id || 0}`"
+                  :account-id="Number(userStore.userId)"
+                  :student-id="caseStudent.id"
+                  :student-label="studentName(caseStudent)"
+                  :request-id="caseStudent.access?.request_id || null"
+                />
                 <button class="primary-btn" :disabled="contextLoading" @click="loadCaseContext">{{ contextLoading ? '数字员工正在执行…' : (workProduct ? '重新执行工单' : '执行支持工单') }}</button>
 
                 <section v-if="contextLoading" class="desktop-case-agent-live" role="status" aria-live="polite" aria-label="数字员工当前执行进度">
@@ -419,6 +426,7 @@ import UiIcon from '../components/UiIcon.vue'
 import { useDesktopViewport } from '../utils/useDesktopViewport'
 const desktop = useDesktopViewport()
 const TeacherVerification = defineAsyncComponent(() => import('../components/TeacherVerification.vue'))
+const TeacherCaseTaskPanel = defineAsyncComponent(() => import('../components/TeacherCaseTaskPanel.vue'))
 import pkg from '../../package.json'
 import {
   getTeacherOverview,
@@ -1090,6 +1098,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', focusTeacherSearch))
 </script>
 
 <style scoped>
+@media(min-width:1024px){
+  .case-layout:has(.task-report-review){grid-template-columns:minmax(0,1fr)}
+  .case-layout:has(.task-report-review)>.case-roster{display:flex;gap:10px;max-height:none;overflow-x:auto;padding:0 0 8px}
+  .case-layout:has(.task-report-review)>.case-roster .case-student{flex:0 0 250px;min-width:0}
+  .case-layout:has(.task-report-review)>.case-stage{padding:18px;min-width:0}
+}
 .teacher-nav-icon{display:none}
 @media(min-width:1024px){.teacher-nav-icon{display:inline-block}.teacher-legacy-icon{display:none}}
 .teacher-page { min-height: 100vh; padding: 24px; background: #f4f7f5; color: #26332f; }
@@ -1431,6 +1445,7 @@ textarea { min-height: 96px; resize: vertical; }
 .teacher-sidebar-footer button { min-height: 36px; padding: 7px; border: 0; border-radius: 8px; color: rgba(239,246,243,.75); background: rgba(255,255,255,.06); font: inherit; font-size: 11px; cursor: pointer; }
 .teacher-sidebar-footer button:hover { color: #fff; background: rgba(255,255,255,.11); }
 .teacher-shell { min-width: 0; }
+@media(min-width:1024px){.teacher-shell:has(.has-acceptance) .teacher-topbar{position:static}}
 .teacher-topbar {
   position: sticky;
   top: 0;

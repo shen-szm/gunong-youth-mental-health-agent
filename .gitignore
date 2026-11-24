@@ -23,3 +23,10 @@ Thumbs.db
 /data/reports/
 /backend/data/reports/
 .codex-alpha*-backend.tar.gz
+backend/.teacher-plan-runtime/
+
+# Local archives, PlatformIO build output and vendor firmware are never published.
+/artifacts/
+/_archive/
+**/.pio/
+integrations/deskbot-camera-probe/vendor-ov3660/

@@ -1,12 +1,16 @@
 <template>
-  <section class="review-deliverable" aria-labelledby="review-report-title">
+  <section class="review-deliverable" :class="{ embedded, 'workspace-report': desktopWorkspace }" :data-review-section="reviewSection" :aria-labelledby="`${idPrefix}-title`">
+    <div v-if="desktopWorkspace" class="pc-review-toolbar">
+      <div class="pc-review-version"><span>当前报告 · 第 {{ report?.revision_number || 1 }} 版</span><strong>{{ statusLabel }}</strong><code>{{ report?.report_id }}</code></div>
+      <nav aria-label="报告审核视图"><button v-for="view in reviewViews" :key="view.id" type="button" :aria-pressed="reviewSection === view.id" @click="reviewSection = view.id">{{ view.label }}</button></nav>
+    </div>
     <header class="review-hero">
       <div>
         <span class="review-kicker">数字员工最终交付</span>
-        <h4 id="review-report-title">教师评审报告</h4>
+        <h4 :id="`${idPrefix}-title`">教师评审报告</h4>
         <p>把授权证据、风险裁决、支持任务与回访整理为可审签、可下载的工作成果。</p>
       </div>
-      <button class="review-primary" type="button" :disabled="loading" @click="$emit('generate')">
+      <button v-if="allowGenerate" class="review-primary" type="button" :disabled="loading || decisionLoading" @click="$emit('generate')">
         <UiIcon v-if="desktop" name="report" />
         {{ loading ? '报告 Agent 执行中…' : report ? '重新生成评审报告' : '生成最终评审报告' }}
       </button>
@@ -34,8 +38,8 @@
         <small>{{ report.boundary }}</small>
       </article>
 
-      <section v-if="isUrgent" class="review-safety" aria-labelledby="teacher-review-safety-title">
-        <div><span>安全规则强制覆盖</span><h5 id="teacher-review-safety-title">普通沟通与支持计划已停止</h5><p>先确认学生当下安全，再按校内危机流程连接真人支持。</p></div>
+      <section v-if="isUrgent" class="review-safety" :aria-labelledby="`${idPrefix}-safety`">
+        <div><span>安全规则强制覆盖</span><h5 :id="`${idPrefix}-safety`">普通沟通与支持计划已停止</h5><p>先确认学生当下安全，再按校内危机流程连接真人支持。</p></div>
         <ol><li v-for="action in report.safety_review?.immediate_actions || []" :key="action.title"><strong>{{ action.title }}</strong><small>{{ action.owner }} · {{ action.due }} · {{ action.guidance_codes?.join(' / ') }}</small></li></ol>
         <ul><li v-for="threshold in report.safety_review?.escalation_thresholds || []" :key="threshold">{{ threshold }}</li></ul>
       </section>
@@ -55,9 +59,9 @@
         </section>
       </div>
 
-      <section class="review-evidence-audit" aria-labelledby="evidence-audit-title">
+      <section class="review-evidence-audit" :aria-labelledby="`${idPrefix}-evidence`">
         <div class="review-section-head">
-          <div><span class="review-kicker">证据追溯</span><h5 id="evidence-audit-title">结论—证据可追溯审计</h5></div>
+          <div><span class="review-kicker">证据追溯</span><h5 :id="`${idPrefix}-evidence`">结论—证据可追溯审计</h5></div>
           <strong :class="`audit-status is-${report.evidence_audit?.status}`">{{ report.evidence_audit?.label }}</strong>
         </div>
         <p class="audit-summary">{{ report.evidence_audit?.summary }}</p>
@@ -116,14 +120,14 @@
       <section class="review-signoff">
         <div><span class="review-kicker">Human in the loop</span><h5>教师复核与签署</h5><p>AI 完成整理和交叉检查，最终责任由具备权限的教师确认。</p></div>
         <p v-if="signingBlocked" class="signoff-blocker" role="alert">当前报告存在证据不足或未关联主张，不能签署。请退回并补充证据。</p>
-        <label v-for="(item, index) in report.review_checklist || []" :key="item.item" class="review-check"><input v-model="checks[index]" type="checkbox" :disabled="report.status !== 'draft' || loading"><span>{{ item.item }}<em v-if="item.required">必核</em></span></label>
-        <label v-if="needsGapAcknowledgement" class="review-check evidence-gap-check"><input v-model="gapAcknowledged" type="checkbox" :disabled="report.status !== 'draft' || loading"><span>我已核对报告中的证据缺口，并会在审核意见中记录接受理由和线下补充安排<em>必核</em></span></label>
-        <label class="review-note"><span>审核意见</span><textarea v-model="note" maxlength="1000" :disabled="report.status !== 'draft' || loading" placeholder="记录线下核对结果、责任人或需要修订的内容"></textarea></label>
+        <label v-for="(item, index) in report.review_checklist || []" :key="item.item" class="review-check"><input v-model="checks[index]" type="checkbox" :disabled="report.status !== 'draft' || loading || decisionLoading"><span>{{ item.item }}<em v-if="item.required">必核</em></span></label>
+        <label v-if="needsGapAcknowledgement" class="review-check evidence-gap-check"><input v-model="gapAcknowledged" type="checkbox" :disabled="report.status !== 'draft' || loading || decisionLoading"><span>我已核对报告中的证据缺口，并会在审核意见中记录接受理由和线下补充安排<em>必核</em></span></label>
+        <label class="review-note"><span>审核意见</span><textarea v-model="note" maxlength="1000" :disabled="report.status !== 'draft' || loading || decisionLoading" placeholder="记录线下核对结果、责任人或需要修订的内容"></textarea></label>
         <div class="review-actions">
           <button type="button" class="review-secondary" :disabled="loading" @click="$emit('download')"><UiIcon v-if="desktop" name="download" /> 下载 PDF</button>
           <button v-if="report.status === 'draft'" type="button" class="review-secondary danger" :disabled="decisionLoading || loading || note.trim().length < 4" @click="submitDecision('revision_requested')">退回修订</button>
           <button v-if="report.status === 'draft'" type="button" class="review-primary" :disabled="decisionLoading || loading || !canSign" @click="submitDecision('reviewed')">{{ decisionLoading ? '记录中…' : '确认并签署' }}</button>
-          <strong v-else-if="report.status === 'revision_requested'" class="revision-label">当前版本已退回，请重新生成修订版后再签署。</strong>
+          <strong v-else-if="report.status === 'revision_requested'" class="revision-label">{{ allowGenerate ? '当前版本已退回，请重新生成修订版后再签署。' : '当前版本已退回。先按审核意见补充并核对资料，再准备新的修订任务；本报告不会自动改写。' }}</strong>
           <strong v-else class="signed-label">已由教师签署 · {{ shortDate(report.reviewed_at) }}</strong>
         </div>
       </section>
@@ -138,7 +142,10 @@ import UiIcon from './UiIcon.vue'
 const desktop = useDesktopViewport()
 const TeacherAgentExecution = defineAsyncComponent(() => import('./TeacherAgentExecution.vue'))
 
-const props = defineProps({ report: { type: Object, default: null }, loading: Boolean, decisionLoading: Boolean })
+const props = defineProps({ report: { type: Object, default: null }, loading: Boolean, decisionLoading: Boolean, allowGenerate: { type: Boolean, default: true }, embedded: Boolean, desktopWorkspace: Boolean, idPrefix: { type: String, default: 'review-report' } })
+const reviewSection = ref('overview')
+const reviewViews = [{ id: 'overview', label: '报告概览' }, { id: 'evidence', label: '证据核对' }, { id: 'signoff', label: '审核签署' }]
+watch(() => props.report?.report_id, () => { reviewSection.value = 'overview' })
 const emit = defineEmits(['generate', 'decision', 'download'])
 const checks = ref([])
 const note = ref('')
@@ -172,6 +179,18 @@ function submitDecision(decision) { emit('decision', { decision, checklistConfir
 </script>
 
 <style scoped>
+.pc-review-toolbar{display:none}
+@media(min-width:1024px){
+  .workspace-report .pc-review-toolbar{display:block;position:sticky;top:80px;z-index:5;background:#f6faf9;padding:12px 0 0;border-bottom:1px solid #bdcfc7}
+  .pc-review-version{display:grid;grid-template-columns:1fr auto;gap:6px 12px;color:#4e625a;font-size:12px}.pc-review-version strong{color:#315f50}.pc-review-version code{grid-column:1/-1;overflow-wrap:anywhere;font-size:12px}
+  .pc-review-toolbar nav{display:flex;gap:8px;margin-top:12px}.pc-review-toolbar button{min-height:40px;padding:8px 14px;border:0;border-radius:6px 6px 0 0;background:none;color:#4e625a;cursor:pointer;font:inherit;font-size:13px}.pc-review-toolbar button[aria-pressed=true]{background:#dfece5;color:#244d3f;font-weight:700}.pc-review-toolbar button:hover{background:#e8f0ec}
+  .workspace-report[data-review-section]>.review-hero,.workspace-report[data-review-section] .review-desktop-execution,.workspace-report[data-review-section] .review-agents{display:none}
+  .workspace-report[data-review-section=overview] .review-evidence-audit,.workspace-report[data-review-section=overview] .review-signoff{display:none}
+  .workspace-report[data-review-section=evidence]>.review-meta,.workspace-report[data-review-section=evidence]>.review-decision,.workspace-report[data-review-section=evidence]>.review-safety,.workspace-report[data-review-section=evidence]>.review-columns,.workspace-report[data-review-section=evidence]>.review-sources,.workspace-report[data-review-section=evidence]>.review-signoff{display:none}
+  .workspace-report[data-review-section=signoff]>.review-meta,.workspace-report[data-review-section=signoff]>.review-decision,.workspace-report[data-review-section=signoff]>.review-safety,.workspace-report[data-review-section=signoff]>.review-columns,.workspace-report[data-review-section=signoff]>.review-sources,.workspace-report[data-review-section=signoff]>.review-evidence-audit{display:none}
+  .workspace-report .review-columns{grid-template-columns:1fr}.workspace-report .review-meta{grid-template-columns:1fr 1fr}.workspace-report .audit-layout{grid-template-columns:1fr}.workspace-report .review-signoff{scroll-margin-top:190px}.workspace-report .review-actions{position:sticky;bottom:0;background:#f6faf9;padding:12px 0;z-index:4}
+}
+.embedded .review-signoff{grid-template-columns:minmax(0,1fr)}.embedded .review-signoff>div:first-child{grid-row:auto}.embedded .signoff-blocker{grid-column:auto}
 @media (min-width:1024px){.review-agents{display:none}}
 @media (max-width:1023px){.review-desktop-execution{display:none}}
 .review-deliverable{margin-top:18px;padding:22px;border:1px solid rgba(69,105,91,.24);border-radius:16px;background:linear-gradient(145deg,rgba(255,252,244,.94),rgba(233,244,238,.9))}
@@ -182,5 +201,7 @@ function submitDecision(decision) { emit('decision', { decision, checklistConfir
 .review-evidence-audit{margin-top:12px}.audit-status{padding:6px 10px;border-radius:999px;color:#6b5723;background:#fff0c9;font-size:12px}.audit-status.is-review_ready{color:#315f50;background:#e5f1eb}.audit-status.is-insufficient{color:#873934;background:#f7ddda}.audit-summary{margin:8px 0 12px;color:#53675f;line-height:1.6}.audit-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.audit-metrics div{padding:10px 12px;border-radius:11px;background:#f1f6f3}.audit-metrics span,.audit-metrics strong{display:block}.audit-metrics span{color:#4e6259;font-size:11px}.audit-metrics strong{margin-top:3px;color:#2f5044;font-size:18px}.audit-layout{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:10px;margin-top:10px}.audit-claims,.audit-ledger{max-height:360px;overflow:auto;padding:8px;border:1px solid #e0e9e5;border-radius:12px;background:#fbfcfb}.audit-claims article,.audit-ledger article{display:grid;gap:3px;padding:10px;border-bottom:1px solid #e6ede9}.audit-claims article:last-child,.audit-ledger article:last-child{border-bottom:0}.audit-claims article>span,.audit-claims small,.audit-ledger small,.ledger-head small{color:#4f635a;font-size:10px}.audit-claims article>strong{color:#344e44;font-size:12px}.audit-claims article.is-unlinked{border-left:3px solid #b54a46;background:#fff6f5}.audit-claims article.is-declared_gap{border-left:3px solid #c79c43;background:#fffaf0}.ledger-head{display:flex;justify-content:space-between;padding:7px 10px;color:#3d5a50}.audit-ledger article>div{display:flex;justify-content:space-between;gap:8px}.audit-ledger code{color:#3d6b5e;font-size:10px}.audit-ledger span{color:#4f625a;font-size:10px}.audit-ledger p{margin:2px 0;color:#465c54;font-size:11px;line-height:1.5}.audit-empty{margin:8px;color:#52655d}.audit-boundary{margin:10px 0 0;padding-top:10px;border-top:1px solid #e1e9e5;color:#4f625a;font-size:11px;line-height:1.55}
 .review-agents,.review-sources,.review-signoff{margin-top:12px}.review-section-head small{color:#687971}.review-agent-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.review-agent-grid article{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:9px;padding:12px;border:1px solid #e0eae5;border-radius:13px;background:#f9fbfa}.review-agent-grid article>span{color:#647e74;font:700 11px monospace}.review-agent-grid article div{display:grid;gap:2px}.review-agent-grid strong{color:#304b41}.review-agent-grid small,.review-agent-grid p{margin:0;color:#5f7169;font-size:11px;line-height:1.45}.review-agent-grid em{color:#43715f;font-size:11px;font-style:normal;font-weight:800}.review-agent-grid .attention{background:#fff9e9}.review-agent-grid .blocked{background:#fff1ef}.review-card blockquote{margin:13px 0;padding:12px 14px;border:1px solid #dbc77e;border-radius:10px;background:#fff8e6;color:#4e4937;line-height:1.6}.review-card ol li{padding-left:3px}.review-card ol strong,.review-card ol span{display:block}.review-card ol span{color:#687971;font-size:11px}.avoid-title{display:block;margin-top:14px;color:#704f43}
 .review-sources{display:grid;gap:8px}.review-sources a{display:grid;grid-template-columns:105px 1fr;gap:3px 12px;padding:11px 12px;border:1px solid #e1eae6;border-radius:11px;color:inherit;text-decoration:none}.review-sources a:hover{border-color:#8eac9f;background:#f7fbf9}.review-sources a span{grid-row:1/3;color:#527565;font:700 11px monospace}.review-sources a strong{color:#304b41}.review-sources a small{color:#62746b}.review-signoff{display:grid;grid-template-columns:1.1fr 1fr;gap:10px 24px}.review-signoff>div:first-child{grid-row:span 6}.signoff-blocker{grid-column:2;margin:0;padding:10px;border:1px solid #d7a5a1;border-radius:10px;color:#793b36;background:#fff3f2;line-height:1.5}.review-check{display:flex;align-items:flex-start;gap:9px;color:#41574f}.review-check input{margin-top:3px}.review-check em{margin-left:7px;padding:2px 6px;border-radius:7px;background:#edf4f0;color:#537266;font-size:10px;font-style:normal}.evidence-gap-check{padding:9px;border-radius:10px;background:#fff8e6}.review-note{display:grid;gap:6px}.review-note span{color:#536860;font-weight:700}.review-note textarea{min-height:76px;padding:10px;border:1px solid #cbd8d2;border-radius:10px;background:#fff;font:inherit;resize:vertical}.review-actions{grid-column:1/-1;justify-content:flex-end;padding-top:8px;border-top:1px solid #e1e9e5}.review-secondary.danger{color:#91493f}.signed-label{color:#36705b}.revision-label{color:#8a5d28}.review-deliverable :focus-visible{outline:3px solid #e2bd5e;outline-offset:3px}
-@media (max-width:1023px){.review-evidence-audit{display:none}}
+.review-deliverable.embedded{padding:0;border:0;background:none;border-radius:0}.embedded .review-meta strong{overflow-wrap:anywhere}.embedded .review-hero{align-items:flex-start}.embedded .review-card,.embedded .review-signoff,.embedded .review-evidence-audit,.embedded .review-sources,.embedded .review-agents{border:0;border-radius:0;background:none;padding:18px 0;border-top:1px solid #cbd8d2}.embedded .review-note textarea{width:100%;box-sizing:border-box}.embedded .review-check{line-height:1.6}.embedded .review-check input{min-width:18px;min-height:18px}.embedded .review-primary,.embedded .review-secondary{min-height:44px}.embedded .review-actions{flex-wrap:wrap}
+@media(max-width:1023px){.review-evidence-audit{display:none}.embedded .review-evidence-audit{display:block}}
+@media(max-width:700px){.embedded .review-columns,.embedded .audit-layout,.embedded .review-agent-grid,.embedded .review-signoff,.embedded .review-safety{grid-template-columns:minmax(0,1fr)}.embedded .review-hero,.embedded .review-section-head{flex-direction:column;align-items:flex-start;gap:10px}.embedded .review-signoff>div:first-child{grid-row:auto}.embedded .signoff-blocker{grid-column:auto}.embedded .audit-metrics{grid-template-columns:1fr 1fr}.embedded .review-sources a{grid-template-columns:minmax(0,1fr);overflow-wrap:anywhere}.embedded .review-sources a span{grid-row:auto}.embedded .review-actions button{flex:1 1 auto}.embedded .review-meta{grid-template-columns:1fr 1fr}}
 </style>

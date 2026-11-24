@@ -12,7 +12,7 @@ import models  # 确保模型被加载
 from validation import sanitized_validation_exception_handler
 
 # 导入路由
-from api import chat, companion, user, mood, admin, music, guardian, teacher, island, assessment, student_agent
+from api import chat, companion, user, mood, admin, music, guardian, teacher, island, assessment, student_agent, teacher_tasks, robot
 
 app = FastAPI(title="咕哝 API", description="AI心理健康教育与守护者支持工具", version=settings.RELEASE_VERSION)
 app.add_exception_handler(RequestValidationError, sanitized_validation_exception_handler)
@@ -38,6 +38,8 @@ app.include_router(teacher.router)
 app.include_router(island.router)
 app.include_router(assessment.router)
 app.include_router(student_agent.router)
+app.include_router(teacher_tasks.router)
+app.include_router(robot.router)
 support_cleanup_task = None
 logger = logging.getLogger(__name__)
 

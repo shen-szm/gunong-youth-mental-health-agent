@@ -1,0 +1,4 @@
+# Optional durable teacher-task pilot; production enablement is a separate rollout.
+-r requirements.txt
+langgraph==1.2.11
+langgraph-checkpoint-sqlite==3.1.1

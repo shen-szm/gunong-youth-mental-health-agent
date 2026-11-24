@@ -1091,6 +1091,8 @@ def decide_work_product_task(student_id: int, payload: WorkProductTaskDecisionIn
 
 
 def _review_report_payload(row: TeacherReviewReport) -> dict:
+    if hashlib.sha256((row.report_json or "{}").encode("utf-8")).hexdigest() != row.content_hash:
+        raise HTTPException(status_code=409, detail="报告完整性校验失败，请联系管理员核查")
     payload = json.loads(row.report_json or "{}")
     payload.update({
         "report_id": row.report_id,
@@ -1204,6 +1206,23 @@ def latest_teacher_review_report(
     return _review_report_payload(row)
 
 
+@router.get("/students/{student_id}/review-reports/{report_id}/detail")
+def exact_teacher_review_report(
+    student_id: int, report_id: str, request_id: int | None = None,
+    db: Session = Depends(get_db), teacher: User = Depends(require_teacher),
+):
+    approved = _require_student_access(db, teacher, student_id, request_id)
+    row = db.query(TeacherReviewReport).filter_by(
+        report_id=report_id, student_user_id=student_id,
+        request_id=approved.id if approved else None, generated_by_user_id=teacher.id,
+    ).first()
+    if not row:
+        raise HTTPException(404, "评审报告不存在或不属于当前授权范围")
+    payload = _review_report_payload(row)
+    _audit(db, teacher, "view_teacher_review_report", "teacher_review_report", report_id, "allowed")
+    return payload
+
+
 @router.post("/students/{student_id}/review-reports/{report_id}/decision")
 def decide_teacher_review_report(
     student_id: int,
@@ -1238,7 +1257,7 @@ def decide_teacher_review_report(
         return _review_report_payload(row)
     if payload.decision == "reviewed" and not payload.checklist_confirmed:
         deny(400, "签署前必须逐项确认审核清单", "denied_checklist")
-    report_snapshot = json.loads(row.report_json or "{}")
+    report_snapshot = _review_report_payload(row)
     evidence_audit = report_snapshot.get("evidence_audit") or {}
     evidence_status = evidence_audit.get("status", "insufficient")
     unlinked_claims = int(evidence_audit.get("unlinked_claim_count") or 0)
