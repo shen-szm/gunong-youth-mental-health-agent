@@ -9,6 +9,9 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     nickname = Column(String(50), nullable=True)
+    real_name = Column(String(50), nullable=True)
+    class_name = Column(String(50), nullable=True)
+    student_no = Column(String(40), nullable=True, index=True)
     avatar = Column(String(255), nullable=True)
     # 0=学生，1=普通教师，2=管理员教师。保留字段名以兼容既有数据库。
     is_admin = Column(Integer, default=0, nullable=False)
@@ -84,6 +87,30 @@ class StudentConversationSummary(Base):
     expires_at = Column(DateTime, nullable=False, index=True)
 
     __table_args__ = (Index("idx_student_summary_user_expiry", "user_id", "expires_at"),)
+
+
+class StudentCompanionMemory(Base):
+    """小满跨会话记住的一件小事；学生可随时查看和删除，最多保留180天。"""
+
+    __tablename__ = "student_companion_memories"
+
+    id = Column(Integer, primary_key=True)
+    memory_code = Column(String(40), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(String(120), nullable=False)
+    category = Column(String(16), nullable=False, default="其他")
+    dedupe_key = Column(String(64), nullable=False)
+    consent_version = Column(String(32), nullable=False)
+    source_session_id = Column(Integer, ForeignKey("student_chat_sessions.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("idx_student_memory_user_dedupe", "user_id", "dedupe_key", unique=True),
+        Index("idx_student_memory_user_updated", "user_id", "updated_at"),
+        Index("idx_student_memory_user_expiry", "user_id", "expires_at"),
+    )
 
 
 class StudentWellbeingAssessment(Base):
@@ -391,7 +418,7 @@ class StudentExternalAiAuthorization(Base):
     student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
     authorized_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     basis = Column(String(40), nullable=False, default="school_guardian_authority")
-    statement_version = Column(String(40), nullable=False, default="teacher-ai-authorization-v3")
+    statement_version = Column(String(40), nullable=False, default="teacher-ai-authorization-v4")
     purpose = Column(String(120), nullable=False, default="student_support_agents")
     status = Column(String(16), nullable=False, default="active", index=True)
     expires_at = Column(DateTime, nullable=False, index=True)

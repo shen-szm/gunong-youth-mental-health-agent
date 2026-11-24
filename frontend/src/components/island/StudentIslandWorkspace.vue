@@ -146,9 +146,16 @@
       </nav>
 
       <p id="island-instructions" class="island-instructions">
-        方向键或 WASD 行走，点击地图或地点可自动前往，Enter 或空格互动。
+        方向键或 WASD 行走，点击地图或地点可自动前往，Enter 或空格互动；手机可双指捏合缩放地图，放大后单指拖动查看。
       </p>
       <p id="island-live-status" class="sr-only" role="status" aria-live="polite">{{ liveStatus }}</p>
+
+      <div v-if="!loading && !loadError" class="island-zoom-controls" role="group" aria-label="地图缩放" :inert="Boolean(activeActivity || safetyLocked)" :aria-hidden="activeActivity || safetyLocked ? 'true' : undefined">
+        <button type="button" aria-label="放大地图" :disabled="mapZoom >= zoomLimits.max - 0.001" @click.stop="zoomMap('in')">＋</button>
+        <button type="button" aria-label="缩小地图" :disabled="mapZoom <= zoomLimits.min + 0.001" @click.stop="zoomMap('out')">－</button>
+        <span class="island-zoom-level" aria-hidden="true">{{ zoomPercent }}%</span>
+        <button type="button" class="is-zoom-reset" aria-label="复位地图缩放" :disabled="mapZoom <= zoomLimits.min + 0.001" @click.stop="zoomMap('reset')">复位</button>
+      </div>
 
       <div class="island-mobile-controls" :inert="Boolean(activeActivity || safetyLocked)" :aria-hidden="activeActivity || safetyLocked ? 'true' : undefined" aria-label="心岛移动控制">
         <button type="button" aria-label="向左上移动" @pointerdown="startPointerMove($event, -1, -1)" @pointerup="stopMoving" @pointercancel="stopMoving" @lostpointercapture="stopMoving">↖</button>
@@ -178,6 +185,7 @@ import IslandHappinessExchange from './IslandHappinessExchange.vue'
 import { createIslandBridge } from '../../game/island/islandBridge.js'
 import { loadActivityState, saveActivityState } from '../../game/island/islandActivityState.js'
 import { ISLAND_PHASES, ISLAND_PLACES, loadIslandState, millisecondsUntilNextIslandPhase, resolveIslandPhase, saveIslandState } from '../../game/island/islandState.js'
+import { ISLAND_ZOOM } from '../../game/island/islandZoom.js'
 
 const props = defineProps({ storageScope: { type: [String, Number], required: true } })
 const emit = defineEmits(['close', 'activity', 'open-chat', 'safety'])
@@ -199,6 +207,9 @@ const agentSource = ref('deterministic')
 const agentSafetyAction = ref('')
 const viewportQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 900px)') : null
 const compactViewport = !!viewportQuery?.matches
+const mapZoom = ref(1)
+const zoomLimits = ISLAND_ZOOM
+const zoomPercent = computed(() => Math.round(mapZoom.value * 100))
 const agentExpanded = ref(false)
 const liveStatus = ref('心岛地图正在准备')
 const nearby = ref('星灯小径')
@@ -334,6 +345,11 @@ function bindBridge(activeBridge, generation, scope) {
     activeBridge.on('status', event => {
       if (!isCurrentGeneration(generation, scope)) return
       liveStatus.value = event.text
+    }),
+    activeBridge.on('zoom', event => {
+      if (!isCurrentGeneration(generation, scope)) return
+      const zoom = Number(event?.zoom)
+      if (Number.isFinite(zoom)) mapZoom.value = zoom
     }),
     activeBridge.on('arrive', event => {
       if (!isCurrentGeneration(generation, scope)) return
@@ -568,6 +584,10 @@ function interact() {
   if (safetyLocked.value || activeActivity.value) return
   bridge.emit('command', { type: 'interact' })
 }
+function zoomMap(action) {
+  if (safetyLocked.value || activeActivity.value) return
+  bridge.emit('command', { type: 'zoom', action })
+}
 function openArrivalActivity() {
   if (!arrivalCard.value?.place) return
   const place = arrivalCard.value.place
@@ -737,6 +757,7 @@ watch(() => props.storageScope, async (nextScope, previousScope) => {
   safetyLocked.value = false
   nearby.value = '星灯小径'
   targetPlaceLabel.value = ''
+  mapZoom.value = 1
   agentPhase.value = 'ready'
   agentText.value = '正在听懂你想去的方向'
   agentSource.value = 'deterministic'
@@ -913,6 +934,12 @@ onBeforeUnmount(() => {
 .island-place-dock strong { font-size: 11px; }
 .island-place-dock small { margin-top: 2px; font-size: 9px; opacity: .76; }
 .island-instructions { position: absolute; right: 180px; bottom: 24px; margin: 0; color: rgba(255,255,255,.6); font-size: 9px; text-shadow: 0 1px 2px rgba(0,0,0,.5); z-index: 5; }
+.island-zoom-controls { position: absolute; top: 82px; left: 16px; z-index: 8; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 12px; background: rgba(0,0,0,.32); backdrop-filter: blur(12px); }
+.island-zoom-controls button { width: 36px; min-height: 36px; border: 0; border-radius: 9px; color: #fff; background: rgba(0,0,0,.28); font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+.island-zoom-controls button:hover { background: rgba(0,0,0,.46); }
+.island-zoom-controls button:disabled { opacity: .36; cursor: not-allowed; }
+.island-zoom-controls .is-zoom-reset { width: auto; padding: 0 8px; font-size: 10px; font-weight: 700; }
+.island-zoom-level { min-width: 34px; color: rgba(255,255,255,.8); font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
 .island-mobile-controls { position: absolute; right: 16px; bottom: 16px; z-index: 8; display: grid; grid-template-columns: repeat(3, 46px); width: 146px; gap: 4px; }
 .island-mobile-controls button { min-height: 44px; border: 0; border-radius: 10px; color: #fff; background: rgba(0,0,0,.35); font-size: 16px; font-weight: 800; backdrop-filter: blur(10px); touch-action: none; cursor: pointer; transition: background .2s; }
 .island-mobile-controls button:hover { background: rgba(0,0,0,.5); }
@@ -1217,6 +1244,7 @@ onBeforeUnmount(() => {
   .island-place-dock { bottom: 8px; width: calc(100% - 180px); }
   .island-place-dock button { min-height: 42px; }
   .island-instructions { display: none; }
+  .island-zoom-controls { top: 86px; left: 8px; }
 }
 @media (max-width: 520px) {
   .island-phase-status { min-width: 132px; }
@@ -1326,6 +1354,19 @@ onBeforeUnmount(() => {
   box-shadow: 2px 2px 0 var(--px-shadow);
 }
 .island-place-dock strong { font-family: var(--px-font); }
+.island-zoom-controls {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.island-zoom-controls button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.island-zoom-controls .is-zoom-reset { border-color: var(--px-gold); }
+.island-zoom-controls button:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--px-shadow); }
 .island-mobile-controls button {
   border: 2px solid var(--px-line);
   border-radius: 4px;
@@ -1399,5 +1440,90 @@ onBeforeUnmount(() => {
   .activity-panel-header nav { border-radius: 6px; }
   .activity-panel-header nav button { border-radius: 4px; }
   .island-reflection { border-radius: 6px; }
+}
+
+/* 像素皮肤 3.0 · 海面留白：16:9 画布以外的区域也是同一片海 */
+.island-workspace {
+  background-color: #2c7c9a;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .04) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #3f90a6 0%, #2c7c9a 46%, #1d5c76 100%);
+}
+.island-workspace.is-dusk {
+  background-color: #355567;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 236, 210, .035) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #4b7180 0%, #355567 46%, #243b4c 100%);
+}
+.island-workspace.is-night {
+  background-color: #101f31;
+  background-image:
+    radial-gradient(circle at 22px 28px, rgba(255, 236, 170, .8) 0 1px, transparent 2px),
+    radial-gradient(circle at 88px 64px, rgba(255, 236, 170, .5) 0 1px, transparent 2px),
+    repeating-linear-gradient(0deg, rgba(150, 200, 230, .03) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #1b3346 0%, #101f31 52%, #081320 100%);
+  background-size: 128px 96px, 96px 80px, auto, auto;
+}
+
+/* 窄屏：地点导航独占一行，摇杆上移，避免与底栏互相遮挡 */
+@media (max-width: 520px) {
+  .island-place-dock {
+    right: 8px;
+    left: 8px;
+    bottom: 8px;
+    width: auto;
+    transform: none;
+  }
+  .island-place-dock button { padding: 6px 4px; }
+  .island-place-dock strong { font-size: 10.5px; }
+  .island-mobile-controls { right: 8px; bottom: 70px; }
+  .island-mission-glass {
+    left: 8px;
+    bottom: 70px;
+    width: min(212px, calc(100% - 168px));
+  }
+  .island-arrival-card { right: 8px; bottom: 220px; width: calc(100% - 16px); }
+}
+
+/* 窄屏玩法页：标签排成三列两行，内容给顶栏让位 */
+@media (max-width: 700px) {
+  .activity-panel-header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .activity-panel-header > button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .activity-panel-header nav {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    min-width: 0;
+    padding: 3px;
+  }
+  .activity-panel-header nav button {
+    min-height: 32px;
+    padding: 0 4px;
+    overflow: hidden;
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .island-activity-panel.is-garden .activity-panel-body,
+  .island-activity-panel.is-fishing .activity-panel-body,
+  .island-activity-panel.is-exchange .activity-panel-body {
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: 92px 0 24px;
+  }
+  .island-activity-panel.is-fishing .activity-panel-body,
+  .island-activity-panel.is-exchange .activity-panel-body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
 }
 </style>

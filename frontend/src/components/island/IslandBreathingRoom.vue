@@ -76,12 +76,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { logIslandBehavior } from '../../api/island.js'
 import breathingDay from '../../assets/island/breathing-day.png'
 import breathingDusk from '../../assets/island/breathing-dusk.png'
 import breathingNight from '../../assets/island/breathing-night.png'
 
+const props = defineProps({ timePhase: { type: String, default: '' } })
 const emit = defineEmits(['played'])
 
 const modes = [
@@ -90,7 +91,8 @@ const modes = [
   { id: 'coherent', name: '海浪呼吸', icon: '〜', pattern: '吸5秒 · 呼5秒', desc: '不含屏息，节奏简单' },
 ]
 
-const currentPhase = ref('night')
+const currentPhase = ref(props.timePhase || 'day')
+watch(() => props.timePhase, (value) => { if (value) currentPhase.value = value })
 const selectedMode = ref('box')
 const breathing = ref(false)
 const breathState = ref('idle')
@@ -101,7 +103,6 @@ const completedCycles = ref(0)
 const finished = ref(false)
 const showComplete = ref(false)
 let breathTimer = null
-let phaseTimer = null
 
 const bgImage = computed(() => ({
   day: breathingDay, dusk: breathingDusk, night: breathingNight,
@@ -190,19 +191,8 @@ function reset() {
   cycleCount.value = 0
 }
 
-function syncPhase() {
-  const hour = new Date().getHours()
-  if (hour >= 6 && hour < 17) currentPhase.value = 'day'
-  else if (hour >= 17 && hour < 20) currentPhase.value = 'dusk'
-  else currentPhase.value = 'night'
-}
-
-syncPhase()
-phaseTimer = setInterval(syncPhase, 60000)
-
 onBeforeUnmount(() => {
   if (breathTimer) clearTimeout(breathTimer)
-  if (phaseTimer) clearInterval(phaseTimer)
 })
 </script>
 
@@ -484,6 +474,41 @@ onBeforeUnmount(() => {
   font-family: var(--px-font);
 }
 .breathing-room button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+/* 窄屏：白天亮天空下白色半透明卡片几乎不可读，改用深色玻璃底 */
+@media (max-width: 900px) {
+  .breath-header {
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: rgba(24,31,30,.6);
+    text-shadow: none;
+  }
+  .mode-hint {
+    margin-bottom: 18px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    background: rgba(24,31,30,.58);
+    color: rgba(255,248,234,.9);
+    text-shadow: none;
+  }
+  .mode-card {
+    color: var(--island-ink, #fff8ea);
+    background: rgba(24,31,30,.64);
+    backdrop-filter: blur(10px);
+    text-shadow: none;
+  }
+  .mode-card:hover { background: rgba(39,49,47,.78); }
+  .mode-card.active { background: rgba(47,50,36,.84); }
+  .mode-card small { opacity: .85; }
+  .mode-card em { opacity: .75; }
+  .breath-safety-note {
+    padding: 8px 12px;
+    border-radius: 4px;
+    color: rgba(255,248,234,.86);
+    background: rgba(24,31,30,.58);
+    backdrop-filter: blur(8px);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .breathing-room *, .complete-icon { animation: none !important; transition-duration: .01ms !important; }

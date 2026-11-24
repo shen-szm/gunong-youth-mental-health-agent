@@ -26,14 +26,9 @@
       <!-- 右侧：登录表单 -->
       <div class="right-panel">
         <div class="form-header">
-          <span class="form-kicker">咕哝 · 账号入口</span>
-          <h2>{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h2>
-          <p>{{ mode === 'login' ? '很高兴再次见到你' : '加入咕哝，开始倾诉' }}</p>
-        </div>
-
-        <div class="tab-switch" role="tablist" aria-label="登录或注册">
-          <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="switchMode('login')">登录</button>
-          <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="switchMode('register')">注册</button>
+          <span class="form-kicker">咕哝 · 教师入口</span>
+          <h2>教师登录</h2>
+          <p>仅限教师账号进入管理后台</p>
         </div>
 
         <form class="form-body" novalidate @submit.prevent="handleSubmit">
@@ -49,17 +44,6 @@
               autocomplete="username"
             />
           </div>
-          <div class="input-group" v-if="mode === 'register'">
-            <label for="login-nickname">昵称</label>
-            <input
-              id="login-nickname"
-              v-model.trim="form.nickname"
-              name="nickname"
-              placeholder="如何称呼你？（可选）"
-              class="input"
-              autocomplete="nickname"
-            />
-          </div>
           <div class="input-group">
             <label for="login-password">密码</label>
             <div class="input-affix">
@@ -70,7 +54,7 @@
                 name="password"
                 placeholder="请输入密码"
                 class="input"
-                :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+                autocomplete="current-password"
               />
               <button
                 type="button"
@@ -90,12 +74,12 @@
 
           <button type="submit" class="btn-primary" :disabled="loading">
             <span v-if="loading" class="loading-dot" aria-hidden="true"></span>
-            <span v-else>{{ mode === 'login' ? '登 录' : '注 册' }}</span>
+            <span v-else>登 录</span>
           </button>
 
           <div class="form-extras">
-            <p v-if="mode === 'login'" class="forgot-hint">密码不会被系统展示；需要重置时请联系教师管理员。</p>
-            <RouterLink class="back-home" to="/">返回学生端</RouterLink>
+            <p class="forgot-hint">密码不会被系统展示；需要重置时请联系教师管理员。</p>
+            <RouterLink class="back-home" to="/login">学生端登录</RouterLink>
           </div>
         </form>
       </div>
@@ -109,7 +93,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Eye, EyeOff } from '@lucide/vue'
 import { useUserStore } from '../stores/user'
-import { register, login } from '../api/user'
+import { login } from '../api/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -348,21 +332,19 @@ async function handleSubmit() {
   }
   loading.value = true
   try {
-    if (mode.value === 'login') {
-      const resp = await login(form.value.username, form.value.password)
-      const data = resp.data
-      userStore.login(data.user_id, data.nickname, !!data.is_admin, !!data.is_super_admin, data.role)
-      const redirect = route.query.redirect
-      router.push(data.is_admin ? (redirect || '/admin') : '/')
-    } else {
-      await register(form.value.username, form.value.password, form.value.nickname)
-      mode.value = 'login'
-      form.value.password = ''
-      showPassword.value = false
-      notice.value = '注册成功，请用新账号登录'
+    const resp = await login(form.value.username, form.value.password)
+    const data = resp.data
+    if (!data.is_admin) {
+      await userStore.logout()
+      error.value = '该账号不是教师账号，请使用学生端登录'
+      return
     }
+    userStore.login(data.user_id, data.nickname, true, !!data.is_super_admin, data.role)
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/admin'
+    router.push(redirect)
   } catch (e) {
-    error.value = e.response?.data?.detail || '操作失败，请重试'
+    const detail = e.response?.data?.detail
+    error.value = typeof detail === 'string' ? detail : '操作失败，请重试'
   } finally {
     loading.value = false
   }

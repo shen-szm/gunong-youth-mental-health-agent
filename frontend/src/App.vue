@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" :data-part="part" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'trend-full': route.path === '/trend', 'profile-full': route.path === '/profile', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
+  <div class="app-container" :data-part="part" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'trend-full': route.path === '/trend', 'profile-full': route.path === '/profile', 'login-full': route.path === '/teacher-login' || route.path === '/login', 'guardian-full': route.path.startsWith('/guardian') }">
     <Transition name="page" mode="out-in">
       <div :key="route.path" class="page-wrap">
         <router-view class="page-content" />
@@ -29,6 +29,7 @@
         <span class="nav-label">声音</span>
       </button>
     </nav>
+    <LoginPromptModal />
   </div>
 </template>
 
@@ -38,12 +39,13 @@ import { useRoute } from "vue-router";
 import { House, MessageCircle, ChartLine, UserRound, Volume2, VolumeX } from "@lucide/vue";
 import { isBgmOn, stopBgm, subscribeBgm, toggleBgm } from "./utils/bgm";
 import { useTimeOfDay } from "./utils/timeOfDay";
+import LoginPromptModal from "./components/LoginPromptModal.vue";
 
 const route = useRoute();
 const part = useTimeOfDay();
-const showBottomNav = computed(() => route.path !== '/teacher-login' && ['/chat', '/trend', '/profile'].includes(route.path));
+const showBottomNav = computed(() => route.path !== '/teacher-login' && route.path !== '/login' && ['/chat', '/trend', '/profile'].includes(route.path));
 watch(() => route.path, path => {
-  if (path === '/admin' || path === '/teacher-login' || path.startsWith('/guardian')) stopBgm();
+  if (path === '/admin' || path === '/teacher-login' || path === '/login' || path.startsWith('/guardian')) stopBgm();
 });
 const soundOn = ref(isBgmOn());
 let unsubscribeBgm = () => {};

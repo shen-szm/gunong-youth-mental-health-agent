@@ -1,6 +1,6 @@
-import axios from "axios";
+import { createApi } from "./http";
 
-const instance = axios.create({ baseURL: "/api/island" });
+const instance = createApi("/api/island");
 
 // ── Agent 运行 ──
 export function runIslandAgent(trigger = "login") {

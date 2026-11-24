@@ -1,6 +1,6 @@
-import axios from 'axios'
+import { createApi } from './http'
 
-const instance = axios.create({ baseURL: '/api/companion', withCredentials: true })
+const instance = createApi('/api/companion')
 
 export function sendCompanionMessage(content) {
   return instance.post('/chat', { content })

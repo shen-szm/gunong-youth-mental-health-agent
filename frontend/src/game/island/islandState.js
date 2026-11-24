@@ -27,7 +27,16 @@ export function clampIslandPosition(position = ISLAND_SPAWN) {
   }
 }
 
-export function resolveIslandPhase(hour = new Date().getHours()) {
+// 仅开发环境：与首页一致支持 ?hour=18 预览任意时段，生产构建里 DEV 为 false。
+function devHourOverride() {
+  if (typeof window === 'undefined' || !import.meta.env?.DEV) return null
+  const raw = new URLSearchParams(window.location.search).get('hour')
+  if (raw === null || raw === '') return null
+  const hour = Number(raw)
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null
+}
+
+export function resolveIslandPhase(hour = devHourOverride() ?? new Date().getHours()) {
   const normalizedHour = Number.isFinite(Number(hour)) ? Number(hour) : 12
   if (normalizedHour >= 6 && normalizedHour < 17) return 'day'
   if (normalizedHour >= 17 && normalizedHour < 20) return 'dusk'

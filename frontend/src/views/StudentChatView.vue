@@ -14,6 +14,16 @@
           <small><span class="sc-dot" :class="{ thinking: chatLoading }"></span>{{ chatLoading ? '正在思考...' : '在线，随时倾听' }}</small>
         </div>
         <button
+          class="sc-memory-btn"
+          type="button"
+          aria-label="查看小满记得的事"
+          title="小满记得的事"
+          @click="showMemorySheet = true"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h5"/></svg>
+          <span>记得</span>
+        </button>
+        <button
           v-if="!chatUrgentLocked && hasUserMessage"
           class="sc-end"
           type="button"
@@ -36,7 +46,7 @@
             <small>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。</small>
           </div>
         </div>
-        <div v-if="!chatMessages.length" class="sc-starters" aria-label="选择倾诉开场">
+        <div v-if="!chatMessages.length && !screeningFormOpen" class="sc-starters" aria-label="选择倾诉开场">
           <button v-for="starter in conversationStarters" :key="starter.title" type="button" :title="starter.text" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
         </div>
 
@@ -46,6 +56,7 @@
           :paused="chatUrgentLocked"
           @urgent="handleScreeningUrgent"
           @updated="handleScreeningUpdated"
+          @form-open="screeningFormOpen = $event"
         />
 
         <div v-for="(m, i) in chatMessages" :key="i" :class="['sc-row', m.role]">
@@ -76,7 +87,7 @@
       </div>
     </div>
 
-    <div v-if="!chatUrgentLocked" class="sc-consentbar">
+    <div v-if="!chatUrgentLocked && !screeningFormOpen" class="sc-consentbar">
       <div class="sc-consent" :class="{ 'is-open': policyExpanded }" role="note">
         <button
           type="button"
@@ -174,7 +185,11 @@
       </div>
     </div>
 
-    <div v-if="!chatUrgentLocked" class="sc-inputbar">
+    <p v-if="screeningFormOpen && !chatUrgentLocked" class="sc-screening-focus" role="status">
+      筛查进行中 · 提交或点「先不做了」后可以继续倾诉
+    </p>
+
+    <div v-if="!chatUrgentLocked && !screeningFormOpen" class="sc-inputbar">
       <button class="sc-voice" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading || !voiceInputEnabled" :title="voiceInputEnabled ? (recording ? '停止录音' : '语音输入') : '语音输入需独立授权后启用'">
         <svg v-if="!recording" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 14c1.7 0 3-1.3 3-3V5c0-1.7-1.3-3-3-3S9 3.3 9 5v6c0 1.7 1.3 3 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7h-1.7z"/></svg>
         <span v-else class="sc-rec-wave" aria-hidden="true"></span>
@@ -290,6 +305,8 @@
         </aside>
       </div>
     </Transition>
+
+    <CompanionMemorySheet v-if="showMemorySheet" @close="showMemorySheet = false" />
   </div>
 </template>
 
@@ -305,6 +322,7 @@ import { useTimeOfDay } from '../utils/timeOfDay'
 import { petImageForStatus, readPetCompanion } from '../utils/petCompanion'
 import StudentScreeningCard from '../components/StudentScreeningCard.vue'
 import GameBackdrop from '../components/student/GameBackdrop.vue'
+import CompanionMemorySheet from '../components/student/CompanionMemorySheet.vue'
 import { acknowledgeScreening, getLatestScreening } from '../api/screening'
 import {
   completeChatSession,
@@ -384,7 +402,7 @@ const consentDetail = computed(() => {
   if (companionEngine.value === 'legacy_xunfei') {
     return '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。'
   }
-  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
+  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。小满会在你主动说起时，记住少量关于你的小事，让下一次聊天能接上；你可以在「小满记得的事」里随时查看或删除。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
 })
 const policyExpanded = ref(false)
 const voiceInputEnabled = ref(false)
@@ -399,6 +417,7 @@ const screeningCard = ref(null)
 const chatUrgentSupport = ref(null)
 const chatUrgentLocked = ref(false)
 const screeningUrgentActive = ref(false)
+const screeningFormOpen = ref(false)
 const screeningState = ref(null)
 const screeningAckButton = ref(null)
 const screeningAcking = ref(false)
@@ -414,6 +433,7 @@ const summaryStatus = ref('idle')
 const summaryUnread = ref(false)
 const conversationSummary = ref(null)
 const showSupportDrawer = ref(false)
+const showMemorySheet = ref(false)
 const drawerEl = ref(null)
 const supportModeHeading = ref(null)
 const summaryOrbButton = ref(null)
@@ -462,7 +482,7 @@ function isTextEntryTarget(target) {
 // 页面上直接打字时把焦点交给聊天输入框；按钮/链接上的空格仍保留原生激活。
 function handleGlobalChatKeydown(event) {
   if (event.defaultPrevented) return
-  if (chatUrgentLocked.value || chatLoading.value || showSupportDrawer.value || recording.value) return
+  if (chatUrgentLocked.value || screeningFormOpen.value || chatLoading.value || showSupportDrawer.value || recording.value) return
   if (event.ctrlKey || event.metaKey || event.altKey) return
   const target = event.target
   if (isTextEntryTarget(target)) return
@@ -479,13 +499,18 @@ function handleGlobalChatKeydown(event) {
 
 function restoreChatFocusAfterReply() {
   if (!canAutoFocusChat()) return
-  if (chatUrgentLocked.value || showSupportDrawer.value || recording.value) return
+  if (chatUrgentLocked.value || screeningFormOpen.value || showSupportDrawer.value || recording.value) return
   const active = document.activeElement
   const passive = !active || active === document.body || active === document.documentElement
     || active.classList?.contains('sc-send')
     || !!active.closest?.('.sc-quick')
   if (passive) focusWithoutScroll(inputEl.value)
 }
+
+watch(screeningFormOpen, (open) => {
+  if (open || chatUrgentLocked.value || !canAutoFocusChat()) return
+  nextTick(() => focusWithoutScroll(inputEl.value))
+})
 
 function getEmotionEmoji(emotion) {
   const map = {
@@ -1149,6 +1174,28 @@ onUnmounted(() => {
 .sc-end:hover { border-color: var(--m-accent); color: var(--m-accent-strong); }
 .sc-end:not(:disabled):active { transform: scale(.96); }
 .sc-end:disabled { opacity: .45; cursor: not-allowed; }
+.sc-memory-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--m-line);
+  background: transparent;
+  color: var(--m-ink-3);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: border-color var(--m-dur-fast) var(--m-ease),
+              color var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
+}
+.sc-memory-btn:hover { border-color: var(--m-accent); color: var(--m-accent-strong); }
+.sc-memory-btn:active { transform: scale(.96); }
+@media (max-width: 430px) {
+  .sc-memory-btn span { display: none; }
+  .sc-memory-btn { padding: 6px; }
+}
 
 /* ─── 消息区 ─── */
 .sc-msgs {
@@ -1229,6 +1276,16 @@ onUnmounted(() => {
 .sc-consent-toggle span { flex: none; font-size: 11px; font-weight: 600; color: var(--m-accent-strong); }
 .sc-consent-toggle svg { flex: none; color: var(--m-ink-2); transition: transform var(--m-dur-fast) var(--m-ease); }
 .sc-consent-toggle svg.open { transform: rotate(180deg); }
+
+.sc-screening-focus {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 8px 14px calc(12px + env(safe-area-inset-bottom));
+  color: var(--m-ink-2);
+  font-size: 11.5px;
+  line-height: 1.6;
+  text-align: center;
+}
 
 .sc-row { display: flex; gap: 8px; align-items: flex-end; animation: m-rise-sm var(--m-dur-slow) var(--m-ease) backwards; }
 .sc-row.user { justify-content: flex-end; }
@@ -1764,7 +1821,8 @@ onUnmounted(() => {
 .sc-head { border-bottom: 2px solid var(--px-line); }
 .sc-back,
 .sc-end,
-.sc-pet {
+.sc-pet,
+.sc-memory-btn {
   border: 2px solid var(--px-line);
   border-radius: 4px;
   background: var(--game-surface-soft);
@@ -1774,10 +1832,12 @@ onUnmounted(() => {
 }
 .sc-back:hover,
 .sc-end:hover,
-.sc-pet:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.sc-pet:hover,
+.sc-memory-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
 .sc-back:active,
 .sc-end:active,
-.sc-pet:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.sc-pet:active,
+.sc-memory-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
 .sc-head-copy strong { font-family: var(--px-font); font-size: 16px; letter-spacing: .02em; }
 .sc-welcome-bubble,
 .sc-bubble,
@@ -1903,6 +1963,7 @@ onUnmounted(() => {
 .sc-back:focus-visible,
 .sc-end:focus-visible,
 .sc-pet:focus-visible,
+.sc-memory-btn:focus-visible,
 .sc-starters button:focus-visible,
 .sc-chip:focus-visible,
 .sc-send:focus-visible,

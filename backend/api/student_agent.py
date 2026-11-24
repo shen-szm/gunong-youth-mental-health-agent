@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import get_current_user, require_real_user
 from database import get_db
 from models import MoodRecord, SensitiveAccessLog, StudentSupportEvent, StudentSupportRun, StudentWellbeingAssessment, User
 from student_support_engine import recover_stale_support_run
@@ -115,7 +115,7 @@ def get_run(run_code: str, db: Session = Depends(get_db), current_user: User = D
 
 
 @router.delete("/runs/{run_code}", status_code=204)
-def delete_run(run_code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_run(run_code: str, db: Session = Depends(get_db), current_user: User = Depends(require_real_user)):
     run = db.query(StudentSupportRun).filter_by(run_code=run_code, user_id=current_user.id).first()
     if not run:
         raise HTTPException(status_code=404, detail="未找到该智能体任务")

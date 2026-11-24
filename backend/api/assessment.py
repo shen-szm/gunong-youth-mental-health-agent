@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from agents.wellbeing_assessment import ALLOWED_EMOTIONS, ITEM_LABELS, WellbeingAssessmentOrchestrator
 from app_time import china_now_naive
-from auth import get_current_user
+from auth import get_current_user, require_real_user
 from config import settings
 from database import get_db
 from models import SensitiveAccessLog, StudentAssessmentAgentRun, StudentWellbeingAssessment, User
@@ -157,7 +157,7 @@ def assessment_schema(db: Session = Depends(get_db), current_user: User = Depend
 async def submit_assessment(
     payload: AssessmentSubmitRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     _cleanup(db, current_user.id)
     answers = {**payload.answers, "self_harm": payload.self_harm, "unsafe_home": payload.unsafe_home}
@@ -229,7 +229,7 @@ def latest_assessment(db: Session = Depends(get_db), current_user: User = Depend
 def delete_assessment(
     assessment_code: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     row = db.query(StudentWellbeingAssessment).filter(
         StudentWellbeingAssessment.assessment_code == assessment_code,

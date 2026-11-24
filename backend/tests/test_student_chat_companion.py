@@ -19,7 +19,7 @@ from api.chat import router as chat_router
 from api.user import router as user_router
 from config import settings
 from database import Base, get_db
-from models import ChatMessage, SensitiveAccessLog, StudentChatSession
+from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentCompanionMemory
 
 
 class StudentChatCompanionTests(unittest.TestCase):
@@ -108,7 +108,7 @@ class StudentChatCompanionTests(unittest.TestCase):
 
         state, session = self._state()
         self.assertEqual(state["scored"], {"1": 2})
-        self.assertEqual(session.external_ai_consent_version, "platform-direct-transcript-v3")
+        self.assertEqual(session.external_ai_consent_version, "platform-direct-transcript-v4")
 
         prompt = str(mock.await_args_list[0])
         self.assertIn("以前挺爱打球的", prompt)
@@ -210,6 +210,125 @@ class StudentChatCompanionTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_memory_is_saved_and_reused_in_the_next_session(self):
+        mock = AsyncMock(return_value=(
+            '团子半夜跑酷，确实很闹腾。\n'
+            '[[XM_STATE]]{"scores": {}, "crisis": false, "memory": '
+            '{"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"}}'
+        ))
+        chat_api.ask_deepseek = mock
+
+        first = self._send("我家猫叫团子，最近总在半夜跑酷。")
+        self.assertEqual(first.status_code, 200)
+        db = self.Session()
+        try:
+            rows = db.query(StudentCompanionMemory).all()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].content, "养了一只叫团子的猫")
+            self.assertEqual(rows[0].category, "近况")
+            self.assertEqual(rows[0].consent_version, "platform-direct-transcript-v4")
+            memory_code = rows[0].memory_code
+        finally:
+            db.close()
+
+        started = self.client.post("/api/chat/sessions", json={"force_new": True})
+        self.assertEqual(started.status_code, 200)
+        second = self._send("今天有点累。", session_id=started.json()["session_id"])
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["analysis_source"], "deepseek_companion")
+
+        payload = mock.await_args_list[-1].args[0]
+        system_prompt = payload[0]["content"]
+        self.assertIn("【你记得的一些事】", system_prompt)
+        self.assertIn("养了一只叫团子的猫", system_prompt)
+
+        db = self.Session()
+        try:
+            transfer = db.query(SensitiveAccessLog).filter_by(
+                action="external_model_transfer_chat", result=(
+                    "platform_direct_transcript_chat_transcript_to_deepseek"
+                    "_with_1_user_approved_memories"
+                )
+            ).one()
+            self.assertTrue(transfer)
+            write = db.query(SensitiveAccessLog).filter_by(
+                action="write_student_companion_memory", resource_id=memory_code
+            ).one()
+            self.assertEqual(write.resource_type, "student_companion_memory")
+        finally:
+            db.close()
+
+    def test_ungrounded_or_crisis_memory_is_not_saved(self):
+        mock = AsyncMock(side_effect=[
+            '嗯，今天辛苦了。\n[[XM_STATE]]{"scores": {}, "crisis": false, "memory": '
+            '{"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"}}',
+            '嗯，我在。\n[[XM_STATE]]{"scores": {}, "crisis": true, "memory": '
+            '{"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"}}',
+        ])
+        chat_api.ask_deepseek = mock
+
+        first = self._send("今天有点累。")
+        self.assertEqual(first.status_code, 200)
+        second = self._send("我家猫叫团子，最近总在半夜跑酷。")
+        self.assertEqual(second.status_code, 200)
+
+        db = self.Session()
+        try:
+            self.assertEqual(db.query(StudentCompanionMemory).count(), 0)
+        finally:
+            db.close()
+
+    def test_memories_api_lists_active_versions_and_deletes(self):
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        db = self.Session()
+        try:
+            db.add_all([
+                StudentCompanionMemory(
+                    memory_code="XM-TEST-0001", user_id=self.user_id,
+                    content="喜欢打篮球", category="喜好",
+                    dedupe_key="a" * 64, consent_version="platform-direct-transcript-v4",
+                    created_at=now, updated_at=now,
+                    expires_at=now + timedelta(days=30)),
+                StudentCompanionMemory(
+                    memory_code="XM-TEST-0002", user_id=self.user_id,
+                    content="以前爱看电影", category="喜好",
+                    dedupe_key="b" * 64, consent_version="platform-direct-transcript-v3",
+                    created_at=now, updated_at=now - timedelta(days=1),
+                    expires_at=now + timedelta(days=30)),
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        listed = self.client.get("/api/chat/memories")
+        self.assertEqual(listed.status_code, 200)
+        body = listed.json()
+        self.assertTrue(body["enabled"])
+        self.assertEqual(body["consent_version"], "platform-direct-transcript-v4")
+        self.assertEqual(len(body["items"]), 2)
+        by_code = {item["memory_code"]: item for item in body["items"]}
+        self.assertTrue(by_code["XM-TEST-0001"]["active"])
+        self.assertFalse(by_code["XM-TEST-0002"]["active"])
+
+        deleted = self.client.delete("/api/chat/memories/XM-TEST-0001")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertEqual(len(self.client.get("/api/chat/memories").json()["items"]), 1)
+
+        cleared = self.client.delete("/api/chat/memories")
+        self.assertEqual(cleared.status_code, 204)
+        self.assertEqual(self.client.get("/api/chat/memories").json()["items"], [])
+
+        db = self.Session()
+        try:
+            actions = {row.action for row in db.query(SensitiveAccessLog).filter(
+                SensitiveAccessLog.resource_type == "student_companion_memory"
+            ).all()}
+            self.assertIn("read_student_companion_memories", actions)
+            self.assertIn("delete_student_companion_memory", actions)
+        finally:
+            db.close()
+
     def test_stale_consent_session_is_not_sent_to_model(self):
         db = self.Session()
         try:
@@ -250,7 +369,7 @@ class StudentChatCompanionTests(unittest.TestCase):
                 session_code=response.json()["session_id"]
             ).one()
             self.assertEqual(
-                new_session.external_ai_consent_version, "platform-direct-transcript-v3"
+                new_session.external_ai_consent_version, "platform-direct-transcript-v4"
             )
         finally:
             db.close()

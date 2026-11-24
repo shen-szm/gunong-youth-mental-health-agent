@@ -20,6 +20,9 @@ class RegisterReq(BaseModel):
     username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
     password: str = Field(min_length=10, max_length=128)
     nickname: str = Field(default="", max_length=50)
+    real_name: str = Field(min_length=1, max_length=50)
+    class_name: str = Field(min_length=1, max_length=50)
+    student_no: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9-]+$")
 
 
 class LoginReq(BaseModel):
@@ -46,6 +49,9 @@ class UserResp(BaseModel):
     id: int
     username: str
     nickname: str = ""
+    real_name: str = ""
+    class_name: str = ""
+    student_no: str = ""
     avatar: str = ""
 
 
@@ -57,6 +63,10 @@ def _payload(user: User) -> dict:
         "is_admin": level >= 1,
         "is_super_admin": level >= 2,
         "role": "admin_teacher" if level >= 2 else "teacher" if level == 1 else "student",
+        "is_guest": (user.username or "").startswith("guest_"),
+        "real_name": user.real_name or "",
+        "class_name": user.class_name or "",
+        "student_no": user.student_no or "",
     }
 
 
@@ -133,12 +143,19 @@ async def guest_session(response: Response, db: Session = Depends(get_db)):
 
 @router.post("/register")
 async def register(req: RegisterReq, response: Response, db: Session = Depends(get_db)):
+    if req.username.startswith("guest_"):
+        raise HTTPException(status_code=400, detail="该用户名前缀已被保留")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
+    if db.query(User).filter(User.student_no == req.student_no).first():
+        raise HTTPException(status_code=400, detail="该学号已被注册")
     user = User(
         username=req.username,
         password_hash=get_password_hash(req.password),
-        nickname=req.nickname or req.username,
+        nickname=req.nickname or req.real_name,
+        real_name=req.real_name,
+        class_name=req.class_name,
+        student_no=req.student_no,
         is_admin=0,
     )
     db.add(user)

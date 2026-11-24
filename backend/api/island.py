@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import get_current_user, require_real_user
 from config import settings
 from database import get_db
 from models import (
@@ -74,7 +74,7 @@ class ReportGenerateRequest(BaseModel):
 async def run_agent(
     payload: AgentRunRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     """触发一次心岛守护者多Agent流程。"""
     from agents import IslandOrchestrator
@@ -140,7 +140,7 @@ def get_agent_history(
 def log_behavior(
     payload: BehaviorLogRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     """记录一条游戏行为（感知Agent的数据源）。"""
     log = GameBehaviorLog(
@@ -221,7 +221,7 @@ def get_pending_commands(
 def ack_commands(
     payload: CommandAckRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     """确认指令已执行。"""
     if not payload.command_ids:
@@ -265,7 +265,7 @@ async def pet_interact(
     payload: PetInteractRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     """与咕团互动（喂食/梳毛/对话/玩耍）。"""
     pet = db.query(PetState).filter(PetState.user_id == current_user.id).first()
@@ -330,7 +330,7 @@ async def pet_interact(
 async def generate_report(
     payload: ReportGenerateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     """生成情绪报告（可验收成果）。"""
     from agents import IslandOrchestrator

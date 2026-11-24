@@ -20,13 +20,13 @@ from sqlalchemy.orm import Session
 
 import companion_engine as companion
 import screening_engine
-from auth import ensure_user_scope, get_current_user
+from auth import ensure_user_scope, get_current_user, require_real_user
 from app_time import china_now_naive
 from config import settings
 from database import get_db
 from deepseek_client import DeepSeekError, ask_deepseek, is_deepseek_configured
 from guardian_engine import _context_has_urgent_meaning, generated_content_violations
-from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentConversationSummary, StudentScreeningRun, StudentSupportEvent, StudentSupportRun, User
+from models import ChatMessage, SensitiveAccessLog, StudentChatSession, StudentCompanionMemory, StudentConversationSummary, StudentScreeningRun, StudentSupportEvent, StudentSupportRun, User
 from student_ai_authorization import (
     student_ai_audit_basis,
     student_ai_governance_version,
@@ -204,9 +204,25 @@ class SummaryResponse(BaseModel):
     idempotent: bool = False
 
 
-def _audit(db: Session, user_id: int, action: str, resource_id: str, result: str = "allowed") -> None:
+class CompanionMemoryItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    memory_code: str
+    content: str
+    category: str
+    active: bool
+
+
+class CompanionMemoryListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+    consent_version: str | None = None
+    items: list[CompanionMemoryItem] = Field(default_factory=list)
+
+
+def _audit(db: Session, user_id: int, action: str, resource_id: str, result: str = "allowed",
+           resource_type: str = "student_conversation_summary") -> None:
     db.add(SensitiveAccessLog(actor_user_id=user_id, action=action,
-        resource_type="student_conversation_summary", resource_id=resource_id, result=result))
+        resource_type=resource_type, resource_id=resource_id, result=result))
 
 
 def _cleanup_expired_summaries(db: Session, user_id: int) -> None:
@@ -323,7 +339,7 @@ def _active_or_new_session(db: Session, user_id: int, session_code: str | None =
 
 @router.post("/sessions", response_model=SessionResponse)
 def start_session(payload: SessionStartRequest, db: Session = Depends(get_db),
-                  current_user: User = Depends(get_current_user)):
+                  current_user: User = Depends(require_real_user)):
     _cleanup_expired_summaries(db, current_user.id)
     external_ai_enabled = student_external_ai_allowed(db, current_user.id)
     voice_input_enabled = external_ai_enabled and settings.STUDENT_AI_ACCESS_MODE != "platform_direct"
@@ -366,7 +382,7 @@ def start_session(payload: SessionStartRequest, db: Session = Depends(get_db),
 @router.post("/sessions/{session_code}/resolve-safety", response_model=SafetyResolutionResponse)
 def resolve_safety_session(session_code: str, payload: SafetyResolutionRequest, request: Request,
                            db: Session = Depends(get_db),
-                           current_user: User = Depends(get_current_user)):
+                           current_user: User = Depends(require_real_user)):
     """学生完成真人安全交接后，受控结束危机会话；保留原筛查结果，仅记录已确认联系可信成年人。"""
     session = _owned_session(db, session_code, current_user.id)
     if session.status != "urgent":
@@ -411,7 +427,7 @@ def resolve_safety_session(session_code: str, payload: SafetyResolutionRequest, 
 
 @router.post("/sessions/safety-handoff", response_model=SessionResponse)
 def create_safety_handoff(payload: SafetyHandoffRequest, db: Session = Depends(get_db),
-                          current_user: User = Depends(get_current_user)):
+                          current_user: User = Depends(require_real_user)):
     """将客户端确定性安全门的最小化状态交接给倾诉流程，不接收或保存原文。"""
     active = db.query(StudentChatSession).filter(
         StudentChatSession.user_id == current_user.id,
@@ -444,7 +460,7 @@ def create_safety_handoff(payload: SafetyHandoffRequest, db: Session = Depends(g
 
 @router.post("/send", response_model=ChatResponse)
 async def send_message(req: ChatRequest, db: Session = Depends(get_db),
-                       current_user: User = Depends(get_current_user)):
+                       current_user: User = Depends(require_real_user)):
     """正常聊天不生成倾诉小结；仅返回是否建议询问结束。"""
     if req.user_id is not None:
         ensure_user_scope(req.user_id, current_user)
@@ -626,7 +642,7 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db),
 
 @router.post("/sessions/{session_code}/complete", response_model=SummaryResponse)
 async def complete_session(session_code: str, db: Session = Depends(get_db),
-                           current_user: User = Depends(get_current_user)):
+                           current_user: User = Depends(require_real_user)):
     _cleanup_expired_summaries(db, current_user.id)
     session = _owned_session(db, session_code, current_user.id)
     if session.summary_deleted_at is not None:
@@ -768,7 +784,7 @@ def latest_summary(db: Session = Depends(get_db), current_user: User = Depends(g
 
 @router.delete("/sessions/{session_code}/summary", status_code=204)
 def delete_summary(session_code: str, db: Session = Depends(get_db),
-                   current_user: User = Depends(get_current_user)):
+                   current_user: User = Depends(require_real_user)):
     session = _owned_session(db, session_code, current_user.id)
     row = db.query(StudentConversationSummary).filter(
         StudentConversationSummary.session_id == session.id,
@@ -778,6 +794,75 @@ def delete_summary(session_code: str, db: Session = Depends(get_db),
     db.delete(row)
     session.summary_deleted_at = datetime.utcnow()
     _audit(db, current_user.id, "delete_student_summary", session.session_code)
+    db.commit()
+    return Response(status_code=204)
+
+
+def _cleanup_expired_memories(db: Session, user_id: int) -> None:
+    db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == user_id,
+        StudentCompanionMemory.expires_at <= datetime.utcnow(),
+    ).delete(synchronize_session=False)
+    db.commit()
+
+
+@router.get("/memories", response_model=CompanionMemoryListResponse)
+def list_companion_memories(db: Session = Depends(get_db),
+                            current_user: User = Depends(get_current_user)):
+    """学生查看小满记住的小事；只返回本人仍在有效期内的记录。"""
+    _cleanup_expired_memories(db, current_user.id)
+    now = datetime.utcnow()
+    current_version = student_ai_governance_version(db, current_user.id)
+    rows = db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == current_user.id,
+        StudentCompanionMemory.expires_at > now,
+    ).order_by(StudentCompanionMemory.updated_at.desc(), StudentCompanionMemory.id.desc()).all()
+    enabled = bool(
+        settings.STUDENT_COMPANION_ENGINE == "deepseek"
+        and is_deepseek_configured()
+        and current_version
+        and student_external_ai_allowed(db, current_user.id)
+    )
+    _audit(db, current_user.id, "read_student_companion_memories", "list",
+           f"count:{len(rows)}", resource_type="student_companion_memory")
+    db.commit()
+    return CompanionMemoryListResponse(
+        enabled=enabled,
+        consent_version=current_version,
+        items=[
+            CompanionMemoryItem(
+                memory_code=row.memory_code,
+                content=row.content,
+                category=row.category,
+                active=bool(enabled and row.consent_version == current_version),
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.delete("/memories/{memory_code}", status_code=204)
+def delete_companion_memory(memory_code: str, db: Session = Depends(get_db),
+                            current_user: User = Depends(require_real_user)):
+    row = db.query(StudentCompanionMemory).filter_by(
+        memory_code=memory_code, user_id=current_user.id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="没有找到这条记忆")
+    db.delete(row)
+    _audit(db, current_user.id, "delete_student_companion_memory", memory_code,
+           "deleted", resource_type="student_companion_memory")
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/memories", status_code=204)
+def delete_all_companion_memories(db: Session = Depends(get_db),
+                                  current_user: User = Depends(require_real_user)):
+    count = db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == current_user.id,
+    ).delete(synchronize_session=False)
+    _audit(db, current_user.id, "delete_student_companion_memory", "all",
+           f"deleted:{count}", resource_type="student_companion_memory")
     db.commit()
     return Response(status_code=204)
 
@@ -1336,6 +1421,75 @@ def _parse_student_turn_output(raw: str, derived_turns: list[dict], *, local_emo
     return candidate
 
 
+def _active_companion_memories(db: Session, user_id: int, consent_version: str | None) -> list[StudentCompanionMemory]:
+    if not consent_version:
+        return []
+    return db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == user_id,
+        StudentCompanionMemory.consent_version == consent_version,
+        StudentCompanionMemory.expires_at > datetime.utcnow(),
+    ).order_by(
+        StudentCompanionMemory.updated_at.desc(),
+        StudentCompanionMemory.id.desc(),
+    ).limit(companion.MAX_MEMORIES_IN_PROMPT).all()
+
+
+def _remember_companion_fact(db: Session, user_id: int, session: StudentChatSession,
+                             candidate: dict) -> None:
+    now = datetime.utcnow()
+    db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == user_id,
+        StudentCompanionMemory.expires_at <= now,
+    ).delete(synchronize_session=False)
+    content = candidate["content"]
+    dedupe_key = hashlib.sha256(companion.memory_dedupe_key(content).encode()).hexdigest()
+    row = db.query(StudentCompanionMemory).filter_by(
+        user_id=user_id, dedupe_key=dedupe_key).first()
+    if row is None:
+        normalized = companion.memory_dedupe_key(content)
+        for existing in db.query(StudentCompanionMemory).filter(
+            StudentCompanionMemory.user_id == user_id,
+            StudentCompanionMemory.expires_at > now,
+        ).all():
+            if SequenceMatcher(
+                None, normalized, companion.memory_dedupe_key(existing.content)
+            ).ratio() >= 0.82:
+                row = existing
+                row.dedupe_key = dedupe_key
+                break
+    if row is not None:
+        row.content = content
+        row.category = candidate["category"]
+        row.consent_version = session.external_ai_consent_version
+        row.source_session_id = session.id
+        row.updated_at = now
+        row.expires_at = now + timedelta(days=companion.MEMORY_EXPIRY_DAYS)
+    else:
+        row = StudentCompanionMemory(
+            memory_code=f"XM-{now:%Y%m%d}-{secrets.token_hex(4).upper()}",
+            user_id=user_id,
+            content=content,
+            category=candidate["category"],
+            dedupe_key=dedupe_key,
+            consent_version=session.external_ai_consent_version,
+            source_session_id=session.id,
+            created_at=now,
+            updated_at=now,
+            expires_at=now + timedelta(days=companion.MEMORY_EXPIRY_DAYS),
+        )
+        db.add(row)
+    db.flush()
+
+    active = db.query(StudentCompanionMemory).filter(
+        StudentCompanionMemory.user_id == user_id,
+        StudentCompanionMemory.expires_at > now,
+    ).order_by(StudentCompanionMemory.updated_at.asc(), StudentCompanionMemory.id.asc()).all()
+    for stale in active[:max(0, len(active) - companion.MAX_ACTIVE_MEMORIES)]:
+        db.delete(stale)
+    _audit(db, user_id, "write_student_companion_memory", row.memory_code,
+           f"saved:{row.category}", resource_type="student_companion_memory")
+
+
 async def _deepseek_companion_turn(
     db: Session,
     user_id: int,
@@ -1352,11 +1506,18 @@ async def _deepseek_companion_turn(
     last_user_text = history[-1]["content"] if history else ""
     state = companion.normalize_state(session.companion_state_json)
     focus_id = companion.current_focus(state)
-    system_prompt = companion.SYSTEM_PROMPT + "\n\n" + companion.build_state_instruction(state, history)
-    payload = [{"role": "system", "content": system_prompt}, *history]
+    memory_rows = _active_companion_memories(db, user_id, session.external_ai_consent_version)
+    memory_instruction = companion.build_memory_instruction([row.content for row in memory_rows])
+    prompt_parts = [companion.SYSTEM_PROMPT]
+    if memory_instruction:
+        prompt_parts.append(memory_instruction)
+    prompt_parts.append(companion.build_state_instruction(state, history))
+    payload = [{"role": "system", "content": "\n\n".join(prompt_parts)}, *history]
 
-    _audit(db, user_id, "external_model_transfer_chat", session.session_code,
-           f"{student_ai_transcript_audit_basis()}_chat_transcript_to_deepseek")
+    transfer_basis = f"{student_ai_transcript_audit_basis()}_chat_transcript_to_deepseek"
+    if memory_rows:
+        transfer_basis += f"_with_{len(memory_rows)}_user_approved_memories"
+    _audit(db, user_id, "external_model_transfer_chat", session.session_code, transfer_basis)
     db.commit()
 
     fallback = companion.in_character_fallback(last_user_text)
@@ -1374,6 +1535,13 @@ async def _deepseek_companion_turn(
 
         companion.apply_turn(state, focus_id, parsed["scores"], parsed["crisis"])
         session.companion_state_json = json.dumps(state, ensure_ascii=False)
+        memory_candidate = companion.clean_memory_candidate(parsed.get("memory"), last_user_text)
+        if memory_candidate and not state.get("crisisActive"):
+            try:
+                with db.begin_nested():
+                    _remember_companion_fact(db, user_id, session, memory_candidate)
+            except Exception:
+                logger.warning("Companion memory write skipped", exc_info=True)
         _audit(db, user_id, "external_model_result_chat", support_run.run_code,
                "validated:companion-v1:plaintext_with_state_marker")
         return reply, "deepseek_companion"
@@ -1524,7 +1692,7 @@ def _detect_end_candidate(text: str) -> bool:
 
 @router.post("/asr")
 async def audio_to_text(request: Request, session_id: str | None = None,
-                        db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+                        db: Session = Depends(get_db), current_user: User = Depends(require_real_user)):
     if not settings.ALLOW_EXTERNAL_AI or not settings.ALLOW_STUDENT_EXTERNAL_AI:
         raise HTTPException(status_code=503, detail="语音识别当前不可用，请改用文字输入")
     if not session_id:
@@ -1554,7 +1722,7 @@ async def audio_to_text(request: Request, session_id: str | None = None,
 
 @router.post("/tts")
 async def get_tts_audio(req: TTSRequest, db: Session = Depends(get_db),
-                        current_user: User = Depends(get_current_user)):
+                        current_user: User = Depends(require_real_user)):
     if not settings.ALLOW_EXTERNAL_AI or not settings.ALLOW_STUDENT_EXTERNAL_AI:
         raise HTTPException(status_code=503, detail="语音播放当前不可用")
     if not req.session_id:

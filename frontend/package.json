@@ -1,6 +1,6 @@
 {
   "name": "shengyu-web",
-  "version": "5.1.0-alpha.41",
+  "version": "5.1.0-alpha.43",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "fonts:student": "python3 scripts/build_student_font_subset.py",
-    "test:island": "node --test tests/island-state.test.mjs tests/island-integration.test.mjs",
+    "test:island": "node --test tests/island-state.test.mjs tests/island-integration.test.mjs tests/island-zoom.test.mjs",
     "test:e2e:island": "node --test tests/student-leisure.e2e.mjs",
     "test:e2e:student-summary": "node --test tests/student-conversation-summary.e2e.mjs",
     "scenes:lobby": "python3 scripts/gen_lobby_scenes.py"

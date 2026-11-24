@@ -75,4 +75,34 @@ function apply(result, action) {
 .garden-layout aside{border-left-color:var(--px-line)}
 .garden-stock{border-bottom-color:var(--px-line)}
 .island-garden-game :focus-visible{outline:3px dashed var(--px-gold);outline-offset:3px}
+
+/* 像素皮肤 3.0 · 暖房羊皮纸 */
+.island-garden-game{
+  --px-line: rgba(120, 88, 52, .38);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(74, 52, 32, .22);
+  color: #3d2e1f;
+  background:
+    repeating-linear-gradient(0deg, rgba(120, 92, 55, .035) 0 2px, transparent 2px 8px),
+    #f4ead5;
+}
+.island-garden-game h3{font-size:22px;color:#3d2e1f}
+.island-garden-game p,
+.island-garden-game header>span,
+.island-garden-game .garden-stock small,
+.island-garden-game .garden-boundary{color:#6b5743}
+.island-garden-game button,
+.garden-seed select{
+  border-color:#b99a6e;
+  color:#3d2e1f;
+  background:#fff8ea;
+}
+.garden-tools button[aria-pressed=true]{background:#b07a45;border-color:#7d5a33;color:#fff8ea}
+.garden-plots .plot{border:2px solid #b99a6e;background:#e5d7bd}
+.garden-plots .tilled{background:#c9a878;border-color:#a4814f}
+.garden-plots .mature{background:#e9d391;border-color:#ab8a3e}
+.garden-layout aside{border-left:2px dashed #c3a87c}
+.garden-layout h4{color:#3d2e1f}
+.garden-stock{border-bottom:1px solid #d8c6a5}
+.island-garden-game :focus-visible{outline:3px dashed #b07a45;outline-offset:3px}
 </style>

@@ -10,6 +10,11 @@ from typing import Any
 STATE_MARKER = "[[XM_STATE]]"
 MAX_FOLLOWUP = 4
 MAX_REPLY_CHARS = 120
+MEMORY_CATEGORIES = ("喜好", "近况", "重要的人", "计划", "称呼", "其他")
+MAX_MEMORY_CHARS = 30
+MAX_MEMORIES_IN_PROMPT = 12
+MAX_ACTIVE_MEMORIES = 30
+MEMORY_EXPIRY_DAYS = 180
 
 PHQ9_ITEMS = [
     {"id": 1, "topic": "以前喜欢做的事，最近提不太起劲",
@@ -38,6 +43,16 @@ FORBIDDEN_CLINICAL_RE = re.compile(
     re.I,
 )
 
+MEMORY_FORBIDDEN_RE = re.compile(
+    r"(?:PHQ|GAD|量表|题目|测评|评分|诊断|抑郁症|症状|"
+    r"自杀|自残|自伤|轻生|割腕|不想活|想死|去死|"
+    r"手机号|电话|微信|QQ号|地址|住址|学号|身份证|银行卡|密码|"
+    r"\d{5,}|@[A-Za-z0-9._-]+|https?://)",
+    re.I,
+)
+
+_MEMORY_FILLER = set("的了是在有和与我你他她它这那就都也还很挺个只一吧呢啊呀吗")
+
 
 SYSTEM_PROMPT = """你是「小满」，一个温柔、会聊天、也会好好提问的朋友，正在陪一位年轻人聊聊最近。
 
@@ -52,7 +67,7 @@ SYSTEM_PROMPT = """你是「小满」，一个温柔、会聊天、也会好好�
 - 一次最多问一个问题。不要用「那……呢」「还有呢」「能多说一点吗」连着追。
 - 对方这句话很沉、很短，或者刚拒绝一个话题，就只接住，这一轮什么都别问，把下一轮留给他自己。
 - 还没聊到的话题，要等对方这句话聊得差不多了再带出来；接不上就先不提，别用「对了」「说起来」硬转。
-- 不替对方补细节：他没提过的爱好、经历、家人、工作，都不能当成已经知道的事来说。
+- 不替对方补细节：除了后面「你记得的一些事」里明确列出的，他没提过的爱好、经历、家人、工作，都不能当成已经知道的事来说。
   没听他说过，就问得开放一点：「你平时有没有什么喜欢做的事」，而不是「你以前爱做的那些事」。
 - 对方说「没有」「不想聊这个」时，就把这一件先放下，别换个说法再问一遍；跟着他现在的话走。
 - 该往下探的时候，也别用「你最近怎么样」这种空问题，试试：
@@ -142,16 +157,27 @@ SYSTEM_PROMPT = """你是「小满」，一个温柔、会聊天、也会好好�
 判断不了的宁可留空，也不要猜：多聊一句比急着打分好。只有对方说清了「最近两周大概几天这样」，
 才写进 scores；只是随口抱怨一次、或者拿不准，就先不写。
 
+【可以悄悄记住的小事】
+如果对方这一轮主动说起一件关于他自己的、以后聊天还用得上的小事，你可以记下来：
+- 只记他明确说过的：喜欢或不喜欢的东西、最近在忙的近况、重要的人、接下来的计划、希望你怎么称呼他。
+- 一次最多记一件，用 30 字以内、不带主语的短句写，比如「养了一只叫团子的猫」「最近在准备汇演」「喜欢打篮球」。
+- 不记：真实姓名、学校班级、学号、电话、微信、住址等身份和联系方式；不记量表、分数、症状、诊断；
+  不记自伤、轻生或伤害他人的念头；不记你猜出来的、或对方没有明说的内容。
+- 对方没主动说、只是随口抱怨一句，就不记。没有就省略 memory。
+- 不要告诉对方「我记住了」，也不要主动提起这件事；记住是悄悄发生的。
+
 【输出格式】
 先写你要对对方说的话（纯文本，1~2 句，像平时发消息）。然后另起一行，写上内部状态标记：
-[[XM_STATE]]{"scores": {"3": 2}, "crisis": false}
+[[XM_STATE]]{"scores": {"3": 2}, "crisis": false, "memory": {"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"}}
 
 - 标记前面的话会原样给对方看，所以只写朋友会说的话；不要提「标记」「状态」，
   不要用代码块，也不要在标记后面再写任何东西。
 - scores：只写这一轮能明确判断的那几件事，题号是字符串 "1"~"9"，分值是 0~3 的整数；
   判断不了的题不要写。如果对方一句话同时透露了好几件事（比如「睡不好，白天也没力气」），
   可以一次写多题，比如 {"3": 2, "4": 2}。
-- 没有可记的就写 {"scores": {}, "crisis": false}。
+- memory 可选：只有对方这一轮明确说出关于自己的小事时才写。category 从
+  喜好 / 近况 / 重要的人 / 计划 / 称呼 / 其他 里选一个；quote 必须逐字摘自对方这一轮的原话。
+- 没有可记的就写 {"scores": {}, "crisis": false}，或省略 memory 字段。
 - crisis：只有对方流露出自伤、轻生或伤害他人的念头时才设为 true，此时前面的话要格外温柔，
   表达「我很担心你」，并建议联系真实的人（热线 12356、身边信任的人、必要时 120）。
 
@@ -334,7 +360,7 @@ def _parse_loose_json(text: str) -> Any:
 def parse_companion_output(text: str) -> dict:
     raw = str(text or "").strip()
     if not raw:
-        return {"reply": "", "scores": None, "crisis": False}
+        return {"reply": "", "scores": None, "crisis": False, "memory": None}
 
     try:
         legacy = _parse_loose_json(raw)
@@ -343,13 +369,14 @@ def parse_companion_output(text: str) -> dict:
                 "reply": legacy["reply"].strip(),
                 "scores": _valid_scores(legacy.get("scores")) or None,
                 "crisis": bool(legacy.get("crisis")),
+                "memory": legacy.get("memory"),
             }
     except (TypeError, ValueError):
         pass
 
     marker_at = raw.rfind(STATE_MARKER)
     if marker_at == -1:
-        return {"reply": raw, "scores": None, "crisis": False}
+        return {"reply": raw, "scores": None, "crisis": False, "memory": None}
 
     reply = raw[:marker_at].split(STATE_MARKER)[0].strip()
     state_text = raw[marker_at + len(STATE_MARKER):].strip()
@@ -363,7 +390,71 @@ def parse_companion_output(text: str) -> dict:
         "reply": reply,
         "scores": _valid_scores(parsed_state.get("scores")) or None,
         "crisis": bool(parsed_state.get("crisis")),
+        "memory": parsed_state.get("memory"),
     }
+
+
+def clean_memory_candidate(raw: Any, latest_user_text: str) -> dict | None:
+    """只收下能被本轮原话逐字支撑、且不含身份/临床/危机信息的一件小事。"""
+    if not isinstance(raw, dict):
+        return None
+    content = re.sub(r"\s+", " ", str(raw.get("content") or "")).strip("　 。，！？、；：,.!?;:")
+    quote = str(raw.get("quote") or "").strip()
+    category = str(raw.get("category") or "").strip()
+    if category not in MEMORY_CATEGORIES:
+        category = "其他"
+    if not (2 <= len(content) <= MAX_MEMORY_CHARS):
+        return None
+    if MEMORY_FORBIDDEN_RE.search(content):
+        return None
+
+    normalized_content = _normalize_quote_text(content)
+    normalized_quote = _normalize_quote_text(quote)
+    normalized_message = _normalize_quote_text(latest_user_text)
+    if len(normalized_content) < 2 or len(normalized_quote) < 3:
+        return None
+    if normalized_quote not in normalized_message:
+        return None
+    bigram_hits = sum(
+        1 for index in range(len(normalized_content) - 1)
+        if normalized_content[index:index + 2] in normalized_quote
+    )
+    distinctive = [char for char in normalized_content if char not in _MEMORY_FILLER]
+    coverage = (
+        sum(char in normalized_quote for char in distinctive) / len(distinctive)
+        if distinctive else 0
+    )
+    if bigram_hits < 2 and not (bigram_hits >= 1 and coverage >= 0.8):
+        return None
+    return {"content": content, "category": category}
+
+
+def memory_dedupe_key(content: Any) -> str:
+    return _normalize_quote_text(content).lower()
+
+
+def build_memory_instruction(memories: list[str]) -> str:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in memories or []:
+        text = re.sub(r"\s+", " ", str(item or "")).strip()
+        if not text:
+            continue
+        key = memory_dedupe_key(text)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text[:MAX_MEMORY_CHARS])
+        if len(cleaned) >= MAX_MEMORIES_IN_PROMPT:
+            break
+    if not cleaned:
+        return ""
+    return "\n".join([
+        "【你记得的一些事】",
+        "（这些是对方在之前的聊天里主动说过、并且同意你记住的小事。只在自然聊到时提一句，"
+        "不要一次全说出来，不要用「我记得你说过」开头，也不要拿这些去追问或下结论。）",
+        *[f"- {item}" for item in cleaned],
+    ])
 
 
 def apply_turn(state: dict, focus_id: int | None, scores: dict | None, crisis: bool) -> dict:

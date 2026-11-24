@@ -1,6 +1,16 @@
 <template>
   <div class="profile-page game-page" :data-part="part">
     <GameBackdrop :part="part" variant="page" />
+    <div v-if="!userStore.isRealUser" class="guest-gate">
+      <div class="guest-gate-card">
+        <span class="guest-gate-mark" aria-hidden="true">咕</span>
+        <h2>登录后解锁你的个人中心</h2>
+        <p>游客可以随便看看，情绪记录、倾诉和小岛成长需要登录后才能使用。</p>
+        <router-link class="guest-gate-btn" :to="{ path: '/login', query: { redirect: '/profile' } }">去登录</router-link>
+        <router-link class="guest-gate-back" to="/">先回首页逛逛</router-link>
+      </div>
+    </div>
+    <template v-else>
     <!-- 顶部背景 + 头像 -->
     <div class="profile-hero">
       <div class="hero-bg">
@@ -209,6 +219,7 @@
     <MoodRecordSheet v-if="showMoodSheet" @close="showMoodSheet = false" @saved="onMoodSaved" />
 
     <button class="logout-btn" @click="handleLogout">退出登录</button>
+    </template>
   </div>
 </template>
 
@@ -343,24 +354,15 @@ async function saveNickname() {
   if (!nickname.value.trim()) { alert('昵称不能为空'); return }
   try {
     await updateProfile(Number(userStore.userId), nickname.value, '')
-    userStore.login(userStore.userId, nickname.value, userStore.isAdmin)
+    userStore.login(userStore.userId, nickname.value, userStore.isAdmin, userStore.isSuperAdmin, userStore.role)
     alert('保存成功')
   } catch { alert('保存失败') }
 }
 
 async function handleLogout() {
   if (!confirm('确定要退出登录吗？')) return
-  const wasTeacher = userStore.isAdmin
   await userStore.logout()
-  if (wasTeacher) {
-    router.push('/teacher-login')
-    return
-  }
-  try {
-    await userStore.ensureStudentSession()
-  } catch {
-    router.push('/teacher-login')
-  }
+  router.push('/login')
 }
 
 // 树洞回声
@@ -440,7 +442,12 @@ async function handleChangePwd() {
   }
 }
 
-onMounted(() => { loadStats(); loadTodayStatus(); refreshTodayMood() })
+onMounted(async () => {
+  loadTodayStatus()
+  if (!userStore.isRealUser) return
+  loadStats()
+  refreshTodayMood()
+})
 
 onBeforeUnmount(() => {
   releaseTreeholeDialog?.()
@@ -907,4 +914,28 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+/* 游客引导 */
+.guest-gate {
+  position: relative; z-index: 1;
+  min-height: 72vh; display: grid; place-items: center; padding: 40px 20px;
+}
+.guest-gate-card {
+  width: min(420px, 100%); padding: 34px 28px; border-radius: 24px;
+  background: var(--game-surface, #fff); border: 1px solid var(--game-line, #e6dcc8);
+  box-shadow: var(--game-shadow-soft, 0 16px 40px rgba(60, 44, 30, .14));
+  text-align: center; color: var(--game-ink, #3b2f24);
+}
+.guest-gate-mark {
+  display: inline-grid; place-items: center; width: 56px; height: 56px;
+  border-radius: 18px; background: #fdf6e8; border: 2px solid #e3c27d;
+  color: #6b4e37; font-size: 22px; font-weight: 700; margin-bottom: 16px;
+}
+.guest-gate-card h2 { margin: 0 0 10px; font-size: 20px; }
+.guest-gate-card p { margin: 0 0 22px; font-size: 13px; line-height: 1.7; color: var(--game-ink-3, #86715c); }
+.guest-gate-btn {
+  display: block; padding: 12px; border-radius: 14px;
+  background: linear-gradient(135deg, #4a7a6c, #3f6c5f);
+  color: #fff; font-size: 15px; font-weight: 600; text-decoration: none;
+}
+.guest-gate-back { display: inline-block; margin-top: 12px; font-size: 12.5px; color: var(--game-ink-3, #86715c); text-decoration: none; }
 </style>

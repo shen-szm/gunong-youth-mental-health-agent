@@ -1,6 +1,6 @@
-import axios from 'axios'
+import { createApi } from './http'
 
-const instance = axios.create({ baseURL: '/api/student-agent' })
+const instance = createApi('/api/student-agent')
 
 export function getLatestStudentAgentRun() {
   return instance.get('/runs/latest')

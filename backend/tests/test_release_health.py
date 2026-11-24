@@ -13,7 +13,7 @@ from main import health, root
 
 class ReleaseHealthTests(unittest.TestCase):
     def test_release_version_is_synchronized(self):
-        self.assertEqual(settings.RELEASE_VERSION, "5.1.0-alpha.41")
+        self.assertEqual(settings.RELEASE_VERSION, "5.1.0-alpha.43")
         self.assertEqual(asyncio.run(root())["version"], settings.RELEASE_VERSION)
         self.assertEqual(asyncio.run(health())["version"], settings.RELEASE_VERSION)
 

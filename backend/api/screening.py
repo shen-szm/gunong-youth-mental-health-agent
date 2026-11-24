@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 import screening_engine
 from app_time import china_now_naive
-from auth import get_current_user
+from auth import get_current_user, require_real_user
 from config import settings
 from database import get_db
 from models import SensitiveAccessLog, StudentChatSession, StudentScreeningRun, User
@@ -128,7 +128,7 @@ def screening_schema(current_user: User = Depends(get_current_user)):
 
 @router.post("/submit", status_code=201)
 def submit_screening(payload: ScreeningSubmitRequest, db: Session = Depends(get_db),
-                     current_user: User = Depends(get_current_user)):
+                     current_user: User = Depends(require_real_user)):
     _require_enabled()
     if not payload.disclosure_ack:
         raise HTTPException(status_code=400, detail="请先阅读并确认数据说明")
@@ -186,7 +186,7 @@ def latest_screening(db: Session = Depends(get_db), current_user: User = Depends
 
 @router.post("/acknowledge")
 def acknowledge_screening(payload: ScreeningAcknowledgeRequest, db: Session = Depends(get_db),
-                          current_user: User = Depends(get_current_user)):
+                          current_user: User = Depends(require_real_user)):
     """保留筛查结果，只记录学生已联系可信成年人；专业级风险随后降为持续留意。"""
     _require_enabled()
     if not payload.contacted_trusted_adult:
@@ -208,7 +208,7 @@ def acknowledge_screening(payload: ScreeningAcknowledgeRequest, db: Session = De
 
 @router.delete("/{run_code}", status_code=204)
 def delete_screening(run_code: str, db: Session = Depends(get_db),
-                     current_user: User = Depends(get_current_user)):
+                     current_user: User = Depends(require_real_user)):
     _require_enabled()
     row = db.query(StudentScreeningRun).filter(
         StudentScreeningRun.run_code == run_code,

@@ -1,6 +1,6 @@
-import axios from 'axios'
+import { createApi } from './http'
 
-const instance = axios.create({ baseURL: '/api/screening' })
+const instance = createApi('/api/screening')
 
 export function getScreeningSchema() {
   return instance.get('/schema')

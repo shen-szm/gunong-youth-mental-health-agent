@@ -1,6 +1,6 @@
-import axios from "axios";
+import { createApi } from "./http";
 
-const instance = axios.create({ baseURL: "/api/chat" });
+const instance = createApi("/api/chat");
 
 export function startChatSession(forceNew = false, continueFromSessionId = null) {
   return instance.post("/sessions", {
@@ -34,4 +34,13 @@ export function getLatestChatSummary() {
 }
 export function deleteChatSummary(sessionId) {
   return instance.delete(`/sessions/${encodeURIComponent(sessionId)}/summary`);
+}
+export function getCompanionMemories() {
+  return instance.get("/memories");
+}
+export function deleteCompanionMemory(memoryCode) {
+  return instance.delete(`/memories/${encodeURIComponent(memoryCode)}`);
+}
+export function clearCompanionMemories() {
+  return instance.delete("/memories");
 }

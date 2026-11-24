@@ -1,6 +1,6 @@
-import axios from "axios";
+import { createApi } from "./http";
 
-const instance = axios.create({ baseURL: "/api/mood" });
+const instance = createApi("/api/mood");
 
 export function getMoodList(userId, days) {
   return instance.get("/list", { params: { user_id: userId, days } });

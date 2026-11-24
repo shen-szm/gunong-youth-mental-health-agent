@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 import screening_engine
-from auth import get_current_user
+from auth import get_current_user, require_real_user
 from config import settings
 from database import SessionLocal, get_db
 from models import CompanionSafetyState, SensitiveAccessLog, StudentChatSession, User
@@ -248,7 +248,7 @@ def companion_safety_status(
 def handoff_to_student_chat(
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     state = _current_shared_state(db, request, current_user.id)
     if not state or not state.urgent:
@@ -266,7 +266,7 @@ def chat_with_companion(
     payload: CompanionChatRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_real_user),
 ):
     content = payload.content.strip()
     token_hash = _session_token_hash(request)

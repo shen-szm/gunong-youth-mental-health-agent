@@ -75,16 +75,18 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { logIslandBehavior } from '../../api/island.js'
 import beachDay from '../../assets/island/beach-day.png'
 import beachDusk from '../../assets/island/beach-dusk.png'
 import beachNight from '../../assets/island/beach-night.png'
 
+const props = defineProps({ timePhase: { type: String, default: '' } })
 const emit = defineEmits(['played'])
 const beachRef = ref(null)
 
-const currentPhase = ref('day')
+const currentPhase = ref(props.timePhase || 'day')
+watch(() => props.timePhase, (value) => { if (value) currentPhase.value = value })
 const shells = ref([])
 const collectedCount = ref(0)
 const collectFeedback = ref('')
@@ -103,7 +105,6 @@ const petMood = ref('idle')
 const pressedKeys = new Set()
 let moveInterval = null
 let feedbackTimer = null
-let phaseTimer = null
 let targetPos = null
 
 const petImage = computed(() => {
@@ -257,24 +258,14 @@ function refreshShells() {
   logIslandBehavior('activity_interact', 'beach', 'refresh', {}).catch(() => {})
 }
 
-function syncPhase() {
-  const hour = new Date().getHours()
-  if (hour >= 6 && hour < 17) currentPhase.value = 'day'
-  else if (hour >= 17 && hour < 20) currentPhase.value = 'dusk'
-  else currentPhase.value = 'night'
-}
-
 onMounted(() => {
-  syncPhase()
   generateShells()
-  phaseTimer = setInterval(syncPhase, 60000)
   beachRef.value?.focus()
   logIslandBehavior('activity_start', 'beach', 'enter', { phase: currentPhase.value }).catch(() => {})
 })
 
 onBeforeUnmount(() => {
   if (feedbackTimer) clearTimeout(feedbackTimer)
-  if (phaseTimer) clearInterval(phaseTimer)
   if (moveInterval) clearInterval(moveInterval)
   logIslandBehavior('activity_finish', 'beach', 'leave', { shells_collected: collectedCount.value }).catch(() => {})
 })

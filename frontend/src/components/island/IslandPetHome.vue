@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getPetState, interactWithPet, logIslandBehavior } from '../../api/island.js'
 import { isOfflineCompanionUrgent } from '../../utils/companionSafety.js'
 import homeDay from '../../assets/island/home-day.png'
@@ -80,7 +80,8 @@ import homeNight from '../../assets/island/home-night.png'
 const props = defineProps({ timePhase: { type: String, default: 'day' } })
 const emit = defineEmits(['played'])
 
-const currentPhase = ref('day')
+const currentPhase = ref(props.timePhase || 'day')
+watch(() => props.timePhase, (value) => { if (value) currentPhase.value = value })
 const petMood = ref('content')
 const petMessage = ref('')
 const eating = ref(false)
@@ -223,15 +224,7 @@ async function loadPetState() {
   } catch {}
 }
 
-function syncPhase() {
-  const hour = new Date().getHours()
-  if (hour >= 6 && hour < 17) currentPhase.value = 'day'
-  else if (hour >= 17 && hour < 20) currentPhase.value = 'dusk'
-  else currentPhase.value = 'night'
-}
-
 onMounted(() => {
-  syncPhase()
   loadPetState()
   logIslandBehavior('place_enter', 'home', null, {}).catch(() => {})
   setTimeout(() => {

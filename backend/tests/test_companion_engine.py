@@ -92,6 +92,59 @@ class CompanionEngineTests(unittest.TestCase):
         self.assertNotIn(companion.STATE_MARKER, cleaned)
         self.assertLessEqual(len(cleaned), companion.MAX_REPLY_CHARS + 1)
 
+    def test_parse_memory_from_state_marker(self):
+        parsed = companion.parse_companion_output(
+            '嗯，团子听起来好黏人。\n[[XM_STATE]]{"scores": {}, "crisis": false, '
+            '"memory": {"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"}}'
+        )
+        self.assertEqual(parsed["memory"]["content"], "养了一只叫团子的猫")
+        self.assertEqual(parsed["memory"]["category"], "近况")
+
+    def test_memory_candidate_must_be_grounded_in_latest_message(self):
+        candidate = companion.clean_memory_candidate(
+            {"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"},
+            "我家猫叫团子，最近总在半夜跑酷。",
+        )
+        self.assertEqual(candidate, {"content": "养了一只叫团子的猫", "category": "近况"})
+        self.assertIsNone(companion.clean_memory_candidate(
+            {"content": "养了一只叫团子的猫", "category": "近况", "quote": "我家猫叫团子"},
+            "今天有点累。",
+        ))
+        self.assertIsNone(companion.clean_memory_candidate(
+            {"content": "喜欢篮球", "category": "喜好", "quote": "我喜欢看电影"},
+            "我喜欢看电影。",
+        ))
+
+    def test_memory_candidate_rejects_clinical_crisis_and_contact_content(self):
+        for content in ("最近量表得分 12 分", "有过轻生的念头", "手机号 13800138000", "微信 abc12345"):
+            self.assertIsNone(companion.clean_memory_candidate(
+                {"content": content, "category": "近况", "quote": content},
+                content,
+            ), content)
+
+    def test_memory_candidate_caps_length_and_normalizes_category(self):
+        too_long = "喜欢" + "很" * companion.MAX_MEMORY_CHARS
+        self.assertIsNone(companion.clean_memory_candidate(
+            {"content": too_long, "category": "近况", "quote": too_long}, too_long))
+        candidate = companion.clean_memory_candidate(
+            {"content": "喜欢打篮球", "category": "不存在的分类", "quote": "我挺喜欢打篮球的"},
+            "我挺喜欢打篮球的。",
+        )
+        self.assertEqual(candidate, {"content": "喜欢打篮球", "category": "其他"})
+
+    def test_build_memory_instruction_is_bounded_and_deduplicated(self):
+        self.assertEqual(companion.build_memory_instruction([]), "")
+        instruction = companion.build_memory_instruction(
+            ["喜欢打篮球", "喜欢打篮球。", "养了一只叫团子的猫"]
+        )
+        self.assertIn("喜欢打篮球", instruction)
+        self.assertIn("养了一只叫团子的猫", instruction)
+        self.assertEqual(instruction.count("喜欢打篮球"), 1)
+        long_list = companion.build_memory_instruction(
+            [f"小事{index}" for index in range(30)]
+        )
+        self.assertEqual(long_list.count("- "), companion.MAX_MEMORIES_IN_PROMPT)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,8 +5,8 @@ from config import settings
 from models import StudentExternalAiAuthorization
 
 
-AUTHORIZATION_VERSION = "teacher-ai-authorization-v3"
-PLATFORM_DIRECT_VERSION = "platform-direct-transcript-v3"
+AUTHORIZATION_VERSION = "teacher-ai-authorization-v4"
+PLATFORM_DIRECT_VERSION = "platform-direct-transcript-v4"
 
 
 def get_student_ai_authorization(db: Session, student_user_id: int) -> StudentExternalAiAuthorization | None:

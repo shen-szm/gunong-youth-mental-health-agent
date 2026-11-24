@@ -121,6 +121,18 @@ def init_db():
         _migrate_student_support_runs(engine)
         _migrate_assessment_created_at_to_china_time(engine)
         inspector = inspect(engine)
+        user_columns = {item["name"] for item in inspector.get_columns("users")}
+        user_additions = {
+            "real_name": "VARCHAR(50)",
+            "class_name": "VARCHAR(50)",
+            "student_no": "VARCHAR(40)",
+        }
+        for column_name, column_type in user_additions.items():
+            if column_name not in user_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"))
+        with engine.begin() as connection:
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_users_student_no ON users (student_no)"))
         columns = {item["name"] for item in inspector.get_columns("student_case_access_requests")}
         if "expires_at" not in columns:
             with engine.begin() as connection:

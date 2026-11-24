@@ -52,9 +52,9 @@ test('patch release continues from latest baseline and records changelog', async
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '5.1.0-alpha.41')
-  assert.equal(lock.version, '5.1.0-alpha.41')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.41')
+  assert.equal(pkg.version, '5.1.0-alpha.43')
+  assert.equal(lock.version, '5.1.0-alpha.43')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.43')
   assert.match(changelog, /## \[5\.1\.0-alpha\.5\] - 2026-08-25/)
   assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
   assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)
@@ -75,6 +75,7 @@ test('splash version uses build metadata instead of a hard-coded badge', async (
   const vite = await source('frontend/vite.config.js')
 
   assert.match(room, /V\{\{ splashVersion \}\}/)
+  assert.match(room, /class="beian-version"[^>]*>v\{\{ splashVersion \}\}/)
   assert.match(room, /import\.meta\.env\.VITE_APP_VERSION/)
   assert.doesNotMatch(room, /<span class="splash-version">V\d+\.\d+/)
   assert.match(vite, /package\.json/)

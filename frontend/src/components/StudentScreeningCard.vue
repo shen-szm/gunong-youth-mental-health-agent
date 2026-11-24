@@ -109,7 +109,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
   deleteScreening,
   getLatestScreening,
@@ -120,9 +120,10 @@ import {
 const SKIP_KEY = 'gy_screening_skip_until'
 const SKIP_DAYS = 7
 const props = defineProps({ paused: { type: Boolean, default: false } })
-const emit = defineEmits(['urgent', 'updated'])
+const emit = defineEmits(['urgent', 'updated', 'form-open'])
 
 const state = ref('loading')
+watch(state, (value) => emit('form-open', value === 'form'))
 const introExpanded = ref(false)
 const cardEl = ref(null)
 const schema = ref({ items: [], options: [], disclosure: '', boundary: '', period: '过去两周' })

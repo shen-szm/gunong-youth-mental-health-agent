@@ -60,6 +60,20 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
+def is_guest_user(user: User) -> bool:
+    # 游客会话是真实 User 行，仅以 guest_ 前缀标记；注册处保留该前缀。
+    return (user.username or "").startswith("guest_")
+
+
+def require_real_user(current_user: User = Depends(get_current_user)) -> User:
+    if is_guest_user(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "login_required", "message": "请登录后使用"},
+        )
+    return current_user
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="需要教师权限")

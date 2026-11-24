@@ -4,9 +4,9 @@ import { Howl } from 'howler'
 import { Play, Pause, SkipForward, Volume2, Music2 } from '@lucide/vue'
 const emit = defineEmits(['playing'])
 const tracks = [
-  { title: '房间旋律 01', detail: '熟悉的房间背景曲', src: '/audio/bgm.mp3' },
-  { title: '房间旋律 02', detail: '换一段旋律，停留一会儿', src: '/audio/bgm-song2.mp3' },
-  { title: '房间旋律 03', detail: '给这一刻留一点空间', src: '/audio/bgm-song3.mp3' },
+  { title: '心岛旋律 01', detail: '熟悉的心岛背景曲', src: '/audio/bgm.mp3' },
+  { title: '心岛旋律 02', detail: '换一段旋律，停留一会儿', src: '/audio/bgm-song2.mp3' },
+  { title: '心岛旋律 03', detail: '给这一刻留一点空间', src: '/audio/bgm-song3.mp3' },
 ]
 const current = ref(0), playing = ref(false), loading = ref(false), error = ref(''), duration = ref(0), position = ref(0), volume = ref(35), sleep = ref('0')
 let sound, interval, deadline = 0
@@ -38,7 +38,7 @@ defineExpose({ pause })
 
 <template>
   <section class="listening-shelf" aria-labelledby="listening-title">
-    <header><Music2 :size="22" aria-hidden="true" /><div><h3 id="listening-title">先听一首，不必先说明心情</h3><p>三首现有房间曲目可直接播放，关闭面板即停止。</p></div></header>
+    <header><Music2 :size="22" aria-hidden="true" /><div><h3 id="listening-title">先听一首，不必先说明心情</h3><p>三首心岛曲目可直接播放，关闭面板即停止。</p></div></header>
     <div class="listening-tracks"><button v-for="(item, index) in tracks" :key="item.src" :aria-pressed="current === index" @click="play(index)"><span>0{{ index + 1 }}</span><strong>{{ item.title }}</strong><small>{{ item.detail }}</small><em>{{ current === index && playing ? '正在播放' : '点击收听' }}</em></button></div>
     <div class="listening-player"><button :disabled="loading" :aria-label="playing ? '暂停当前曲目' : '播放当前曲目'" @click="play()"><Pause v-if="playing" :size="20" aria-hidden="true" /><Play v-else :size="20" aria-hidden="true" /></button><div><strong>{{ track.title }}</strong><small role="status">{{ loading ? '正在加载…' : playing ? '正在播放' : '已暂停' }}</small></div><button aria-label="下一首" @click="play((current + 1) % tracks.length)"><SkipForward :size="20" aria-hidden="true" /></button></div>
     <label class="listening-progress"><span class="sr-only">播放进度</span><span>{{ format(position) }}</span><input aria-label="播放进度" type="range" min="0" :max="duration || 1" :value="position" :disabled="!duration" step="1" @input="seek" /><span>{{ format(duration) }}</span></label>

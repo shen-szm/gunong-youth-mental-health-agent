@@ -72,7 +72,7 @@ test('chat page routes typing into the composer without a click', async () => {
   assert.match(chat, /event\.key === 'Process'/)
   assert.match(chat, /CHAT_KEYBOARD_EXCLUDE/)
   assert.match(chat, /active\.classList\?\.contains\('sc-send'\)/)
-  assert.match(chat, /chatUrgentLocked\.value \|\| chatLoading\.value \|\| showSupportDrawer\.value \|\| recording\.value/)
+  assert.match(chat, /chatUrgentLocked\.value \|\| screeningFormOpen\.value \|\| chatLoading\.value \|\| showSupportDrawer\.value \|\| recording\.value/)
   assert.match(chat, /if \(!chatUrgentLocked\.value && canAutoFocusChat\(\)\) focusWithoutScroll\(inputEl\.value\)/)
   assert.match(chat, /target\.closest\('\[role="dialog"\], \[aria-modal="true"\]'\)/)
 })

@@ -9,7 +9,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 from database import get_db
 from models import ChatMessage, MoodRecord, StudentConversationSummary, User
-from auth import ensure_user_scope, get_current_user
+from auth import ensure_user_scope, get_current_user, require_real_user
 from app_time import china_day_start_naive, china_now_naive
 from config import settings
 
@@ -33,7 +33,7 @@ class ActivityReflectionInput(BaseModel):
 @router.post("/activity-reflection")
 async def record_activity_reflection(data: ActivityReflectionInput,
                                      db: Session = Depends(get_db),
-                                     current_user: User = Depends(get_current_user)):
+                                     current_user: User = Depends(require_real_user)):
     labels = {
         "lighter": ("轻松一些", 6),
         "same": ("差不多", 5),
@@ -129,7 +129,7 @@ async def get_emotion_report(days: int = 30, db: Session = Depends(get_db),
 
 
 @router.post("/record")
-async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def record_mood(data: MoodRecordInput, db: Session = Depends(get_db), current_user: User = Depends(require_real_user)):
     ensure_user_scope(data.user_id, current_user)
     """记录一条情绪"""
     record = MoodRecord(

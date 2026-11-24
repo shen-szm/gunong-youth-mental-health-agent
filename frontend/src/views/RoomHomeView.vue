@@ -134,6 +134,8 @@
           class="icp-link"
           aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
         >粤ICP备2026048986号-2</a>
+        <span class="beian-divider">|</span>
+        <span class="beian-version" :title="`当前版本 ${splashVersion}`">v{{ splashVersion }}</span>
       </footer>
     </main>
     <StudentAgentRail
@@ -1045,7 +1047,7 @@
           <!-- 空状态 -->
           <div class="empty-state" v-else-if="!primaryEmotion">
             <div class="empty-icon">🎶</div>
-            <p>记录心情后可探索更多曲风；上方房间曲目随时可听。</p>
+            <p>记录心情后可探索更多曲风；上方心岛曲目随时可听。</p>
           </div>
         </div>
       </div>
@@ -1229,6 +1231,15 @@
                 </div>
               </div>
             </div>
+            <button
+              class="chat-memory-button"
+              type="button"
+              aria-label="查看小满记得的事"
+              title="小满记得的事"
+              @click="showMemorySheet = true"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h5"/></svg>
+            </button>
             <button
               v-if="!chatUrgentLocked"
               class="chat-end-button"
@@ -1610,6 +1621,8 @@
         </div>
       </div>
     </Transition>
+
+    <CompanionMemorySheet v-if="showMemorySheet" @close="showMemorySheet = false" />
   </div>
 </template>
 
@@ -1653,6 +1666,7 @@ import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
+import CompanionMemorySheet from '../components/student/CompanionMemorySheet.vue'
 import StudentIslandWorkspace from '../components/island/StudentIslandWorkspace.vue'
 import petHomeDay from '../assets/island/home-day.png'
 import petHomeDusk from '../assets/island/home-dusk.png'
@@ -1667,6 +1681,7 @@ const displayNickname = computed(() => (userStore.nickname || '朋友').replace(
 // ═══ 个人中心面板 ═══
 const showProfilePanel = ref(false)
 const showChatPanel = ref(false)
+const showMemorySheet = ref(false)
 const showSupportDrawer = ref(false)
 const supportCloseButton = ref(null)
 const supportModeHeading = ref(null)
@@ -3942,7 +3957,7 @@ const consentDetail = computed(() => {
   if (companionEngine.value === 'legacy_xunfei') {
     return '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。'
   }
-  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
+  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。小满会在你主动说起时，记住少量关于你的小事，让下一次聊天能接上；你可以在「小满记得的事」里随时查看或删除。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
 })
 const voiceInputEnabled = ref(false)
 const chatMessages = ref([])
@@ -5527,6 +5542,7 @@ onUnmounted(() => {
   .chat-end-confirm { align-items: stretch; flex-direction: column; }
   .chat-end-actions { justify-content: flex-end; }
   .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
+  .chat-panel .chat-memory-button { right: 162px; width: 34px; height: 34px; }
 }
 
 /* 头像区 */
@@ -6257,6 +6273,16 @@ onUnmounted(() => {
 .chat-panel .chat-end-button:hover:not(:disabled) { background: var(--chat-raised); border-color: var(--chat-accent); }
 .chat-panel .chat-end-button:disabled { opacity: .38; cursor: not-allowed; }
 .chat-panel .chat-end-button:focus-visible { outline: 3px solid var(--chat-accent); outline-offset: 3px; }
+.chat-panel .chat-memory-button {
+  position: absolute; right: 174px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border: 1px solid oklch(53% .05 72); border-radius: 10px;
+  color: var(--chat-accent); background: var(--chat-surface); cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+}
+.chat-panel .chat-memory-button:hover { background: var(--chat-raised); border-color: var(--chat-accent); }
+.chat-panel .chat-memory-button:focus-visible { outline: 3px solid var(--chat-accent); outline-offset: 3px; }
 .chat-panel .header-center { display: flex; align-items: center; gap: 10px; }
 .chat-panel .ai-avatar { font-size: 28px; }
 .chat-panel .ai-name { font-size: 15px; font-weight: 650; color: var(--chat-ink); }
@@ -6294,6 +6320,7 @@ onUnmounted(() => {
   .chat-end-confirm { align-items: stretch; flex-direction: column; }
   .chat-end-actions { justify-content: flex-end; }
   .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
+  .chat-panel .chat-memory-button { right: 162px; width: 34px; height: 34px; }
 }
 
 /* 欢迎消息 */
@@ -6541,6 +6568,14 @@ onUnmounted(() => {
   font-size: 12px;
   color: rgba(255,255,255,0.72);
   font-weight: 700;
+}
+.beian-version {
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 @media (max-width: 520px) {
@@ -7702,6 +7737,24 @@ onUnmounted(() => {
   .pet-panel-close { width: 44px; height: 44px; top: 10px; right: 10px; }
   .pet-chat-prompts button { min-height: 44px; }
   .pet-chat-workflow { grid-template-columns: 1fr; }
+  /* 场景化咕团小屋：窄屏单列，避免双栏把场景压成竖条、标题逐字换行。 */
+  .pet-home-header { flex-wrap: wrap; min-height: 0; align-items: flex-start; gap: 10px; padding: 0 44px 12px 0; }
+  .pet-home-title { flex: 1 1 100%; gap: 10px; }
+  .pet-home-title .pet-panel-avatar { width: 46px; height: 46px; }
+  .pet-home-title .pet-panel-frame { width: 50px; height: 50px; }
+  .pet-home-title h2 { font-size: 17px; }
+  .pet-home-title p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+  .pet-bond-chip { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; }
+  .pet-home-layout { grid-template-columns: 1fr; }
+  .pet-home-scene { min-height: 380px; }
+  .pet-scene-character { bottom: 150px; width: 140px; height: 140px; }
+  .pet-scene-hotspot.is-nest { top: 34%; left: 8%; }
+  .pet-scene-hotspot.is-brush { right: 4%; bottom: 46%; }
+  .pet-scene-hotspot.is-snack { right: 2%; bottom: 38%; }
+  .pet-scene-hotspot.is-ball { left: 4%; bottom: 40%; }
+  .pet-scene-dock { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pet-scene-dock button { min-height: 46px; }
+  .pet-home-sidebar { min-height: 0; gap: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8624,6 +8677,11 @@ onUnmounted(() => {
 .lobby-home .beian-divider {
   color: var(--lobby-line);
 }
+.lobby-home .beian-version {
+  color: var(--lobby-muted);
+  font-weight: 500;
+  letter-spacing: .04em;
+}
 .lobby-home .room-onboarding-cue {
   left: 50%;
   top: 84px;
@@ -8946,6 +9004,7 @@ onUnmounted(() => {
     transform: none;
   }
   .lobby-home .beian-footer a { font-size: 11px; }
+  .lobby-home .beian-version { font-size: 10.5px; }
 }
 @media (max-width: 440px) {
   .lobby {
@@ -9128,7 +9187,8 @@ onUnmounted(() => {
   border-radius: 6px;
 }
 .chat-panel .chat-header { border-bottom: 2px solid var(--px-line); }
-.chat-panel .chat-end-button { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .chat-end-button,
+.chat-panel .chat-memory-button { border: 2px solid var(--px-line); border-radius: 4px; }
 .chat-panel .welcome-bubble,
 .chat-panel .bubble,
 .chat-panel .chat-ai-consent,
@@ -9151,6 +9211,7 @@ onUnmounted(() => {
 .chat-panel .chat-urgent-calls a,
 .chat-panel .chat-safety-resolve { border-radius: 4px; }
 .chat-panel .chat-end-button:focus-visible,
+.chat-panel .chat-memory-button:focus-visible,
 .chat-panel .quick-btn:focus-visible,
 .chat-panel .voice-btn:focus-visible,
 .chat-panel .send-btn:focus-visible,

@@ -81,7 +81,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
             row = StudentExternalAiAuthorization(student_user_id=user_id, authorized_by_user_id=self.teacher_id)
             db.add(row)
         row.status = "active" if active else "revoked"
-        row.statement_version = "teacher-ai-authorization-v3"
+        row.statement_version = "teacher-ai-authorization-v4"
         row.expires_at = datetime.now() + timedelta(days=30)
         row.revoked_at = None if active else datetime.now()
         db.commit()
@@ -337,7 +337,7 @@ class StudentConversationSummaryApiTests(unittest.TestCase):
         db = self.Session()
         try:
             session = db.query(StudentChatSession).filter_by(session_code=session_id).one()
-            self.assertEqual(session.external_ai_consent_version, "platform-direct-transcript-v3")
+            self.assertEqual(session.external_ai_consent_version, "platform-direct-transcript-v4")
             audit = db.query(SensitiveAccessLog).filter_by(action="external_model_transfer_chat").one()
             self.assertEqual(audit.result, "platform_direct_deidentified_derived_features_only")
         finally:

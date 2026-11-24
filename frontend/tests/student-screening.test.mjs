@@ -86,6 +86,17 @@ test('screening form shows progress and selected answers', () => {
   assert.match(component, /scrollIntoView/)
 })
 
+test('screening form takes over the chat composer so answers are not lost', () => {
+  assert.match(component, /emit\('form-open', value === 'form'\)/)
+  assert.match(chatView, /@form-open="screeningFormOpen = \$event"/)
+  assert.match(chatView, /const screeningFormOpen = ref\(false\)/)
+  assert.match(chatView, /v-if="!chatMessages\.length && !screeningFormOpen"/)
+  assert.match(chatView, /v-if="!chatUrgentLocked && !screeningFormOpen"/)
+  assert.match(chatView, /screeningFormOpen\.value \|\| chatLoading\.value/)
+  assert.match(chatView, /筛查进行中 · 提交或点「先不做了」后可以继续倾诉/)
+  assert.match(chatView, /watch\(screeningFormOpen/)
+})
+
 test('screening result stays visible during a screening-triggered urgent handoff', () => {
   assert.match(chatView, /screeningUrgentActive/)
   assert.match(chatView, /:paused="chatUrgentLocked"/)
