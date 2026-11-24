@@ -1,0 +1,400 @@
+{
+  "source": "D:\\桌面文件\\大学文件\\咕哝\\桌面机器人\\电池改版设计\\native_docs.json",
+  "sha256": "da7b7e6cdbbafe4fefec6bde56582954787af4952d9233524b1648a31a7f3366",
+  "pcb_uuid": "6d346aee3d67e255",
+  "mcu_symbol_uuid": "375300749f2d286f",
+  "components": {
+    "FPC1": "7f9e368a8c4d18b4",
+    "U4": "0074f901dfa29342"
+  },
+  "module_source": "User supplied OV2640-200mm-160 drawing",
+  "limitation": "FPC pad = 25 - module pin is the intended contact relation; physical insertion is unverified. This does not establish sensor supply compatibility.",
+  "intended_contact_mapping": [
+    {
+      "module_pin": 1,
+      "signal": "NC",
+      "fpc_pad": 24,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 2,
+      "signal": "AGND",
+      "fpc_pad": 23,
+      "net": "GND",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 3,
+      "signal": "SDA",
+      "fpc_pad": 22,
+      "net": "CAM_SDA",
+      "u4_terminal": 17,
+      "gpio": 9
+    },
+    {
+      "module_pin": 4,
+      "signal": "AVDD",
+      "fpc_pad": 21,
+      "net": "VCC_2V8",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 5,
+      "signal": "SCL",
+      "fpc_pad": 20,
+      "net": "CAM_SCL",
+      "u4_terminal": 18,
+      "gpio": 10
+    },
+    {
+      "module_pin": 6,
+      "signal": "RESET",
+      "fpc_pad": 19,
+      "net": "$1N80",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 7,
+      "signal": "VSYNC",
+      "fpc_pad": 18,
+      "net": "DVP_VSYNC",
+      "u4_terminal": 19,
+      "gpio": 11
+    },
+    {
+      "module_pin": 8,
+      "signal": "PWDN",
+      "fpc_pad": 17,
+      "net": "$1N79",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 9,
+      "signal": "HREF",
+      "fpc_pad": 16,
+      "net": "DVP_HREF",
+      "u4_terminal": 20,
+      "gpio": 12
+    },
+    {
+      "module_pin": 10,
+      "signal": "DVDD",
+      "fpc_pad": 15,
+      "net": "VCC_1V2",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 11,
+      "signal": "DOVDD",
+      "fpc_pad": 14,
+      "net": "VCC_2V8",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 12,
+      "signal": "Y9",
+      "fpc_pad": 13,
+      "net": "DVP_Y9",
+      "u4_terminal": 21,
+      "gpio": 13
+    },
+    {
+      "module_pin": 13,
+      "signal": "MCLK",
+      "fpc_pad": 12,
+      "net": "XMCLK",
+      "u4_terminal": 22,
+      "gpio": 14
+    },
+    {
+      "module_pin": 14,
+      "signal": "Y8",
+      "fpc_pad": 11,
+      "net": "DVP_Y8",
+      "u4_terminal": 23,
+      "gpio": 21
+    },
+    {
+      "module_pin": 15,
+      "signal": "DGND",
+      "fpc_pad": 10,
+      "net": "GND",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 16,
+      "signal": "Y7",
+      "fpc_pad": 9,
+      "net": "DVP_Y7",
+      "u4_terminal": 24,
+      "gpio": 47
+    },
+    {
+      "module_pin": 17,
+      "signal": "PCLK",
+      "fpc_pad": 8,
+      "net": "DVP_PCLK",
+      "u4_terminal": 25,
+      "gpio": 48
+    },
+    {
+      "module_pin": 18,
+      "signal": "Y6",
+      "fpc_pad": 7,
+      "net": "DVP_Y6",
+      "u4_terminal": 31,
+      "gpio": 38
+    },
+    {
+      "module_pin": 19,
+      "signal": "Y2",
+      "fpc_pad": 6,
+      "net": "DVP_Y2",
+      "u4_terminal": 32,
+      "gpio": 39
+    },
+    {
+      "module_pin": 20,
+      "signal": "Y5",
+      "fpc_pad": 5,
+      "net": "DVP_Y5",
+      "u4_terminal": 10,
+      "gpio": 17
+    },
+    {
+      "module_pin": 21,
+      "signal": "Y3",
+      "fpc_pad": 4,
+      "net": "DVP_Y3",
+      "u4_terminal": 11,
+      "gpio": 18
+    },
+    {
+      "module_pin": 22,
+      "signal": "Y4",
+      "fpc_pad": 3,
+      "net": "DVP_Y4",
+      "u4_terminal": 12,
+      "gpio": 8
+    },
+    {
+      "module_pin": 23,
+      "signal": "Y1",
+      "fpc_pad": 2,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 24,
+      "signal": "Y0",
+      "fpc_pad": 1,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    }
+  ],
+  "same_number_hypothesis": [
+    {
+      "module_pin": 1,
+      "signal": "NC",
+      "fpc_pad": 1,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 2,
+      "signal": "AGND",
+      "fpc_pad": 2,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 3,
+      "signal": "SDA",
+      "fpc_pad": 3,
+      "net": "DVP_Y4",
+      "u4_terminal": 12,
+      "gpio": 8
+    },
+    {
+      "module_pin": 4,
+      "signal": "AVDD",
+      "fpc_pad": 4,
+      "net": "DVP_Y3",
+      "u4_terminal": 11,
+      "gpio": 18
+    },
+    {
+      "module_pin": 5,
+      "signal": "SCL",
+      "fpc_pad": 5,
+      "net": "DVP_Y5",
+      "u4_terminal": 10,
+      "gpio": 17
+    },
+    {
+      "module_pin": 6,
+      "signal": "RESET",
+      "fpc_pad": 6,
+      "net": "DVP_Y2",
+      "u4_terminal": 32,
+      "gpio": 39
+    },
+    {
+      "module_pin": 7,
+      "signal": "VSYNC",
+      "fpc_pad": 7,
+      "net": "DVP_Y6",
+      "u4_terminal": 31,
+      "gpio": 38
+    },
+    {
+      "module_pin": 8,
+      "signal": "PWDN",
+      "fpc_pad": 8,
+      "net": "DVP_PCLK",
+      "u4_terminal": 25,
+      "gpio": 48
+    },
+    {
+      "module_pin": 9,
+      "signal": "HREF",
+      "fpc_pad": 9,
+      "net": "DVP_Y7",
+      "u4_terminal": 24,
+      "gpio": 47
+    },
+    {
+      "module_pin": 10,
+      "signal": "DVDD",
+      "fpc_pad": 10,
+      "net": "GND",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 11,
+      "signal": "DOVDD",
+      "fpc_pad": 11,
+      "net": "DVP_Y8",
+      "u4_terminal": 23,
+      "gpio": 21
+    },
+    {
+      "module_pin": 12,
+      "signal": "Y9",
+      "fpc_pad": 12,
+      "net": "XMCLK",
+      "u4_terminal": 22,
+      "gpio": 14
+    },
+    {
+      "module_pin": 13,
+      "signal": "MCLK",
+      "fpc_pad": 13,
+      "net": "DVP_Y9",
+      "u4_terminal": 21,
+      "gpio": 13
+    },
+    {
+      "module_pin": 14,
+      "signal": "Y8",
+      "fpc_pad": 14,
+      "net": "VCC_2V8",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 15,
+      "signal": "DGND",
+      "fpc_pad": 15,
+      "net": "VCC_1V2",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 16,
+      "signal": "Y7",
+      "fpc_pad": 16,
+      "net": "DVP_HREF",
+      "u4_terminal": 20,
+      "gpio": 12
+    },
+    {
+      "module_pin": 17,
+      "signal": "PCLK",
+      "fpc_pad": 17,
+      "net": "$1N79",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 18,
+      "signal": "Y6",
+      "fpc_pad": 18,
+      "net": "DVP_VSYNC",
+      "u4_terminal": 19,
+      "gpio": 11
+    },
+    {
+      "module_pin": 19,
+      "signal": "Y2",
+      "fpc_pad": 19,
+      "net": "$1N80",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 20,
+      "signal": "Y5",
+      "fpc_pad": 20,
+      "net": "CAM_SCL",
+      "u4_terminal": 18,
+      "gpio": 10
+    },
+    {
+      "module_pin": 21,
+      "signal": "Y3",
+      "fpc_pad": 21,
+      "net": "VCC_2V8",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 22,
+      "signal": "Y4",
+      "fpc_pad": 22,
+      "net": "CAM_SDA",
+      "u4_terminal": 17,
+      "gpio": 9
+    },
+    {
+      "module_pin": 23,
+      "signal": "Y1",
+      "fpc_pad": 23,
+      "net": "GND",
+      "u4_terminal": null,
+      "gpio": null
+    },
+    {
+      "module_pin": 24,
+      "signal": "Y0",
+      "fpc_pad": 24,
+      "net": "NC",
+      "u4_terminal": null,
+      "gpio": null
+    }
+  ]
+}

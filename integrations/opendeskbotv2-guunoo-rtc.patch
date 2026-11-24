@@ -1,0 +1,46 @@
+diff --git a/service/src/deskbot_server/rtc_agent_sdk.py b/service/src/deskbot_server/rtc_agent_sdk.py
+--- a/service/src/deskbot_server/rtc_agent_sdk.py
++++ b/service/src/deskbot_server/rtc_agent_sdk.py
+@@ -571,8 +571,11 @@
+         if not self.settings.rtc.agent_name:
+             missing.append("rtc.agent_name")
+ 
+-        llm_key = _first_env("LLM_API_KEY", "OPENAI_API_KEY")
+-        llm_base = _first_env("LLM_BASE_URL") or self.settings.llm.base_url
+-        llm_model = _first_env("LLM_MODEL") or self.settings.llm.model_name
++        guunoo_token = _first_env("GUUNOO_ROBOT_TOKEN")
++        llm_key = guunoo_token or _first_env("LLM_API_KEY", "OPENAI_API_KEY")
++        llm_base = (
++            _first_env("GUUNOO_ROBOT_BASE_URL") or "https://guunoo.online/api/robot/v1"
++        ) if guunoo_token else (_first_env("LLM_BASE_URL") or self.settings.llm.base_url)
++        llm_model = "guunoo-companion" if guunoo_token else (_first_env("LLM_MODEL") or self.settings.llm.model_name)
+         if not llm_key:
+             missing.append("LLM_API_KEY")
+@@ -617,6 +620,12 @@
+     def _rtc_system_prompt(self) -> str:
+         from deskbot_server.llm.prompt_assembly import assemble_rtc_system_prompt
+ 
++        if _first_env("GUUNOO_ROBOT_TOKEN"):
++            return (
++                "guunoo-robot-voice-v1。你是咕哝的桌面语音入口。"
++                "只将用户主动说出的内容交给咕哝后台，直接朗读后台回复。"
++                "不自行诊断、治疗或执行机器人其他工具。"
++            )
+         return assemble_rtc_system_prompt()
+ 
+     def _roles(self) -> dict:
+@@ -627,9 +636,14 @@
+         llm_api_key = _first_env(
+             "LLM_API_KEY",
+             "OPENAI_API_KEY",
+         )
+         llm_base = _first_env("LLM_BASE_URL") or self.settings.llm.base_url
+         llm_model = _first_env("LLM_MODEL") or self.settings.llm.model_name
++        guunoo_token = _first_env("GUUNOO_ROBOT_TOKEN")
++        if guunoo_token:
++            llm_api_key = guunoo_token
++            llm_base = _first_env("GUUNOO_ROBOT_BASE_URL") or "https://guunoo.online/api/robot/v1"
++            llm_model = "guunoo-companion"
+         livekit: dict[str, str] = {
+             "url": _livekit_ws_url(self.settings.rtc.livekit_url),
+         }
