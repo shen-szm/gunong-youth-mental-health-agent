@@ -1,3 +1,27 @@
+@font-face {
+  font-family: 'Fusion Pixel Lobby';
+  src: url('./assets/fonts/fusion-pixel-sc-lobby.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Fusion Pixel Student';
+  src: url('./assets/fonts/fusion-pixel-sc-student.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+}
+
+/* 学生端像素点缀 token。只被学生页面引用，教师端/守护端不引用 --px-*。 */
+:root {
+  --px-font: 'Fusion Pixel Student', 'Fusion Pixel Lobby', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --px-gold: #b07a45;
+  --px-line: rgba(90, 62, 38, .28);
+  --px-shadow: rgba(74, 52, 32, .28);
+  --px-hard-lg: 4px 4px 0 var(--px-shadow);
+  --px-hard-sm: 3px 3px 0 var(--px-shadow);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -5,19 +29,69 @@
 }
 
 :root {
-  /* 治愈系森林薄荷绿 - 低饱和度、温暖、放松 */
-  --primary: #5B8C7E;
-  --primary-light: #7FB3A6;
-  --primary-dark: #3D6B5E;
-  --bg: #F5F7F5;
-  --card: #FFFFFF;
-  --text: #3A3F3C;
-  --text-secondary: #7A8580;
-  --success: #6DB58B;
-  --warning: #E8C468;
-  --danger: #D4766A;
-  --border: #E8EDE9;
-  --hover: #EDF2EE;
+  /* 学生端色系：若竹（主色）/ 浅梅（提醒）/ 奶酪（页面底色与警示）/ 尼蓝（文字与深色面板） */
+  --primary: #55A87C;
+  --primary-light: #8FCBA6;
+  --primary-dark: #3D8660;
+  --bg: #F7F3E8;
+  --card: #FDFBF6;
+  --text: #2A3245;
+  --text-secondary: #868C9B;
+  --success: #6FBF92;
+  --warning: #C9A452;
+  --danger: #C4737C;
+  --border: #E4DED0;
+  --hover: #F1EBDB;
+
+  /* v5.1.0-alpha.30 shared product tokens.
+     "Liquid glass" below is an honest web approximation, not an Apple API. */
+  --ui-forest-950: #2E3A59;
+  --ui-forest-800: #4A5672;
+  --ui-forest-650: #55A87C;
+  --ui-mint-200: #E3F2E8;
+  --ui-gold-300: #EBD4A4;
+  --ui-coral-400: #CF9AA1;
+  --ui-canvas: #F7F3E8;
+  --ui-surface: #FDFBF6;
+  --ui-ink: #2A3245;
+  --ui-muted: #868C9B;
+  --ui-line: #E4DED0;
+  --ui-radius-control: 10px;
+  --ui-radius-panel: 14px;
+  --ui-duration-fast: 180ms;
+  --ui-ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ui-focus: #6E7FA3;
+
+  /* 教师端：若竹 / 浅梅 / 奶酪 / 尼蓝，与学生端同一色板，AdminView 与 Teacher* 子组件共用 */
+  --t-canvas: #F7F3E8;
+  --t-surface: #FDFBF6;
+  --t-surface-2: #F1EBDB;
+  --t-ink: #2A3245;
+  --t-ink-2: #5A6478;
+  --t-muted: #868C9B;
+  --t-faint: #A9AEB9;
+  --t-line: #E4DED0;
+  --t-line-2: #D5CDBC;
+  --t-accent: #66BB8D;
+  --t-accent-ink: #3D8660;
+  --t-accent-soft: #E3F2E8;
+  --t-accent-ring: rgba(85, 168, 124, .16);
+  --t-brand: #8FCBA6;
+  --t-sidebar: #2E3A59;
+  --t-green: #8FCBA6;
+  --t-green-ink: #3D8660;
+  --t-green-bg: #E3F2E8;
+  --t-amber: #E8C783;
+  --t-amber-ink: #B8903E;
+  --t-amber-bg: #F7EED8;
+  --t-red: #CF9AA1;
+  --t-red-ink: #B95C66;
+  --t-red-bg: #F7E7E9;
+  --t-blue: #6E7FA3;
+  --t-r-sm: 4px;
+  --t-r: 6px;
+  --t-r-lg: 8px;
+  --t-mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
 }
 
 body {
@@ -27,9 +101,90 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: rgba(74, 122, 108, .18);
+}
+
 button {
   cursor: pointer;
   border: none;
   outline: none;
   font-family: inherit;
+}
+
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* v5.1.0-alpha.38 student minimal skin（追加式：学生端新皮肤专用 token，
+   不改动上方既有 token，教师端/守护端不受影响） */
+:root {
+  --m-bg: #F7F3E8;
+  --m-surface: #FDFBF6;
+  --m-ink: #2A3245;
+  --m-ink-2: #5A6478;
+  --m-ink-3: #868C9B;
+  --m-line: #E4DED0;
+  --m-accent: #66BB8D;
+  --m-accent-strong: #3D8660;
+  --m-accent-soft: #E3F2E8;
+  --m-danger: #B95C66;
+  --m-radius-lg: 18px;
+  --m-radius-md: 12px;
+  --m-radius-sm: 8px;
+  --m-shadow: 0 1px 2px rgba(46, 58, 89, .04), 0 8px 24px rgba(46, 58, 89, .06);
+}
+
+/* v5.1.0-alpha.41 流光氛围：运动与流光 token（追加式，不改上方 token） */
+:root {
+  --m-ease: cubic-bezier(.22, 1, .36, 1);
+  --m-ease-soft: cubic-bezier(.33, 0, .2, 1);
+  --m-dur-fast: 160ms;
+  --m-dur: 220ms;
+  --m-dur-slow: 320ms;
+  --m-enter-dur: 480ms;
+  --m-drift-dur: 26s;
+  --m-hero-grad: linear-gradient(135deg, #8FCBA6 0%, #55A87C 52%, #3D8660 100%);
+  --m-hero-shadow: 0 2px 4px rgba(46, 58, 89, .16), 0 16px 36px rgba(46, 58, 89, .24);
+  --m-hero-shadow-hover: 0 4px 10px rgba(46, 58, 89, .20), 0 24px 52px rgba(46, 58, 89, .32);
+  --m-shadow-hover: 0 2px 4px rgba(46, 58, 89, .05), 0 14px 34px rgba(46, 58, 89, .10);
+  --m-ring: rgba(85, 168, 124, .18);
+  --m-glow-mint: rgba(102, 187, 141, .38);
+  --m-glow-gold: rgba(232, 199, 131, .30);
+}
+
+/* v5.1.0-alpha.41 流光氛围：全局 keyframes（学生端多文件复用） */
+@keyframes m-rise {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-rise-sm {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes m-pop {
+  0%   { opacity: 0; transform: scale(.86); }
+  62%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes m-panel-rise {
+  from { opacity: 0; transform: translate3d(0, 30px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-drift-a {
+  0%, 100% { transform: translate3d(-4%, -3%, 0) scale(1); }
+  50%      { transform: translate3d(5%, 4%, 0) scale(1.08); }
+}
+@keyframes m-drift-b {
+  0%, 100% { transform: translate3d(4%, 3%, 0) scale(1.06); }
+  50%      { transform: translate3d(-5%, -4%, 0) scale(1); }
 }

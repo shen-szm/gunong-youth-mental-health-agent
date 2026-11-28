@@ -42,9 +42,8 @@ class GuardianCaseCreate(StrictModel):
     ]
     context: str = Field(default="", max_length=500)
     guardian_may_be_source: bool = False
-    consent_version: Literal["guardian-support-v1"]
-    deidentified_confirmed: Literal[True]
-    external_ai_consent: bool = False
+    consent_version: Literal["guardian-demo-v1"]
+    synthetic_data_confirmed: Literal[True]
 
     @field_validator("context")
     @classmethod

@@ -1,57 +1,29 @@
-# Secrets and local configuration
-.env
-.env.*
-!.env.example
-**/.env
-**/.env.*
-!**/.env.example
-*.pem
-*.key
-*.p12
-*.pfx
-*.crt
-*.known_hosts
-
-# User data and runtime state
-*.db
-*.sqlite
-*.sqlite3
-*.log
-logs/
-uploads/
-backups/
-output/
-tmp/
-
-# Dependencies and build products
 node_modules/
-venv/
-.venv/
+.pnpm-store/
 dist/
-build/
-coverage/
 __pycache__/
 *.pyc
-.pytest_cache/
+.env
+*.db
+.codex-guardian-*.log
+.codex-alpha*.log
+.codex-*-alpha*.log
+.codex-alpha*.png
+.codex-audit-*/
+.alpha*-*.log
+/backend/*.log
 .vite/
-
-# Archives and local previews
-*.zip
-*.7z
-*.tar
-*.gz
-.codex-*
-
-# Optional locally licensed media are deployment-owned and never published here
-frontend/public/audio/
-frontend/public/videos/
-frontend/public/media-local/
-
-# IDE and operating system
-.idea/
-.vscode/
 .DS_Store
 Thumbs.db
 
-# Local release snapshots live outside this repository
-release-archives/
+.worktrees/
+/migration/
+/output/
+/tmp/
+/data/reports/
+/backend/data/reports/
+.codex-alpha*-backend.tar.gz
+backend/.teacher-plan-runtime/
+.venv/
+venv/
+artifacts/

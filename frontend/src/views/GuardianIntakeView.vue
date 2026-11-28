@@ -66,8 +66,7 @@
             </fieldset>
 
             <div v-if="hasUrgentSignal" class="guardian-form-alert" role="alert">
-              <strong>不要等待系统生成结果，请立即确认当下安全。</strong><br>陪在孩子身边，不让其独处，远离药物、刀具等危险物，并联系可信成年人。若监护人可能是伤害来源，请联系可信教师、其他安全成年人或报警。
-              <div class="guardian-emergency-actions"><a href="tel:12356">拨打12356</a><a href="tel:110">拨打110</a><a href="tel:120">拨打120</a></div>
+              <strong>这些信号需要优先确认当下安全。</strong><br>提交后系统会停止普通家庭方案，直接展示12356、110、120与可信成年人陪伴步骤。
             </div>
 
             <label class="guardian-field"><span>持续时间</span><select v-model="form.duration" class="guardian-select"><option value="">请选择</option><option v-for="item in durationOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
@@ -85,20 +84,15 @@
             <label class="guardian-field"><span>东莞市区级位置</span><select v-model="form.district" class="guardian-select"><option value="">请选择</option><option v-for="district in districts" :key="district" :value="district">{{ district }}</option></select></label>
             <label class="guardian-field"><span>补充观察（选填）</span><small>只写行为、时间和场景，不写身份信息。最多500字。</small><textarea v-model="form.context" class="guardian-textarea" maxlength="500" placeholder="例如：近三周回家后常关门独处，与同伴联系减少；询问时会说很累，但仍愿意一起吃晚饭。"></textarea><small>{{ form.context.length }}/500</small></label>
             <label class="guardian-consent guardian-safety-question"><input v-model="form.guardian_may_be_source" type="checkbox"><span><strong>家庭安全项：</strong>存在人身威胁、暴力、性伤害、无法安全回家，或监护人可能是伤害/恐惧来源。选择后将直接进入安全路径，优先建议可信教师、其他安全成年人或110。</span></label>
-            <div v-if="hasUrgentSignal" class="guardian-form-alert" role="alert">
-              <strong>紧急信号不应等待工单。</strong><br>请先采取现实安全行动；工单只用于记录后续支持，不替代热线、报警或急救。
-              <div class="guardian-emergency-actions"><a href="tel:12356">拨打12356</a><a href="tel:110">拨打110</a><a href="tel:120">拨打120</a></div>
-            </div>
-            <label class="guardian-consent"><input v-model="deidentifiedConfirmed" type="checkbox"><span>我确认已移除姓名、学校、联系方式、精确地址及其他可识别个人身份的信息。</span></label>
+            <label class="guardian-consent"><input v-model="syntheticConfirmed" type="checkbox"><span>我确认已移除姓名、学校、联系方式、精确地址及其他可识别个人身份的信息。</span></label>
             <label class="guardian-consent"><input v-model="boundaryConfirmed" type="checkbox"><span>我理解系统只提供心理健康教育、支持建议和求助导航，不提供诊断、治疗或正式量表结论。</span></label>
-            <label class="guardian-consent"><input v-model="form.external_ai_consent" type="checkbox"><span>可选：我同意将去标识化的观察内容发送给已配置的讯飞模型生成结构化文字。不同意时仍使用本地审核模板，不影响安全分流。</span></label>
           </section>
 
           <p v-if="error" class="guardian-form-error" role="alert">{{ error }}</p>
           <div class="guardian-form-actions">
             <button v-if="step > 1" class="guardian-secondary-action" type="button" @click="step--">上一步</button><span v-else></span>
             <button v-if="step < 3" class="guardian-primary-action" type="button" @click="nextStep">下一步</button>
-            <button v-else :class="hasUrgentSignal ? 'guardian-secondary-action' : 'guardian-primary-action'" type="submit" :disabled="submitting">{{ submitting ? '正在创建工单…' : hasUrgentSignal ? '记录后续支持工单' : '提交并启动 Agent' }}</button>
+            <button v-else class="guardian-primary-action" type="submit" :disabled="submitting">{{ submitting ? '正在创建工单…' : hasUrgentSignal ? '提交并进入安全路径' : '提交并启动 Agent' }}</button>
           </div>
         </form>
       </div>
@@ -117,9 +111,9 @@ const route = useRoute()
 const step = ref(1)
 const submitting = ref(false)
 const error = ref('')
-const deidentifiedConfirmed = ref(false)
+const syntheticConfirmed = ref(false)
 const boundaryConfirmed = ref(false)
-const form = reactive({ reporter_role: '', age_band: '', signals: [], duration: '', functional_impact: '', district: '', context: '', guardian_may_be_source: false, external_ai_consent: false })
+const form = reactive({ reporter_role: '', age_band: '', signals: [], duration: '', functional_impact: '', district: '', context: '', guardian_may_be_source: false })
 
 const signalOptions = [
   { value: 'mood_low', label: '情绪持续低落', hint: '比平时更沉默、难过或缺少兴趣' },
@@ -160,10 +154,10 @@ function nextStep() {
 async function submitCase() {
   error.value = ''
   if (!form.district) { error.value = '请选择区级位置。'; return }
-  if (!deidentifiedConfirmed.value || !boundaryConfirmed.value) { error.value = '请确认隐私处理和产品边界后再提交。'; return }
+  if (!syntheticConfirmed.value || !boundaryConfirmed.value) { error.value = '请确认隐私处理和产品边界后再提交。'; return }
   submitting.value = true
   try {
-    const response = await createGuardianCase({ ...form, consent_version: 'guardian-support-v1', deidentified_confirmed: true })
+    const response = await createGuardianCase({ ...form, consent_version: 'guardian-demo-v1', synthetic_data_confirmed: true })
     router.push(`/guardian/cases/${response.data.case_id}`)
   } catch (err) {
     const detail = err.response?.data?.detail

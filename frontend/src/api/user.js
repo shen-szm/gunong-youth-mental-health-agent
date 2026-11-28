@@ -1,15 +1,22 @@
-import axios from "axios";
+import { createApi } from "./http";
 
-const instance = axios.create({ baseURL: "/api/user" });
+const instance = createApi("/api/user");
 
-export function register(username, password, nickname) {
-  return instance.post("/register", { username, password, nickname });
+export function register(username, password, nickname, realName, className, studentNo) {
+  return instance.post("/register", {
+    username,
+    password,
+    nickname,
+    real_name: realName,
+    class_name: className,
+    student_no: studentNo,
+  });
 }
 export function login(username, password) {
   return instance.post("/login", { username, password });
 }
-export function createDemoSession() {
-  return instance.post("/demo-session");
+export function createGuestSession() {
+  return instance.post("/guest-session");
 }
 export function getCurrentSession() {
   return instance.get("/me");

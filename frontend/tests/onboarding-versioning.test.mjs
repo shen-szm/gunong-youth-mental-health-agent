@@ -18,7 +18,7 @@ test('first-run guide requires a chat confession before completion', async () =>
   assert.match(room, /guideStage\.value = 'confession'/)
   assert.match(room, /completeFirstRunAfterChat/)
   assert.match(room, /guideStage\.value = 'mood-card'/)
-  assert.match(room, /localStorage\.setItem\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
+  assert.match(room, /safeStudentStorageSet\(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION\)/)
 })
 
 test('daily return is available through the unified status and action system', async () => {
@@ -32,15 +32,16 @@ test('daily return is available through the unified status and action system', a
   assert.match(room, /治愈/)
 })
 
-test('window hotspot label is hidden until hover and uses subtle copy', async () => {
+test('window entry stays subtle until hover and uses restrained copy', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
 
   assert.doesNotMatch(room, />出去看看</)
   assert.doesNotMatch(room, /<h2>[^<]*出去看看<\/h2>/)
   assert.doesNotMatch(room, />窗外有新风景</)
   assert.match(room, /看看窗外/)
-  assert.match(room, /\.window-label \{[\s\S]*?opacity:\s*0/)
-  assert.match(room, /\.zone-window:hover \.window-label \{[\s\S]*?opacity:\s*1/)
+  assert.match(room, /\.lobby-pill \{[\s\S]*?background: var\(--lobby-card\)/)
+  assert.match(room, /\.lobby-pill:hover \{[\s\S]*?border-color: var\(--lobby-gold\)/)
+  assert.match(room, /\.lobby-card \{[\s\S]*?background: var\(--lobby-card\)/)
 })
 
 test('patch release continues from latest baseline and records changelog', async () => {
@@ -51,30 +52,30 @@ test('patch release continues from latest baseline and records changelog', async
   assert.ok(info.isFile())
   const changelog = await source('CHANGELOG.md')
 
-  assert.equal(pkg.version, '5.1.0-alpha.5')
-  assert.equal(lock.version, '5.1.0-alpha.5')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.5')
-  assert.match(changelog, /## \[5\.1\.0-alpha\.5\] - 2026-08-24/)
-  assert.match(changelog, /完整 Git 历史的凭据、数据路径和媒体扫描/)
-  assert.match(changelog, /所有学生自由文本陪伴入口统一经过后端安全分流/)
+  assert.equal(pkg.version, '5.1.0-alpha.43')
+  assert.equal(lock.version, '5.1.0-alpha.43')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.43')
+  assert.match(changelog, /## \[5\.1\.0-alpha\.5\] - 2026-08-25/)
+  assert.match(changelog, /## \[4\.3\.2\] - 2026-07-06/)
+  assert.match(changelog, /4\.5\.1 -> 4\.5\.2/)
+  assert.match(changelog, /4\.5\.2 -> 4\.5\.3/)
+  assert.match(changelog, /4\.5\.3 -> 4\.5\.4/)
+  assert.match(changelog, /4\.5\.4 -> 4\.5\.5/)
   assert.match(changelog, /## \[5\.0\.0-alpha\.2\] - 2026-08-21/)
 })
 
-test('release script verifies the semantic version before creating an immutable archive', async () => {
-  const script = await source('scripts/release.ps1')
+test('deploy script publishes semantic version plus git commit for visible build badge', async () => {
+  const script = await source('deploy-frontend.ps1')
 
-  assert.match(script, /frontend\/package\.json/)
-  assert.match(script, /backend\/config\.py/)
-  assert.match(script, /git archive/)
-  assert.match(script, /Get-FileHash[^\n]+SHA256/)
-  assert.match(script, /git push github main \$tag/)
-  assert.match(script, /git push gitee main \$tag/)
+  assert.match(script, /package\.json/)
+  assert.match(script, /VITE_APP_VERSION = "\$pkgVersion\+\$gitSha"/)
 })
 test('splash version uses build metadata instead of a hard-coded badge', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
   const vite = await source('frontend/vite.config.js')
 
   assert.match(room, /V\{\{ splashVersion \}\}/)
+  assert.match(room, /class="beian-version"[^>]*>v\{\{ splashVersion \}\}/)
   assert.match(room, /import\.meta\.env\.VITE_APP_VERSION/)
   assert.doesNotMatch(room, /<span class="splash-version">V\d+\.\d+/)
   assert.match(vite, /package\.json/)

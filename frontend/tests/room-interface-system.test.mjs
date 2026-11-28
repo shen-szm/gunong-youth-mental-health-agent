@@ -7,7 +7,7 @@ const actionBar = fs.readFileSync(new URL('../src/components/RoomActionBar.vue',
 
 test('student room uses one scene action system instead of stacked home cards', () => {
   const template = room.slice(0, room.indexOf('<script setup>'))
-  assert.match(template, /room-status-bar/)
+  assert.match(template, /lobby-top/)
   assert.match(template, /<RoomActionBar/)
   assert.doesNotMatch(template, /guardian-workbench-entry/)
   assert.doesNotMatch(template, /daily-return-card/)
@@ -16,25 +16,29 @@ test('student room uses one scene action system instead of stacked home cards', 
   assert.doesNotMatch(template, /weather-float/)
 })
 
-test('room hotspots share keyboard and selection behavior', () => {
-  for (const id of ['chat', 'trend', 'window', 'music', 'pet', 'daily']) {
-    assert.match(room, new RegExp(`selectRoomFeature\\('${id}'`))
-  }
-  assert.match(room, /<button type="button" :class="\['hot-zone zone-monitor'/)
-  assert.match(room, /aria-label="床头：回顾近期情绪"/)
-  assert.match(room, /aria-label="窗户：看看窗外"/)
+test('lobby entries share keyboard behavior and the window opens its real journey directly', () => {
+  assert.match(room, /selectRoomFeature\('daily', \$event\)/)
+  assert.match(room, /function runSelectedRoomFeature[\s\S]*?handleGuideChatTarget\(\)/)
+  assert.match(room, /function runSelectedRoomFeature[\s\S]*?openWorkspacePanel\('transport'\)/)
+  assert.match(room, /function startWindowJourney[\s\S]*?selectCity\(city\)/)
+  assert.match(room, /function startWindowJourney[\s\S]*?showTransportPanel\.value = false/)
+  assert.match(room, /去西安[\s\S]*?皮影工坊/)
+  assert.match(room, /去洛阳[\s\S]*?拓印工坊/)
+  assert.match(room, /function handleTransportPanelKeydown[\s\S]*?event\.key !== 'Tab'/)
+  assert.match(room, /function startXianTransition[\s\S]*?prefers-reduced-motion/)
+  assert.match(room, /function startLuoyangTransition[\s\S]*?prefers-reduced-motion/)
+  assert.match(room, /focusWithoutScroll\(xianBackButton\.value\)/)
+  assert.match(room, /focusWithoutScroll\(luoyangBackButton\.value\)/)
   assert.match(room, /function runSelectedRoomFeature/)
   assert.match(actionBar, /@keydown\.esc/)
   assert.match(actionBar, /focus\(\{ preventScroll: true \}\)/)
   assert.match(actionBar, /querySelector\('\.room-action-moods button'\)/)
   assert.match(room, /focusWithoutScroll\(roomFeatureTrigger\)/)
   assert.match(actionBar, /:disabled="feature\.actionDisabled"/)
-  assert.match(room, /function safeRoomPetPosition/)
-  assert.match(room, /window\.innerHeight \* \.58/)
-  assert.match(room, /const next = safeRoomPetPosition\(event\.clientX, event\.clientY\)/)
-  assert.match(room, /\.hot-zone:focus-visible \.hover-tip/)
-  assert.match(room, /\.zone-speaker-left \{ top: 46%; left: 26%; width: 12%; height: 12%; \}/)
-  assert.match(room, /\.zone-speaker-right \{ display: none; \}/)
+  assert.match(room, /\.lobby-primary-cta:focus-visible/)
+  assert.match(room, /\.lobby-card:focus-visible/)
+  assert.match(room, /\.lobby-pet-stage:focus-visible/)
+  assert.doesNotMatch(room, /\.hot-zone|\.heart-island-door|\.room-roaming-pet/)
 })
 
 test('opening a primary workspace closes competing overlays', () => {
@@ -44,7 +48,10 @@ test('opening a primary workspace closes competing overlays', () => {
   assert.match(room, /closeRoomWorkspaces\(key\)/)
   assert.match(room, /function closeWorkspacePanel/)
   assert.match(room, /data-workspace="chat"/)
-  assert.match(room, /focusWithoutScroll\(workspaceTrigger\)/)
+  assert.match(room, /workspaceTrigger\?\.isConnected \? workspaceTrigger : fallback/)
+  assert.match(room, /data-workspace="profile" role="dialog"/)
+  assert.match(room, /data-workspace="treehole" role="dialog"/)
+  assert.match(room, /data-workspace="report" role="dialog"/)
   assert.match(room, /function toggleAgentRail[\s\S]*?closeRoomWorkspaces\('agent'\)/)
   assert.match(room, /async function openSummaryDrawer[\s\S]*?closeRoomWorkspaces\('support'\)/)
 })
@@ -53,7 +60,7 @@ test('the action system adapts to mobile and reduced motion', () => {
   assert.match(actionBar, /env\(safe-area-inset-bottom\)/)
   assert.match(actionBar, /@media \(max-width: 640px\)/)
   assert.match(actionBar, /@media \(prefers-reduced-motion: reduce\)/)
-  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.room-status-bar/)
+  assert.match(room, /@media \(max-width: 760px\)[\s\S]*?\.lobby-primary-cta/)
 })
 
 test('student trends remain descriptive and unassessed before any expression', () => {

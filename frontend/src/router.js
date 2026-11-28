@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from "vue-router";
 import RoomHomeView from "./views/RoomHomeView.vue";
 import HomeView from "./views/HomeView.vue";
 import LoginView from "./views/LoginView.vue";
-import ChatView from "./views/ChatView.vue";
+import StudentLoginView from "./views/StudentLoginView.vue";
+import StudentChatView from "./views/StudentChatView.vue";
 import TrendView from "./views/TrendView.vue";
 import ProfileView from "./views/ProfileView.vue";
 import AdminView from "./views/AdminView.vue";
@@ -13,14 +14,15 @@ import GuardianFollowUpsView from "./views/GuardianFollowUpsView.vue";
 import { useUserStore } from "./stores/user";
 
 const routes = [
-  { path: "/", name: "Home", component: RoomHomeView },
-  { path: "/home", name: "OldHome", component: HomeView },
-  { path: "/login", redirect: "/" },
+  { path: "/", name: "Home", component: RoomHomeView, meta: { guestViewable: true } },
+  { path: "/room", redirect: "/" },
+  { path: "/home", name: "OldHome", component: HomeView, meta: { guestViewable: true } },
+  { path: "/login", name: "StudentLogin", component: StudentLoginView },
   { path: "/teacher-login", name: "Login", component: LoginView },
-  { path: "/chat", name: "Chat", component: ChatView },
-  { path: "/trend", name: "Trend", component: TrendView },
-  { path: "/profile", name: "Profile", component: ProfileView },
-  { path: "/admin", name: "Admin", component: AdminView },
+  { path: "/chat", name: "Chat", component: StudentChatView, meta: { requiresRealUser: true } },
+  { path: "/trend", name: "Trend", component: TrendView, meta: { requiresRealUser: true } },
+  { path: "/profile", name: "Profile", component: ProfileView, meta: { guestViewable: true } },
+  { path: "/admin", name: "Admin", component: AdminView, meta: { requiresTeacher: true } },
   { path: "/guardian", name: "GuardianHome", component: GuardianHomeView },
   { path: "/guardian/new", name: "GuardianNew", component: GuardianIntakeView },
   { path: "/guardian/cases/:caseId", name: "GuardianCase", component: GuardianCaseView },
@@ -35,25 +37,23 @@ const router = createRouter({
   },
 });
 
-// 开发环境普通页面可绑定隔离访客；/teacher-login 保留为教师隐藏入口
+// 只恢复已有会话，绝不自动创建游客；游客由登录页的“先随便逛逛”显式进入。
 router.beforeEach(async (to) => {
   const userStore = useUserStore();
-  if (to.path === "/teacher-login") return true;
+  await userStore.ensureStudentSession();
 
-  if (to.path === "/admin" && !userStore.isAdmin) {
+  if (to.path === "/login" && userStore.isRealUser) {
+    return typeof to.query.redirect === "string" ? to.query.redirect : "/";
+  }
+  if (to.path === "/teacher-login" && userStore.isAdmin) {
+    return "/admin";
+  }
+  if (to.meta?.requiresTeacher && !userStore.isAdmin) {
     return { path: "/teacher-login", query: { redirect: to.fullPath } };
   }
-
-  try {
-    await userStore.ensureDemoSession();
-  } catch {
-    return { path: "/teacher-login", query: { redirect: to.fullPath } };
+  if (to.meta?.requiresRealUser && !userStore.isRealUser) {
+    return { path: "/login", query: { redirect: to.fullPath } };
   }
-
-  if (to.path === "/admin" && !userStore.isAdmin) {
-    return { path: "/teacher-login", query: { redirect: to.fullPath } };
-  }
-
   return true;
 });
 

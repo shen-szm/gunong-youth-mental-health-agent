@@ -1,0 +1,93 @@
+import { createGardenLifeState, normalizeGardenLifeState } from './gardenLifeEngine.js'
+
+export const HAPPINESS_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+
+export const FISH_TYPES = Object.freeze([
+  { id: 'silver', label: '银尾小鱼', rarity: '常见', habitat: '近岸' },
+  { id: 'sun', label: '暖阳鱼', rarity: '常见', habitat: '白天' },
+  { id: 'square', label: '方鳍鱼', rarity: '少见', habitat: '深水' },
+  { id: 'cloud', label: '云斑鱼', rarity: '少见', habitat: '傍晚' },
+  { id: 'moon', label: '月光鱼', rarity: '稀有', habitat: '夜晚' },
+  { id: 'star', label: '星愿鱼', rarity: '稀有', habitat: '完美抛竿' },
+])
+
+export const HAPPINESS_CARDS = Object.freeze([
+  '热牛奶上浮着一层细细的奶泡。',
+  '公交车到站时，雨刚好变小了。',
+  '写完最后一道题，窗外还有晚霞。',
+  '朋友记得我随口提过的一首歌。',
+  '晒过太阳的被子有很好闻的味道。',
+  '回家时，一小片云在路上陪了我很久。',
+])
+
+export function activityStorageKey(scope) {
+  const safeScope = String(scope || '').trim()
+  return /^\d+$/.test(safeScope) ? `shengyu_island_activities_v5_1_${safeScope}` : ''
+}
+
+export function createActivityState() {
+  return {
+    garden: createGardenLifeState(),
+    fishing: { catches: 0, coins: 0, bait: 'bread', bestPrecision: 0, fishBook: Object.fromEntries(FISH_TYPES.map(fish => [fish.id, 0])) },
+    happiness: { exchanges: 0, notes: [], cardIndex: 0 },
+    reflection: '',
+  }
+}
+
+export function normalizeActivityState(saved = {}, now = Date.now()) {
+  const base = createActivityState()
+  const legacyUpdatedAt = Math.max(0, Number(saved.happiness?.updatedAt) || 0)
+  const notes = Array.isArray(saved.happiness?.notes) ? saved.happiness.notes : []
+  const currentNotes = notes.flatMap(note => {
+    const text = typeof note === 'string' ? note : note?.text
+    const createdAt = typeof note === 'string' ? legacyUpdatedAt : Math.max(0, Number(note?.createdAt) || 0)
+    if (typeof text !== 'string' || !createdAt || now - createdAt >= HAPPINESS_RETENTION_MS) return []
+    const cleaned = text.trim().slice(0, 80)
+    return cleaned ? [{ text: cleaned, createdAt }] : []
+  }).slice(-12)
+  return {
+    garden: normalizeGardenLifeState(saved.garden),
+    fishing: {
+      catches: Math.max(0, Number(saved.fishing?.catches) || 0),
+      coins: Math.max(0, Number(saved.fishing?.coins) || 0),
+      bait: ['bread', 'berry', 'glow'].includes(saved.fishing?.bait) ? saved.fishing.bait : 'bread',
+      bestPrecision: Math.max(0, Math.min(100, Number(saved.fishing?.bestPrecision) || 0)),
+      fishBook: Object.fromEntries(FISH_TYPES.map(fish => [fish.id, Math.max(0, Number(saved.fishing?.fishBook?.[fish.id]) || 0)])),
+    },
+    happiness: {
+      exchanges: Math.max(0, Number(saved.happiness?.exchanges) || 0),
+      notes: currentNotes,
+      cardIndex: Math.max(0, Number(saved.happiness?.cardIndex) || 0) % HAPPINESS_CARDS.length,
+    },
+    reflection: ['lighter', 'same', 'energized', 'more_tense'].includes(saved.reflection) ? saved.reflection : '',
+  }
+}
+
+export function loadActivityState(scope, storage = globalThis.localStorage) {
+  const key = activityStorageKey(scope)
+  if (!storage || !key) return createActivityState()
+  try {
+    const raw = storage.getItem(key)
+    if (!raw) return createActivityState()
+    const parsed = JSON.parse(raw)
+    const normalized = normalizeActivityState(parsed)
+    if (parsed.happiness?.notes?.length !== normalized.happiness.notes.length
+        || parsed.happiness?.notes?.some(note => typeof note === 'string')) {
+      try { storage.setItem(key, JSON.stringify({ version: 1, ...normalized })) } catch { /* UI still withholds expired text */ }
+    }
+    return normalized
+  } catch {
+    return createActivityState()
+  }
+}
+
+export function saveActivityState(scope, state, storage = globalThis.localStorage) {
+  const key = activityStorageKey(scope)
+  if (!storage || !key) return false
+  try {
+    storage.setItem(key, JSON.stringify({ version: 1, ...normalizeActivityState(state) }))
+    return true
+  } catch {
+    return false
+  }
+}

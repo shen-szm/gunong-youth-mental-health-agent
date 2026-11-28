@@ -5,6 +5,7 @@ import router from "./router";
 import axios from "axios";
 import "./style.css";
 import "./guardian.css";
+import "./styles/game-theme.css";
 
 axios.defaults.withCredentials = true;
 

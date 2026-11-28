@@ -5,8 +5,18 @@
         <h2>{{ greeting }}，{{ userStore.nickname || '朋友' }}</h2>
         <p class="date">{{ today }}</p>
       </div>
-      <div class="avatar" @click="router.push('/profile')">{{ (userStore.nickname||'你')[0] }}</div>
+      <button type="button" class="avatar" title="更换头像" @click="showAvatarPicker = true">
+        <img v-if="avatarSrc" :src="avatarSrc" alt="我的头像" />
+        <template v-else>{{ (userStore.nickname||'你')[0] }}</template>
+      </button>
     </header>
+
+    <AvatarPickerModal
+      v-if="showAvatarPicker"
+      :nickname="userStore.nickname"
+      @close="showAvatarPicker = false"
+      @change="src => { avatarSrc = src }"
+    />
 
     <div class="emotion-card" :style="{background: emotionColor}" @click="showMoodPicker = true">
       <p class="emotion-label">今日情绪</p>
@@ -62,7 +72,18 @@
     </div>
 
     <footer class="beian-footer">
-      心理健康教育与支持 · 不替代专业服务
+      <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
+        <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
+        <span>粤公网安备44011202003950号</span>
+      </a>
+      <span class="beian-divider">|</span>
+      <a
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="icp-link"
+        aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
+      >粤ICP备2026048986号-2</a>
     </footer>
   </div>
 </template>
@@ -72,6 +93,11 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useUserStore } from "../stores/user";
 import { getMoodInsight, recordMood, getMoodList, getTodayMood } from "../api/mood";
+import AvatarPickerModal from "../components/AvatarPickerModal.vue";
+import { getAvatarSrc } from "../utils/avatar";
+
+const showAvatarPicker = ref(false);
+const avatarSrc = ref(getAvatarSrc());
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -96,11 +122,13 @@ const moodNote = ref("");
 const savingMood = ref(false);
 
 const moodOptions = [
-  { emoji: "😊", label: "开心", score: 9, color: "#6DB58B" },
-  { emoji: "😌", label: "平静", score: 7, color: "#7FB3A6" },
-  { emoji: "😰", label: "焦虑", score: 4, color: "#E8C468" },
-  { emoji: "😢", label: "难过", score: 3, color: "#8EAFC4" },
-  { emoji: "😡", label: "愤怒", score: 2, color: "#D4766A" },
+  { emoji: "😠", label: "愤怒", score: 3, color: "#CF9AA1" },
+  { emoji: "🤢", label: "厌恶", score: 2, color: "#B8903E" },
+  { emoji: "😨", label: "恐惧", score: 2, color: "#8B7BA6" },
+  { emoji: "😊", label: "开心", score: 9, color: "#8FCBA6" },
+  { emoji: "😐", label: "中性", score: 6, color: "#A8A29A" },
+  { emoji: "😢", label: "悲伤", score: 3, color: "#6F82A6" },
+  { emoji: "😲", label: "惊讶", score: 6, color: "#D9B46A" },
 ];
 
 async function saveMood() {
@@ -130,12 +158,20 @@ async function saveMood() {
   }
 }
 const emotionColor = computed(() => {
-  const colors = {"开心":"#B5E0C8","平静":"#C8E0D8","焦虑":"#F0E0A8","难过":"#B8C8D8","愤怒":"#E8BEB8"};
-  return colors[todayEmotion.value.label] || "#C8E0D8";
+  const colors = {
+    "愤怒":"#E9C4C8", "厌恶":"#E8C783", "恐惧":"#CFC8E0", "开心":"#8FCBA6",
+    "中性":"#D9D4C8", "悲伤":"#8EA6C8", "惊讶":"#EBD4A4",
+    "平静":"#A9D2BC", "焦虑":"#E8C783", "难过":"#8EA6C8",
+  };
+  return colors[todayEmotion.value.label] || "#8FCBA6";
 });
 
 function getMoodColor(label) {
-  const colors = {"开心":"#6DB58B","平静":"#7FB3A6","焦虑":"#E8C468","难过":"#8EAFC4","愤怒":"#D4766A"};
+  const colors = {
+    "愤怒":"#CF9AA1", "厌恶":"#B8903E", "恐惧":"#8B7BA6", "开心":"#8FCBA6",
+    "中性":"#A8A29A", "悲伤":"#6F82A6", "惊讶":"#D9B46A",
+    "平静":"#8FCBA6", "焦虑":"#D9B46A", "难过":"#6F82A6",
+  };
   return colors[label] || "#aaa";
 }
 
@@ -157,12 +193,15 @@ onMounted(async () => {
 .header h2 { font-size: 20px; }
 .date { font-size: 13px; color: var(--text-secondary); }
 .avatar {
-  width: 40px; height: 40px; border-radius: 50%;
-  background: var(--primary); color: white;
+  width: 44px; height: 44px; border-radius: 14px; overflow: hidden;
+  background: var(--primary); color: white; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; cursor: pointer;
-  box-shadow: 0 2px 8px rgba(91,140,126,0.25);
+  font-size: 18px; cursor: pointer; border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(124,139,125,0.22);
+  transition: transform .18s ease;
 }
+.avatar:hover { transform: translateY(-1px); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .emotion-card {
   border-radius: 16px; padding: 24px; color: white;
   margin-bottom: 20px; transition: background 0.3s;
@@ -212,9 +251,9 @@ onMounted(async () => {
   box-shadow: 0 8px 32px rgba(0,0,0,0.1);
 }
 .modal h3 { font-size: 18px; margin-bottom: 16px; text-align: center; color: var(--text); }
-.mood-options { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.mood-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
 .mood-option {
-  flex: 1; text-align: center; padding: 12px 4px;
+  text-align: center; padding: 12px 4px;
   border: 2px solid var(--border); border-radius: 12px; cursor: pointer;
   transition: all 0.2s; background: #fff;
 }

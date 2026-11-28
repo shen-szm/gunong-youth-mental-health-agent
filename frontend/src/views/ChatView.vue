@@ -261,7 +261,7 @@ onUnmounted(() => { if (recording.value) stopRecording() })
   transition: background 0.3s;
 }
 .status-dot.thinking {
-  background: #E8C468;
+  background: #D9B46A;
   animation: pulse-dot 1s infinite;
 }
 @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }

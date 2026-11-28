@@ -1,0 +1,163 @@
+/* 学生子页（聊天 / 回顾 / 我的）的昼夜游戏皮肤。
+   只作用于带 .game-page 的页面，避免影响教师端与守护者端。 */
+
+.game-page {
+  --game-bg: #f5ecdc;
+  --game-bg-deep: #ead8bd;
+  --game-surface: rgba(255, 250, 240, 0.86);
+  --game-surface-solid: #fffaf0;
+  --game-surface-soft: rgba(255, 247, 234, 0.66);
+  --game-ink: #3b3228;
+  --game-ink-2: #6b5c4e;
+  --game-ink-3: #8a7a6a;
+  --game-wood: #6b4e37;
+  --game-wood-soft: #8a6a4e;
+  --game-accent: #4f7a66;
+  --game-accent-strong: #3c6653;
+  --game-accent-soft: rgba(79, 122, 102, 0.13);
+  --game-gold: #b9893c;
+  --game-gold-soft: rgba(185, 137, 60, 0.16);
+  --game-on-accent: #fffdf7;
+  --game-line: rgba(107, 78, 55, 0.16);
+  --game-line-strong: rgba(107, 78, 55, 0.28);
+  --game-shadow: 0 10px 30px rgba(81, 56, 34, 0.12);
+  --game-shadow-soft: 0 3px 12px rgba(81, 56, 34, 0.08);
+  --game-danger: #b4534a;
+  /* 复用现有组件的 --m-* 语义，让筛查卡、自评卡和抽屉一起换肤。 */
+  --m-bg: #f5ecdc;
+  --m-surface: #fffaf0;
+  --m-ink: #3b3228;
+  --m-ink-2: #6b5c4e;
+  --m-ink-3: #8a7a6a;
+  --m-line: rgba(107, 78, 55, 0.16);
+  --m-accent: #4f7a66;
+  --m-accent-strong: #3c6653;
+  --m-accent-soft: rgba(79, 122, 102, 0.13);
+  --m-danger: #a95851;
+  --m-shadow: 0 3px 12px rgba(81, 56, 34, 0.08);
+  --m-shadow-hover: 0 12px 32px rgba(81, 56, 34, 0.14);
+  --m-ring: rgba(79, 122, 102, 0.2);
+  --m-radius-lg: 6px;
+  --m-radius-md: 4px;
+  --m-radius-sm: 3px;
+  --px-line: rgba(90, 62, 38, 0.28);
+  --px-gold: #b07a45;
+  --px-shadow: rgba(74, 52, 32, 0.22);
+  color: var(--game-ink);
+  background-color: var(--game-bg);
+  transition: background-color 600ms ease, color 400ms ease;
+}
+
+.game-page[data-part="evening"] {
+  --game-bg: #3a2c24;
+  --game-bg-deep: #2c211b;
+  --game-surface: rgba(72, 54, 42, 0.82);
+  --game-surface-solid: #48362a;
+  --game-surface-soft: rgba(82, 61, 47, 0.62);
+  --game-ink: #f4e7d2;
+  --game-ink-2: #d8c5a9;
+  --game-ink-3: #b09a7f;
+  --game-wood: #d9b87c;
+  --game-wood-soft: #c2a273;
+  --game-accent: #9dc3a9;
+  --game-accent-strong: #c9e2d0;
+  --game-accent-soft: rgba(157, 195, 169, 0.14);
+  --game-gold: #d9b87c;
+  --game-gold-soft: rgba(217, 184, 124, 0.16);
+  --game-on-accent: #241c17;
+  --game-line: rgba(232, 205, 168, 0.18);
+  --game-line-strong: rgba(232, 205, 168, 0.3);
+  --game-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  --game-shadow-soft: 0 3px 12px rgba(0, 0, 0, 0.2);
+  --game-danger: #e89b91;
+  --m-bg: #3a2c24;
+  --m-surface: #48362a;
+  --m-ink: #f4e7d2;
+  --m-ink-2: #d8c5a9;
+  --m-ink-3: #b09a7f;
+  --m-line: rgba(232, 205, 168, 0.18);
+  --m-accent: #9dc3a9;
+  --m-accent-strong: #c9e2d0;
+  --m-accent-soft: rgba(157, 195, 169, 0.14);
+  --m-danger: #e89b91;
+  --m-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
+  --m-shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.3);
+  --m-ring: rgba(157, 195, 169, 0.24);
+  --px-line: rgba(226, 192, 132, 0.30);
+  --px-gold: #e2c084;
+  --px-shadow: rgba(0, 0, 0, 0.45);
+}
+
+.game-page[data-part="night"] {
+  --game-bg: #241c17;
+  --game-bg-deep: #1a1410;
+  --game-surface: rgba(48, 37, 29, 0.86);
+  --game-surface-solid: #30251d;
+  --game-surface-soft: rgba(58, 45, 35, 0.64);
+  --game-ink: #f1e6d2;
+  --game-ink-2: #cdbba3;
+  --game-ink-3: #a38e75;
+  --game-wood: #e3c27d;
+  --game-wood-soft: #cbab6d;
+  --game-accent: #8fbfa2;
+  --game-accent-strong: #cbe6d2;
+  --game-accent-soft: rgba(143, 191, 162, 0.14);
+  --game-gold: #e3c27d;
+  --game-gold-soft: rgba(227, 194, 125, 0.16);
+  --game-on-accent: #1a1410;
+  --game-line: rgba(227, 194, 125, 0.16);
+  --game-line-strong: rgba(227, 194, 125, 0.28);
+  --game-shadow: 0 12px 34px rgba(0, 0, 0, 0.34);
+  --game-shadow-soft: 0 3px 12px rgba(0, 0, 0, 0.24);
+  --game-danger: #eb9d93;
+  --m-bg: #241c17;
+  --m-surface: #30251d;
+  --m-ink: #f1e6d2;
+  --m-ink-2: #cdbba3;
+  --m-ink-3: #a38e75;
+  --m-line: rgba(227, 194, 125, 0.16);
+  --m-accent: #8fbfa2;
+  --m-accent-strong: #cbe6d2;
+  --m-accent-soft: rgba(143, 191, 162, 0.14);
+  --m-danger: #eb9d93;
+  --m-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  --m-shadow-hover: 0 14px 36px rgba(0, 0, 0, 0.36);
+  --m-ring: rgba(143, 191, 162, 0.26);
+  --px-line: rgba(227, 194, 125, 0.28);
+  --px-gold: #e3c27d;
+  --px-shadow: rgba(0, 0, 0, 0.5);
+}
+
+.game-card {
+  background: var(--game-surface);
+  border: 2px solid var(--px-line, var(--game-line));
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow, rgba(0, 0, 0, 0.2));
+  transition: background 400ms ease, border-color 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+
+.game-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 2px solid var(--px-line, var(--game-line));
+  background: var(--game-gold-soft);
+  color: var(--game-wood);
+  font-family: var(--px-font);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.game-wood-rule {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--game-wood-soft), transparent);
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-page,
+  .game-card { transition: none !important; }
+}

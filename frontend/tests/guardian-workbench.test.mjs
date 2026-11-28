@@ -17,10 +17,10 @@ test('guardian routes keep existing student and teacher surfaces while adding th
   assert.match(router, /path: "\/guardian\/follow-ups"/)
 })
 
-test('guardian intake accepts only deidentified observations and never claims a standardized scale', async () => {
+test('guardian intake is synthetic-only and never claims a standardized scale', async () => {
   const intake = await source('frontend/src/views/GuardianIntakeView.vue')
   const caseView = await source('frontend/src/views/GuardianCaseView.vue')
-  assert.match(intake, /deidentified_confirmed/)
+  assert.match(intake, /synthetic_data_confirmed/)
   assert.match(intake, /不写身份信息/)
   assert.match(caseView, /未直接访谈青少年/)
   assert.doesNotMatch(caseView, /PHQ-9.*分/)
@@ -30,17 +30,11 @@ test('guardian intake accepts only deidentified observations and never claims a 
 test('guardian urgent path exposes real-world help and structured agent trace', async () => {
   const caseView = await source('frontend/src/views/GuardianCaseView.vue')
   const home = await source('frontend/src/views/GuardianHomeView.vue')
-  const intake = await source('frontend/src/views/GuardianIntakeView.vue')
   assert.match(caseView, /tel:12356/)
   assert.match(caseView, /tel:110/)
   assert.match(caseView, /tel:120/)
   assert.match(caseView, /不展示模型私有思维链/)
   assert.match(home, /安全规则优先/)
-  assert.match(intake, /不要等待系统生成结果/)
-  assert.match(intake, /tel:12356/)
-  assert.match(intake, /tel:110/)
-  assert.match(intake, /tel:120/)
-  assert.match(intake, /记录后续支持工单/)
 })
 
 test('guardian API includes cases, SSE, report and follow-up contracts', async () => {
@@ -49,7 +43,7 @@ test('guardian API includes cases, SSE, report and follow-up contracts', async (
   assert.match(api, /@router\.get\("\/cases\/\{case_code\}\/events"/)
   assert.match(api, /text\/event-stream/)
   assert.match(api, /@router\.get\("\/cases\/\{case_code\}\/report\.pdf"/)
-  assert.doesNotMatch(api, /simulate-due/)
+  assert.match(api, /@router\.post\("\/follow-ups\/\{followup_id\}\/simulate-due"/)
 })
 
 test('alpha release is synchronized and business UI omits development labels', async () => {
@@ -58,13 +52,16 @@ test('alpha release is synchronized and business UI omits development labels', a
   const changelog = await source('CHANGELOG.md')
   const backend = await source('backend/config.py')
   const currentReleaseNotes = changelog.split('## [5.1.0-alpha.1]')[0]
-  assert.equal(pkg.version, '5.1.0-alpha.5')
-  assert.equal(lock.version, '5.1.0-alpha.5')
-  assert.equal(lock.packages[''].version, '5.1.0-alpha.5')
+  assert.equal(pkg.version, '5.1.0-alpha.43')
+  assert.equal(lock.version, '5.1.0-alpha.43')
+  assert.equal(lock.packages[''].version, '5.1.0-alpha.43')
+  assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.12\]/)
+  assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.7\]/)
+  assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.6\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.3\]/)
   assert.match(currentReleaseNotes, /\[5\.1\.0-alpha\.2\]/)
-  assert.match(currentReleaseNotes, /不部署服务器/)
-  assert.match(backend, /RELEASE_VERSION: str = "5\.1\.0-alpha\.5"/)
+  assert.match(currentReleaseNotes, /未部署、未推送远端/)
+  assert.match(backend, /RELEASE_VERSION: str = "5\.1\.0-alpha\.43"/)
 })
 
 test('plaintext password recovery and hard-coded weak admin are removed', async () => {

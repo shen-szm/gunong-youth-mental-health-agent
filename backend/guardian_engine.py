@@ -116,8 +116,8 @@ URGENT_PATTERNS = [
     r"(?:家里|家中).{0,8}(?:暴力|伤害|人身威胁)",
     r"监护人.{0,8}(?:伤害我|让我害怕|是伤害来源|可能伤害我)",
 ]
-NEGATION_PREFIX = re.compile(r"(?:没有|否认|从未|并未|不是|没想过).{0,4}$")
-QUOTE_PREFIX = re.compile(r"(?:新闻|电影|课文|别人|同学说|讨论).{0,6}$")
+NEGATION_PREFIX = re.compile(r"(?:(?:没有|否认|从未|并未|不是|没想过|不会|不再|并不).{0,4}|(?<!得)不)$")
+QUOTE_PREFIX = re.compile(r"(?:(?:别人|同学|朋友|家人|老师|他|她).{0,4}(?:说|写|表示|提到).{0,2}(?:他|她|自己)|(?:新闻|电影|课文).{0,6}(?:写|表示|提到)).{0,2}$")
 
 
 def load_json(name: str) -> list[dict[str, Any]]:
@@ -355,8 +355,7 @@ def _base_intervention(case: GuardianCase) -> InterventionOutput:
 
 async def build_intervention(case: GuardianCase) -> tuple[InterventionOutput, bool, str]:
     base = _base_intervention(case)
-    if (not settings.ALLOW_EXTERNAL_AI or not settings.ALLOW_GUARDIAN_EXTERNAL_AI
-            or not case.external_ai_consent or not is_spark_available()):
+    if not settings.ALLOW_GUARDIAN_SYNTHETIC_AI or not is_spark_available():
         return base, True, "reviewed-template-v1"
 
     prompt = (

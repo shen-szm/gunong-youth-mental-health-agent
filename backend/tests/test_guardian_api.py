@@ -34,12 +34,12 @@ class GuardianApiTests(unittest.TestCase):
         self.old_api_session_local = guardian_api.SessionLocal
         self.old_delay = settings.AGENT_STEP_DELAY_MS
         self.old_external_ai = settings.ALLOW_EXTERNAL_AI
-        self.old_guardian_ai = settings.ALLOW_GUARDIAN_EXTERNAL_AI
+        self.old_guardian_ai = settings.ALLOW_GUARDIAN_SYNTHETIC_AI
         guardian_engine.SessionLocal = self.Session
         guardian_api.SessionLocal = self.Session
         settings.AGENT_STEP_DELAY_MS = 0
         settings.ALLOW_EXTERNAL_AI = False
-        settings.ALLOW_GUARDIAN_EXTERNAL_AI = False
+        settings.ALLOW_GUARDIAN_SYNTHETIC_AI = False
 
         self.app = FastAPI()
         self.app.add_exception_handler(RequestValidationError, sanitized_validation_exception_handler)
@@ -64,7 +64,7 @@ class GuardianApiTests(unittest.TestCase):
         guardian_api.SessionLocal = self.old_api_session_local
         settings.AGENT_STEP_DELAY_MS = self.old_delay
         settings.ALLOW_EXTERNAL_AI = self.old_external_ai
-        settings.ALLOW_GUARDIAN_EXTERNAL_AI = self.old_guardian_ai
+        settings.ALLOW_GUARDIAN_SYNTHETIC_AI = self.old_guardian_ai
         self.engine.dispose()
 
     @staticmethod
@@ -78,8 +78,8 @@ class GuardianApiTests(unittest.TestCase):
             "district": "南城街道",
             "context": "近三周更常独处，仍愿意一起吃饭。",
             "guardian_may_be_source": False,
-            "consent_version": "guardian-support-v1",
-            "deidentified_confirmed": True,
+            "consent_version": "guardian-demo-v1",
+            "synthetic_data_confirmed": True,
         }
 
     def _login_both(self):

@@ -6,19 +6,26 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
-    RELEASE_VERSION: str = "5.1.0-alpha.5"
+    RELEASE_VERSION: str = "5.1.0-alpha.43"
     DATABASE_URL: str = "sqlite:///./shengyu_v5_dev.db"
     DEMO_MODE: bool = True
+    ALLOW_GUEST_SESSION: bool = False
     SESSION_COOKIE_NAME: str = "shengyu_session"
     SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
     COOKIE_SECURE: bool = False
     AGENT_STEP_DELAY_MS: int = 180
-    # 默认禁止把聊天、语音或情绪记录发送给第三方模型。
+    # 外部模型总开关；学生数据还必须通过教师端登记且未过期的授权记录。
     ALLOW_EXTERNAL_AI: bool = False
-    # 学生自由倾诉包含高度敏感信息；除总开关外，必须单独启用并取得逐会话明确同意。
+    # Opt-in: confirmed task requirements or enum contracts only; no student records attached.
+    ALLOW_TEACHER_TASK_PLANNER_AI: bool = False
+    ENABLE_TEACHER_DURABLE_PLANS: bool = False
+    # 学生自由倾诉包含高度敏感信息；除总开关外，必须有教师端登记且未过期的机构/监护授权依据。
     ALLOW_STUDENT_EXTERNAL_AI: bool = False
-    # 守护者表单只允许去标识化观察；外部生成需单独开启，失败时显式降级。
-    ALLOW_GUARDIAN_EXTERNAL_AI: bool = False
+    # teacher_authorized=逐学生教师登记；platform_direct=学生无需逐次开通，由运营方在站点层完成合法授权治理。
+    STUDENT_AI_ACCESS_MODE: Literal["teacher_authorized", "platform_direct"] = "teacher_authorized"
+    PLATFORM_STUDENT_AI_GOVERNANCE_ACK: bool = False
+    # 守护者表单已强制合成数据确认和去标识校验，可单独启用；失败时仍显式降级。
+    ALLOW_GUARDIAN_SYNTHETIC_AI: bool = True
 
     # 讯飞语音识别(ASR)和语音合成(TTS)配置
     XUNFEI_APP_ID: str = ""
@@ -28,6 +35,15 @@ class Settings(BaseSettings):
     # 星火大模型配置（HTTP API方式）
     SPARK_MODEL: str = "pro"  # pro / pro-128k / lite / max / max-32k / ultra
     SPARK_API_PASSWORD: str = ""  # 讯飞开放平台控制台获取的APIPassword
+
+    # 小满对话引擎：deepseek 走 OpenAI 兼容接口，legacy_xunfei 保留原星火枚举选择方案
+    STUDENT_COMPANION_ENGINE: Literal["deepseek", "legacy_xunfei"] = "deepseek"
+    DEEPSEEK_API_KEY: str = ""  # 只放服务端 .env，不下发浏览器
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # 标准筛查（PHQ-9）：默认关闭；中文措辞与教师可见口径复核后再开启。
+    STUDENT_SCREENING_ENABLED: bool = False
 
     # MySQL配置
     MYSQL_HOST: str = "localhost"
@@ -51,6 +67,8 @@ class Settings(BaseSettings):
     def enforce_production_session_security(self):
         if self.APP_ENV == "production" and (self.DEMO_MODE or not self.COOKIE_SECURE):
             raise ValueError("production requires DEMO_MODE=false and COOKIE_SECURE=true")
+        if self.STUDENT_AI_ACCESS_MODE == "platform_direct" and not self.PLATFORM_STUDENT_AI_GOVERNANCE_ACK:
+            raise ValueError("platform_direct requires explicit operator governance acknowledgement")
         return self
 
 @lru_cache()

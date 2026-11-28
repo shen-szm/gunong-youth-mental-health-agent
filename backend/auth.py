@@ -35,6 +35,8 @@ def establish_session(response: Response, db: Session, user: User) -> None:
 def clear_session(response: Response, request: Request, db: Session) -> None:
     token = request.cookies.get(settings.SESSION_COOKIE_NAME)
     if token:
+        from api.companion import clear_companion_context_for_token
+        clear_companion_context_for_token(token, db)
         db.query(UserSession).filter(UserSession.token_hash == _token_hash(token)).delete()
         db.commit()
     response.delete_cookie(settings.SESSION_COOKIE_NAME, path="/")
@@ -47,6 +49,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     session = db.query(UserSession).filter(UserSession.token_hash == _token_hash(token)).first()
     if not session or session.expires_at <= datetime.utcnow():
         if session:
+            from api.companion import clear_companion_context_for_token
+            clear_companion_context_for_token(token, db)
             db.delete(session)
             db.commit()
         raise HTTPException(status_code=401, detail="会话已失效，请重新进入")
@@ -54,6 +58,20 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not user:
         raise HTTPException(status_code=401, detail="账号不存在")
     return user
+
+
+def is_guest_user(user: User) -> bool:
+    # 游客会话是真实 User 行，仅以 guest_ 前缀标记；注册处保留该前缀。
+    return (user.username or "").startswith("guest_")
+
+
+def require_real_user(current_user: User = Depends(get_current_user)) -> User:
+    if is_guest_user(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "login_required", "message": "请登录后使用"},
+        )
+    return current_user
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:

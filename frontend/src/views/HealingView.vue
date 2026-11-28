@@ -21,6 +21,41 @@
       <div class="energy-points">{{ energy.total_points }} 灵能点</div>
     </div>
 
+    <!-- AI音乐推荐 -->
+    <div class="section">
+      <h2>🎵 AI 音乐处方</h2>
+      <div class="music-recommend" v-if="musicRecommend">
+        <div class="mr-song">
+          <div class="mr-cover">🎶</div>
+          <div class="mr-info">
+            <div class="mr-name">{{ musicRecommend.song?.name }}</div>
+            <div class="mr-artist">{{ musicRecommend.song?.artist }}</div>
+          </div>
+          <button class="mr-play" @click="playRecommendSong">播放</button>
+        </div>
+        <div class="mr-reason">
+          <span class="mr-tag">{{ musicRecommend.emotion_label }}</span>
+          <p>{{ musicRecommend.reason }}</p>
+        </div>
+      </div>
+      <div v-else class="loading-hint">AI 正在为你挑选音乐...</div>
+    </div>
+
+    <!-- 白噪音 -->
+    <div class="section">
+      <h2>🔊 治愈白噪音</h2>
+      <div class="whitenoise-reason" v-if="noiseReason">💡 {{ noiseReason }}</div>
+      <div class="noise-grid">
+        <div v-for="s in whiteNoises" :key="s.id" class="noise-card" :class="{ playing: playingNoise === s.id }" @click="toggleNoise(s)">
+          <div class="nc-emoji">{{ s.emoji }}</div>
+          <div class="nc-name">{{ s.name }}</div>
+          <div class="nc-desc">{{ s.desc }}</div>
+          <div class="nc-status">{{ playingNoise === s.id ? '⏸ 暂停' : '▶ 播放' }}</div>
+        </div>
+      </div>
+      <audio ref="noiseAudio" @ended="onNoiseEnd" loop></audio>
+    </div>
+
     <!-- 今日治愈清单 -->
     <div class="section">
       <h2>✨ 今日治愈清单</h2>
@@ -54,10 +89,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { healingApi } from '../api/healing'
+import axios from 'axios'
+
+const API = import.meta.env.VITE_API_BASE || ''
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -67,6 +105,11 @@ const emit = defineEmits(['close'])
 const energy = ref(null)
 const tasks = ref([])
 const travels = ref([])
+const whiteNoises = ref([])
+const noiseReason = ref('')
+const musicRecommend = ref(null)
+const playingNoise = ref(null)
+const noiseAudio = ref(null)
 
 // ═══ 本地 fallback 数据（当后端 API 不可用时显示）═══
 const DEFAULT_ENERGY = { level: 1, level_name: '萌芽', progress: 0.35, total_points: 350 }
@@ -82,23 +125,62 @@ const DEFAULT_TRAVELS = [
   { name: '日落天台', desc: '找一个高处，静静等待日落', emoji: '🌅', duration: '20分钟' },
   { name: '书店漫游', desc: '去书店随机翻开一本书，读任意一页', emoji: '📚', duration: '40分钟' },
 ]
+const DEFAULT_NOISES = [
+  { id: 'rain', name: '细雨绵绵', desc: '窗外小雨', emoji: '🌧️', url: '' },
+  { id: 'thunder', name: '雷雨夜', desc: '夏夜雷暴', emoji: '⛈️', url: '' },
+  { id: 'forest', name: '林间鸟鸣', desc: '清晨森林', emoji: '🐦', url: '' },
+  { id: 'waves', name: '海浪拍岸', desc: '海边微风', emoji: '🌊', url: '' },
+]
+const DEFAULT_MUSIC = {
+  song: { id: 25706282, name: 'Weightless', artist: 'Marconi Union' },
+  emotion_label: '焦虑缓解',
+  reason: '这首被神经科学家认证为"世界上最放松的音乐"，能有效降低 65% 的焦虑感。闭上眼睛，让音符带走你的烦恼。',
+}
+
 onMounted(async () => {
   const userId = Number(userStore.userId)
   try {
-    const [energyRes, checklistRes, travelRes] = await Promise.all([
+    const [energyRes, checklistRes, travelRes, noiseRes, noiseRecRes, musicRes] = await Promise.all([
       healingApi.getEnergy(userId).catch(() => ({ data: null })),
       healingApi.getChecklist(userId).catch(() => ({ data: { tasks: [] } })),
       healingApi.getTravel(userId).catch(() => ({ data: { suggestions: [] } })),
+      axios.get(`${API}/api/music/whitenoise/list`).catch(() => ({ data: { sounds: [] } })),
+      axios.get(`${API}/api/music/whitenoise/recommend`, { params: { user_id: userId } }).catch(() => ({ data: { sounds: [], reason: '' } })),
+      axios.get(`${API}/api/music/recommend`, { params: { user_id: userId } }).catch(() => ({ data: null })),
     ])
     energy.value = energyRes.data || DEFAULT_ENERGY
     tasks.value = checklistRes.data?.tasks?.length ? checklistRes.data.tasks : DEFAULT_TASKS
     travels.value = travelRes.data?.suggestions?.length ? travelRes.data.suggestions : DEFAULT_TRAVELS
+
+    // 白噪音：优先显示推荐的
+    if (noiseRecRes.data?.sounds?.length) {
+      whiteNoises.value = noiseRecRes.data.sounds
+      noiseReason.value = noiseRecRes.data.reason || ''
+    } else if (noiseRes.data?.sounds?.length) {
+      whiteNoises.value = noiseRes.data.sounds.slice(0, 4)
+    } else {
+      whiteNoises.value = DEFAULT_NOISES
+      noiseReason.value = '根据你最近的情绪状态，推荐以下白噪音帮助你放松'
+    }
+
+    // AI音乐推荐
+    musicRecommend.value = musicRes.data?.song ? musicRes.data : DEFAULT_MUSIC
   } catch (e) {
     console.error('加载治愈中心失败', e)
     // 全部使用 fallback
     energy.value = DEFAULT_ENERGY
     tasks.value = DEFAULT_TASKS
     travels.value = DEFAULT_TRAVELS
+    whiteNoises.value = DEFAULT_NOISES
+    noiseReason.value = '根据你最近的情绪状态，推荐以下白噪音帮助你放松'
+    musicRecommend.value = DEFAULT_MUSIC
+  }
+})
+
+onUnmounted(() => {
+  if (noiseAudio.value) {
+    noiseAudio.value.pause()
+    noiseAudio.value.src = ''
   }
 })
 
@@ -119,12 +201,37 @@ async function checkinTask(taskId) {
   }
 }
 
+function toggleNoise(sound) {
+  if (!noiseAudio.value) return
+
+  if (playingNoise.value === sound.id) {
+    noiseAudio.value.pause()
+    noiseAudio.value.src = ''
+    playingNoise.value = null
+  } else {
+    noiseAudio.value.src = sound.url
+    noiseAudio.value.play().catch(() => {
+      alert('播放失败，请检查网络连接')
+    })
+    playingNoise.value = sound.id
+  }
+}
+
+function onNoiseEnd() {
+  playingNoise.value = null
+}
+
+function playRecommendSong() {
+  if (!musicRecommend.value?.song?.id) return
+  const songId = musicRecommend.value.song.id
+  window.open(`https://music.163.com/song?id=${songId}`, '_blank')
+}
 </script>
 
 <style scoped>
 .healing-page {
   min-height: 100vh;
-  background: #F5F7F5;
+  background: #F7F3E8;
   padding-bottom: 80px;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
@@ -134,12 +241,12 @@ async function checkinTask(taskId) {
   padding: 16px 20px; padding-top: max(16px, env(safe-area-inset-top));
   background: white; border-bottom: 1px solid #eee;
 }
-.healing-header h1 { font-size: 18px; font-weight: 600; color: #3D6B5E; margin: 0; }
-.back-btn { background: none; border: none; font-size: 20px; color: #5B8C7E; cursor: pointer; }
+.healing-header h1 { font-size: 18px; font-weight: 600; color: #3D8660; margin: 0; }
+.back-btn { background: none; border: none; font-size: 20px; color: #55A87C; cursor: pointer; }
 
 .energy-card {
   margin: 16px; padding: 20px;
-  background: linear-gradient(135deg, #5B8C7E, #7FB3A6);
+  background: linear-gradient(135deg, #55A87C, #8FCBA6);
   border-radius: 16px; color: white;
 }
 .energy-level { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
@@ -151,7 +258,7 @@ async function checkinTask(taskId) {
 .energy-points { font-size: 13px; opacity: 0.8; margin-top: 8px; }
 
 .section { margin: 16px; }
-.section h2 { font-size: 16px; font-weight: 600; color: #3D6B5E; margin-bottom: 12px; }
+.section h2 { font-size: 16px; font-weight: 600; color: #3D8660; margin-bottom: 12px; }
 
 /* AI音乐推荐 */
 .music-recommend {
@@ -170,7 +277,7 @@ async function checkinTask(taskId) {
 .mr-artist { font-size: 12px; color: #888; margin-top: 2px; }
 .mr-play {
   padding: 8px 16px; border-radius: 20px; border: none;
-  background: #5B8C7E; color: white; font-size: 13px; font-weight: 500;
+  background: #55A87C; color: white; font-size: 13px; font-weight: 500;
   cursor: pointer; transition: all 0.2s;
 }
 .mr-play:hover { background: #4a7a6e; }
@@ -179,7 +286,7 @@ async function checkinTask(taskId) {
 }
 .mr-tag {
   display: inline-block; padding: 2px 10px; border-radius: 10px;
-  background: rgba(91,140,126,0.15); color: #5B8C7E;
+  background: rgba(61,134,96,0.15); color: #55A87C;
   font-size: 11px; font-weight: 500; margin-bottom: 6px;
 }
 .mr-reason p { font-size: 13px; color: #666; line-height: 1.6; margin: 4px 0 0; }
@@ -198,11 +305,11 @@ async function checkinTask(taskId) {
   border: 2px solid transparent;
 }
 .noise-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-.noise-card.playing { border-color: #5B8C7E; background: rgba(91,140,126,0.05); }
+.noise-card.playing { border-color: #55A87C; background: rgba(61,134,96,0.05); }
 .nc-emoji { font-size: 32px; margin-bottom: 6px; }
 .nc-name { font-size: 14px; font-weight: 600; color: #333; }
 .nc-desc { font-size: 11px; color: #999; margin-top: 4px; line-height: 1.4; }
-.nc-status { font-size: 11px; color: #5B8C7E; margin-top: 8px; font-weight: 500; }
+.nc-status { font-size: 11px; color: #55A87C; margin-top: 8px; font-weight: 500; }
 
 /* 治愈清单 */
 .checklist { display: flex; flex-direction: column; gap: 8px; }
@@ -216,7 +323,7 @@ async function checkinTask(taskId) {
 .ci-check { font-size: 20px; }
 .ci-content { flex: 1; display: flex; justify-content: space-between; align-items: center; }
 .ci-desc { font-size: 14px; color: #333; }
-.ci-points { font-size: 12px; color: #5B8C7E; font-weight: 500; }
+.ci-points { font-size: 12px; color: #55A87C; font-weight: 500; }
 .empty-hint { font-size: 13px; color: #999; text-align: center; padding: 20px; }
 
 /* 微旅行 */
@@ -229,11 +336,11 @@ async function checkinTask(taskId) {
 .tc-info { flex: 1; }
 .tc-name { font-size: 14px; font-weight: 600; color: #333; }
 .tc-desc { font-size: 12px; color: #777; margin-top: 4px; }
-.tc-time { font-size: 11px; color: #5B8C7E; margin-top: 4px; }
+.tc-time { font-size: 11px; color: #55A87C; margin-top: 4px; }
 
 /* inline 弹窗模式 - 适配深色背景 */
 .healing-page.inline-mode { background: transparent; padding: 0; min-height: auto; }
-.healing-page.inline-mode .section h2 { color: #7FB3A6; font-size: 15px; }
+.healing-page.inline-mode .section h2 { color: #8FCBA6; font-size: 15px; }
 .healing-page.inline-mode .energy-card { margin: 0 0 12px; }
 .healing-page.inline-mode .section { margin: 0 0 14px; }
 .healing-page.inline-mode .music-recommend,
@@ -250,11 +357,53 @@ async function checkinTask(taskId) {
 .healing-page.inline-mode .tc-time { color: rgba(232,226,216,0.55); }
 .healing-page.inline-mode .mr-reason { background: rgba(255,255,255,0.05); }
 .healing-page.inline-mode .mr-reason p { color: rgba(232,226,216,0.7); }
-.healing-page.inline-mode .mr-tag { background: rgba(127,179,166,0.2); color: #7FB3A6; }
+.healing-page.inline-mode .mr-tag { background: rgba(102,187,141,0.2); color: #8FCBA6; }
 .healing-page.inline-mode .loading-hint,
 .healing-page.inline-mode .empty-hint { color: rgba(232,226,216,0.4); }
-.healing-page.inline-mode .noise-card.playing { border-color: #7FB3A6; background: rgba(127,179,166,0.1); }
-.healing-page.inline-mode .nc-status { color: #7FB3A6; }
+.healing-page.inline-mode .noise-card.playing { border-color: #8FCBA6; background: rgba(102,187,141,0.1); }
+.healing-page.inline-mode .nc-status { color: #8FCBA6; }
 .inline-title { text-align: center; margin-bottom: 16px; }
 .inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
+
+/* 像素皮肤 3.0 · 疗愈（inline 深色） */
+.healing-page.inline-mode {
+  --px-line: rgba(240, 216, 170, .24);
+  --px-gold: #e8cf9a;
+  --px-shadow: rgba(0, 0, 0, .55);
+}
+.healing-page .inline-title h2 { font-family: var(--px-font); }
+.healing-page .energy-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.healing-page .energy-bar,
+.healing-page .energy-fill { border-radius: 0; }
+.healing-page .section h2 { font-family: var(--px-font); font-size: 15px; }
+.healing-page .music-recommend,
+.healing-page .noise-card,
+.healing-page .checklist-item,
+.healing-page .travel-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.healing-page .noise-card:hover,
+.healing-page .checklist-item:hover,
+.healing-page .travel-card:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.healing-page .noise-card.playing { border-color: var(--px-gold); }
+.healing-page .mr-play {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.healing-page .mr-tag { border-radius: 4px; }
+.healing-page .noise-card:focus-visible,
+.healing-page .checklist-item:focus-visible,
+.healing-page .travel-card:focus-visible,
+.healing-page .mr-play:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
 </style>

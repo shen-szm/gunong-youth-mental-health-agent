@@ -1,5 +1,5 @@
 <template>
-  <div ref="roomRoot" class="room" :class="timeOfDay" @click="handleRoomPetMove">
+  <div class="room lobby-home" :class="[timeOfDay, { 'agent-rail-open': showAgentRail }]" :data-part="timeOfDay">
 
     <!-- ══ 欢迎遮罩：点击任意处进入 ══ -->
     <Transition name="splash-fade">
@@ -13,190 +13,251 @@
       </div>
     </Transition>
 
-    <!-- AI 生成背景图 -->
-    <div class="bg-wrap">
-      <img class="room-bg" :src="bgImage" alt="温馨房间" />
+    <!-- 动态环境层：缓慢漂移的像素云、星点、萤火与呼吸光。 -->
+    <div v-if="!showSplash" class="lobby-ambient" aria-hidden="true">
+      <span class="ambient-glow"></span>
+      <span class="ambient-clouds">
+        <span class="ambient-cloud ambient-cloud-a"></span>
+        <span class="ambient-cloud ambient-cloud-b"></span>
+        <span class="ambient-cloud ambient-cloud-c"></span>
+      </span>
+      <span class="ambient-stars">
+        <b v-for="n in 14" :key="n" :style="{ '--n': n }"></b>
+      </span>
+      <span class="ambient-fireflies">
+        <b v-for="n in 6" :key="n" :style="{ '--n': n }"></b>
+      </span>
+      <span class="ambient-shooting-star"></span>
     </div>
 
-    <!-- 顶部状态条：只保留今日上下文，不再堆叠独立卡片。 -->
-    <header v-if="!showSplash" class="room-status-bar">
-      <div class="room-status-greeting">
-        <time>{{ currentTime }}</time>
-        <strong>{{ greeting }}，{{ displayNickname }}</strong>
-      </div>
-      <button type="button" class="room-status-checkin" :aria-pressed="selectedRoomFeatureId === 'daily'" @click.stop="selectRoomFeature('daily', $event)">
-        <span aria-hidden="true">{{ dailyReturnTask.emoji }}</span>
-        <span>
-          <small>今日状态</small>
-          <strong>{{ dailyStatusLabel }}</strong>
-        </span>
-      </button>
-      <button type="button" class="room-status-utility" :aria-label="`刷新天气，当前${temperature}度`" @click.stop="refreshWeather">
-        <span aria-hidden="true">{{ weatherEmoji }}</span>
-        <span>{{ temperature }}°</span>
-      </button>
-      <button v-if="bundledMediaAvailable" type="button" class="room-status-utility" :aria-label="musicOn ? '关闭背景音乐' : '开启背景音乐'" @click.stop="toggleMusic">
-        <span aria-hidden="true">{{ musicOn ? 'Ⅱ' : '▷' }}</span>
-        <span>声音</span>
-      </button>
-    </header>
-    <StudentAgentRail
+    <!-- 动态天象：太阳按时刻升起落下，夜里月亮按真实月相盈亏。 -->
+    <svg
       v-if="!showSplash"
+      class="lobby-celestial"
+      :class="celestialState.kind"
+      viewBox="0 0 1600 1000"
+      preserveAspectRatio="xMidYMax slice"
+      aria-hidden="true"
+    >
+      <g :transform="`translate(${celestialState.x} ${celestialState.y})`">
+        <rect
+          v-for="(cell, index) in celestialState.rects"
+          :key="index"
+          :x="cell.x"
+          :y="cell.y"
+          :width="cell.w"
+          :height="cell.h"
+          :fill="cell.fill"
+          :opacity="cell.opacity"
+        />
+      </g>
+    </svg>
+
+    <!-- 主题大厅：像素心岛背景 + 渐变光场与发丝线。 -->
+    <main v-if="!showSplash" class="lobby">
+      <header class="lobby-top">
+        <div class="lobby-hello">
+          <time>{{ currentTime }}</time>
+          <strong>{{ greeting }}，{{ displayNickname }}</strong>
+        </div>
+        <div class="lobby-top-actions">
+          <button type="button" class="lobby-utility lobby-utility-weather" :aria-label="`刷新天气，当前${temperature}度`" @click.stop="refreshWeather">
+            <span aria-hidden="true">{{ weatherEmoji }}</span>
+            <span>{{ temperature }}°</span>
+          </button>
+          <button type="button" class="lobby-utility" :aria-label="musicOn ? '关闭背景音乐' : '开启背景音乐'" @click.stop="toggleMusic">
+            <span aria-hidden="true">{{ musicOn ? 'Ⅱ' : '▷' }}</span>
+          </button>
+          <button ref="profileNavButton" type="button" class="lobby-profile" aria-label="打开我的" @click="goProfile">
+            <span aria-hidden="true">我</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="lobby-hero" :class="{ 'is-guide': showFirstRunGuide && guideStage === 'computer' }">
+        <p class="lobby-eyebrow">咕哝 · 你的心岛</p>
+        <button type="button" class="lobby-pet-stage" :class="{ 'is-reacting': petReactionActive }" aria-label="摸摸咕团，和它玩一下" @click="petGuguanHome">
+          <span class="lobby-pet-halo" aria-hidden="true"></span>
+          <span v-if="petReactionActive" :key="petReactionKey" class="lobby-pet-reaction" aria-hidden="true">
+            <i>♥</i><i>✦</i><i>♥</i><i>✦</i><i>♥</i><i>✦</i>
+          </span>
+          <img :src="selectedPetFrame" alt="原创陪伴宠物咕团" />
+          <span class="lobby-pet-caption" role="status" aria-live="polite">{{ petCompanionMessage }}</span>
+        </button>
+        <h1 class="lobby-title">{{ greeting }}，<br />今天想说什么？</h1>
+        <p class="lobby-sub">{{ dailyReturnTask.copy }}</p>
+        <button ref="chatNavButton" type="button" class="lobby-primary-cta" @click.stop="handleGuideChatTarget">
+          <span class="lobby-cta-label">开始倾诉</span>
+          <span class="lobby-cta-arrow" aria-hidden="true">→</span>
+          <span v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</span>
+        </button>
+      </section>
+
+      <section class="lobby-grid" aria-label="今日入口">
+        <button type="button" class="lobby-card lobby-card-trend" @click="goToTrend">
+          <span class="lobby-card-kicker">回顾</span>
+          <strong>看看最近的自己</strong>
+          <small class="lobby-card-hint">情绪轨迹与小纸条</small>
+        </button>
+        <button ref="islandNavButton" type="button" class="lobby-card lobby-card-island" @click="openWorkspacePanel('leisure', $event.currentTarget)">
+          <span class="lobby-card-kicker">心岛</span>
+          <strong>走进去探索</strong>
+          <small class="lobby-card-hint">岛上安静的小任务</small>
+        </button>
+        <button type="button" class="lobby-card lobby-card-pet" @click="openWorkspacePanel('pet', $event.currentTarget)">
+          <span class="lobby-card-kicker">咕团</span>
+          <strong>陪它待一会儿</strong>
+          <small class="lobby-card-hint">亲密度与小游戏</small>
+        </button>
+        <button type="button" class="lobby-card lobby-card-daily room-status-checkin" :aria-pressed="selectedRoomFeatureId === 'daily'" @click.stop="selectRoomFeature('daily', $event)">
+          <span class="lobby-card-kicker">今天</span>
+          <strong>{{ dailyStatusLabel }}</strong>
+          <small class="lobby-card-hint">签到与小心愿</small>
+        </button>
+      </section>
+
+      <nav class="lobby-tertiary" aria-label="更多入口">
+        <button type="button" class="lobby-pill" @click="openMusicPanel">听点音乐</button>
+        <button type="button" class="lobby-pill" @click="openWorkspacePanel('transport', $event.currentTarget)">看看窗外</button>
+      </nav>
+
+      <footer class="beian-footer">
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=44011202003950" target="_blank" rel="noopener noreferrer" class="beian-link">
+          <img src="/images/beian-icon.png" alt="公安备案" class="beian-icon" />
+          <span>粤公网安备44011202003950号</span>
+        </a>
+        <span class="beian-divider">|</span>
+        <a
+          href="https://beian.miit.gov.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="icp-link"
+          aria-label="前往工信部备案管理系统查询粤ICP备2026048986号-2"
+        >粤ICP备2026048986号-2</a>
+        <span class="beian-divider">|</span>
+        <span class="beian-version" :title="`当前版本 ${splashVersion}`">v{{ splashVersion }}</span>
+      </footer>
+    </main>
+    <StudentAgentRail
+      v-if="!showSplash && !showLeisurePanel"
       :open="showAgentRail"
       :state="studentAgentState"
       :steps="studentAgentSteps"
       @toggle="toggleAgentRail"
       @close="showAgentRail = false"
+      @delete-run="deleteCurrentStudentAgentRun"
     />
     <aside v-if="!showSplash && showFirstRunGuide" class="room-onboarding-cue" aria-live="polite">
       <span class="room-onboarding-step">{{ guideStage === 'mood-card' ? '完成' : guideStage === 'confession' ? '2/2' : '1/2' }}</span>
       <div>
-        <strong>{{ guideStage === 'mood-card' ? '第一次倾诉已经被接住' : guideStage === 'confession' ? '把最想说的一句话告诉咕哝' : '先从房间里的电脑开始' }}</strong>
-        <small>{{ guideStage === 'mood-card' ? firstRunMoodCard.summary : guideStage === 'confession' ? '倾诉窗口已经准备好。' : '电脑会打开一个安静的倾诉空间。' }}</small>
+        <strong>{{ guideStage === 'mood-card' ? '第一次倾诉已经被接住' : guideStage === 'confession' ? '把最想说的一句话告诉咕哝' : '先从第一句倾诉开始' }}</strong>
+        <small>{{ guideStage === 'mood-card' ? firstRunMoodCard.summary : guideStage === 'confession' ? '倾诉窗口已经准备好。' : '写下的第一句话，咕哝会认真接住。' }}</small>
       </div>
       <button type="button" @click="guideStage === 'mood-card' ? openTreeHoleFromMoodCard() : focusGuideTarget()">
         {{ guideStage === 'mood-card' ? '去树洞看看' : '带我开始' }}
       </button>
       <button v-if="guideStage !== 'mood-card'" type="button" class="room-onboarding-skip" aria-label="跳过首次引导" @click="skipFirstRunGuide">×</button>
     </aside>
-    <button
-      v-if="!showSplash"
-      type="button"
-      :class="['room-roaming-pet', { moving: petIsMoving }]"
-      :style="{ left: `${roomPetPosition.x}px`, top: `${roomPetPosition.y}px` }"
-      :aria-pressed="selectedRoomFeatureId === 'pet'"
-      @click.stop="selectRoomFeature('pet', $event)"
-    >
-      <img :src="selectedPetFrame" :alt="selectedPetVisual.name" />
-      <span>{{ petIsMoving ? petRoamingBubble : petCompanionMessage }}</span>
-    </button>
     <div v-if="showPetCompanionPanel" class="pet-panel-overlay" @click.self="closeWorkspacePanel('pet')">
-      <section class="pet-panel-card pet-playground-card" data-workspace="pet" @keydown.esc="closeWorkspacePanel('pet')">
+      <section ref="petPanelRoot" class="pet-panel-card pet-playground-card" data-workspace="pet" role="dialog" aria-modal="true" aria-labelledby="guguan-panel-title" @keydown="handlePetPanelKeydown">
         <button type="button" class="pet-panel-close" aria-label="关闭宠物互动" @click="closeWorkspacePanel('pet')">×</button>
-        <div class="pet-panel-head">
-          <div class="pet-panel-avatar" :class="`is-${petMoodStatus}`">
-            <img class="pet-panel-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
+        <header class="pet-home-header">
+          <div class="pet-home-title">
+            <div class="pet-panel-avatar" :class="[`is-${petMoodStatus}`, `is-${petVisualState}`]"><img class="pet-panel-frame" :src="selectedPetFrame" alt="咕团当前状态" /></div>
+            <div><span>咕团的小屋</span><h2 id="guguan-panel-title" tabindex="-1">今天想和它做什么？</h2><p>{{ petCompanionMessage }}</p></div>
           </div>
-          <div>
-            <span class="pet-panel-kicker">宠物互动</span>
-            <h3>{{ petAffinityLabel }}</h3>
-            <p>{{ petCompanionMessage }}</p>
-          </div>
+          <div v-if="petCompanionMode !== 'urgent'" class="pet-bond-chip"><span>{{ petGrowthStage.name }}</span><strong>默契 {{ petCompanionState.bond }}</strong></div>
+        </header>
+        <div :class="['pet-home-layout', { 'is-urgent': petCompanionMode === 'urgent' }]">
+          <section class="pet-home-scene" :style="{ backgroundImage: `linear-gradient(180deg, rgba(26,19,15,.02), rgba(27,18,14,.26)), url(${petHomeScene})` }" aria-label="咕团小屋互动场景">
+            <section v-if="petCompanionMode === 'urgent'" ref="petUrgentHandoff" class="pet-urgent-handoff pet-scene-urgent" role="alert" aria-label="立即安全支持" tabindex="-1">
+              <span>普通陪伴已停止</span>
+              <strong>现在先连接一位可信任的成年人</strong>
+              <p>{{ petCompanionError || '如果你正处于危险中，不要独自承担。请尽快联系可信教师、家人或紧急服务。' }}</p>
+              <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+              <button type="button" @click="goToChatFromPet">打开安全倾诉入口</button>
+            </section>
+            <template v-else>
+              <div class="pet-scene-message" role="status" aria-live="polite"><small>{{ petCurrentNeed }}</small><strong>{{ petCompanionMessage }}</strong></div>
+              <button type="button" class="pet-scene-hotspot is-nest" title="和咕团一起休息" @click.stop="restWithPet"><span>小窝</span></button>
+              <button type="button" class="pet-scene-hotspot is-brush" title="给咕团梳梳毛" @click.stop="groomPet"><span>梳毛</span></button>
+              <button type="button" class="pet-scene-hotspot is-snack" title="喂一块种子饼" @click.stop="feedPetSnack"><span>点心</span></button>
+              <button type="button" class="pet-scene-hotspot is-ball" :title="petCanPlay ? '和咕团玩星星球' : '咕团需要先休息'" :disabled="!petCanPlay" @click.stop="playBallWithPet"><span>{{ petCanPlay ? '星星球' : '先休息' }}</span></button>
+              <button type="button" :class="['pet-scene-character', `is-${petVisualState}`, { 'is-hiding': petHideAndSeekActive }]" aria-label="摸摸咕团" @click.stop="petPetting">
+                <span v-if="petCompanionState.accessory === 'star'" class="pet-star-accessory" aria-label="戴着星星发卡">✦</span>
+                <img class="pet-stage-frame" :src="selectedPetFrame" alt="咕团" />
+                <span class="pet-scene-character-label">摸摸咕团</span>
+              </button>
+              <div v-if="petHideAndSeekActive" class="pet-hide-game" role="group" aria-label="猜猜咕团躲在哪里">
+                <strong>咕团藏好了，猜猜它在哪里？</strong>
+                <div><button v-for="spot in petHideSpots" :key="spot" ref="petHideGuessButtons" type="button" @click.stop="guessPetHidingSpot(spot)">{{ spot }}</button></div>
+                <button type="button" class="pet-hide-cancel" @click.stop="cancelPetHideAndSeek">先不玩了</button>
+              </div>
+              <nav class="pet-scene-dock" aria-label="和咕团互动">
+                <button type="button" @click.stop="petPetting"><span>摸</span>摸摸</button>
+                <button type="button" @click.stop="feedPetSnack"><span>饼</span>喂食</button>
+                <button type="button" @click.stop="groomPet"><span>梳</span>梳毛</button>
+                <button type="button" :disabled="!petCanPlay" @click.stop="playBallWithPet"><span>球</span>{{ petCanPlay ? '玩球' : '先休息' }}</button>
+                <button ref="petHideTrigger" type="button" @click.stop="startPetHideAndSeek"><span>藏</span>捉迷藏</button>
+                <button type="button" @click.stop="togglePetAccessory"><span>星</span>{{ petCompanionState.accessory === 'star' ? '摘发卡' : '戴发卡' }}</button>
+                <button type="button" class="is-primary" @click.stop="talkWithPet"><span>聊</span>说说话</button>
+              </nav>
+            </template>
+          </section>
+          <aside v-if="petCompanionMode !== 'urgent'" class="pet-home-sidebar" aria-label="咕团相处角">
+            <section class="pet-home-today">
+              <div><span>此刻的咕团</span><strong>{{ petCurrentNeed }}</strong></div>
+              <div class="pet-need-row"><span v-for="meter in petCareMeters" :key="meter.key"><i :style="{ '--pet-need': `${meter.value}%` }"></i><small>{{ meter.label }}</small><strong>{{ meter.state }}</strong></span></div>
+              <p>{{ petGrowthStage.copy }} 不连续登录也不会倒退。</p>
+            </section>
+            <section class="pet-home-moments">
+              <div class="pet-section-title"><span>最近一起做过</span><small>不保存聊天原文</small></div>
+              <ul><li v-for="memory in petRecentMemories" :key="memory.id"><time>{{ memory.time }}</time><span>{{ memory.copy }}</span></li></ul>
+            </section>
+            <div class="pet-home-journey"><button type="button" @click.stop="walkPetToIsland"><span>去心岛散步</span><small>带咕团去花田、海边和小田园</small></button></div>
+          </aside>
         </div>
-        <div class="pet-panel-meta">
-          <span>互动默契 {{ petCompanionState.affinity }}</span>
-          <span>随时回来都可以</span>
-        </div>
-        <div class="pet-playground-stage">
-          <div class="pet-stage-hint">点击房间任意位置，它会跑过去陪你</div>
-          <img class="pet-stage-frame" :src="selectedPetFrame" :alt="selectedPetVisual.name" />
-          <div class="pet-stage-bubble">{{ petCompanionMessage }}</div>
-        </div>
-        <div class="pet-panel-actions">
-          <button type="button" @click.stop="petPetting">摸摸它</button>
-          <button type="button" @click.stop="feedPetSnack">喂点心</button>
-          <button type="button" class="is-primary" @click.stop="talkWithPet">和它说句话</button>
-          <button type="button" @click.stop="closeWorkspacePanel('pet')">回到房间</button>
-        </div>
-        <div class="pet-visual-picker">
-          <div class="pet-section-title">
-            <span>宠物形象</span>
-            <small>选择陪你待机的小伙伴</small>
-          </div>
-          <div class="pet-visual-list">
-            <button
-              v-for="visual in PET_VISUALS"
-              :key="visual.key"
-              type="button"
-              :class="['pet-visual-option', { active: selectedPetVisualKey === visual.key }]"
-              @click.stop="selectPetVisual(visual.key)"
-            >
-              <img :src="visual.frames[0]" :alt="visual.name" />
-              <strong>{{ visual.name }}</strong>
-            </button>
-          </div>
-        </div>
-        <div class="pet-companion-restored">
-          <div class="pet-section-title">
-            <span>原陪伴角色</span>
-            <small>选择一个小伙伴开始聊天</small>
-          </div>
-          <div class="pet-companion-list">
-            <button
-              v-for="companion in petCompanions"
-              :key="companion.id"
-              type="button"
-              :class="['pet-companion-option', { active: activePetCompanionId === companion.id }]"
-              @click.stop="startPetCompanion(companion)"
-            >
-              <img :src="companion.image || selectedPetFrame" :alt="companion.name" />
-              <span class="pet-companion-emoji">{{ companion.avatar }}</span>
-              <strong>{{ companion.name }}</strong>
-              <em>{{ companion.desc }}</em>
-            </button>
-          </div>
+        <div v-if="petCompanionMode !== 'urgent'" class="pet-companion-restored">
           <div class="pet-companion-chat" v-if="petCompanionActive">
             <div class="pet-chat-head">
-              <img :src="activePetImage" :alt="activePetCompanion.name" />
+              <img :src="selectedPetFrame" alt="咕团" />
               <div>
-                <strong>{{ activePetCompanion.name }}</strong>
-                <span>正在陪你聊天</span>
+                <strong>咕团在听</strong>
+                <span>{{ petCompanionModeLabel }}</span>
               </div>
             </div>
-            <div ref="petChatMessages" class="pet-chat-messages">
+            <div class="pet-chat-safety-state" :class="`is-${petCompanionMode}`" role="status" aria-live="polite">
+              <span aria-hidden="true"></span>{{ petCompanionModeLabel }}
+            </div>
+            <p class="pet-chat-identity">咕团是 AI 支持角色，没有真实感受，也不能替代可信成年人或专业人员。</p>
+            <ol v-if="petCompanionWorkflow.length" class="pet-chat-workflow" aria-label="咕团 Agent 已核验步骤">
+              <li v-for="step in petCompanionWorkflow" :key="step.id" :class="`is-${step.status}`"><span>{{ step.id === 'safety' ? '安全' : step.id === 'context' ? '理解' : '回应' }}</span>{{ step.summary }}</li>
+            </ol>
+            <section v-if="petCompanionMode === 'urgent'" ref="petUrgentHandoff" class="pet-urgent-handoff" role="alert" aria-label="立即安全支持" tabindex="-1">
+              <strong>先连接真人支持</strong>
+              <p>{{ petCompanionError }}</p>
+              <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+              <button type="button" @click="goToChatFromPet">打开安全倾诉入口</button>
+            </section>
+            <div v-if="petCompanionMode !== 'urgent'" class="pet-chat-prompts" aria-label="快速开场">
+              <button v-for="prompt in petCompanionQuickPrompts" :key="prompt" type="button" @click="usePetQuickPrompt(prompt)">{{ prompt }}</button>
+            </div>
+            <div ref="petChatMessages" class="pet-chat-messages" role="log" aria-live="polite" aria-relevant="additions text" :aria-busy="petCompanionTyping">
               <div v-for="(msg, index) in petCompanionMsgs" :key="index" :class="['pet-chat-msg', msg.role]">
                 {{ msg.content }}
               </div>
               <div v-if="petCompanionTyping" class="pet-chat-msg assistant">正在想怎么回应你...</div>
             </div>
-            <div class="pet-chat-input-row">
-              <input v-model="petCompanionInput" placeholder="和它说点什么..." @keyup.enter="sendPetCompanionMsg" />
+            <div v-if="petCompanionMode !== 'urgent'" class="pet-chat-input-row">
+              <input v-model="petCompanionInput" aria-label="告诉咕团现在想说的话" placeholder="和它说点什么..." @keyup.enter="sendPetCompanionMsg" />
               <button type="button" @click.stop="sendPetCompanionMsg" :disabled="!petCompanionInput.trim() || petCompanionTyping">发送</button>
             </div>
           </div>
+          <button v-else type="button" class="pet-chat-entry" @click.stop="talkWithPet">坐到咕团旁边，说一句现在的感受</button>
         </div>
+        <p class="pet-care-boundary">这些互动只用于陪伴和游戏反馈，不用于判断你的情绪，也没有连续打卡要求。</p>
       </section>
     </div>
-    <!-- 交互热区 — 电脑（倾诉） -->
-    <button type="button" :class="['hot-zone zone-monitor', { 'is-guide-target': showFirstRunGuide && guideStage === 'computer', 'is-selected': selectedRoomFeatureId === 'chat' }]" :aria-pressed="selectedRoomFeatureId === 'chat'" aria-label="电脑：打开倾诉空间" @click.stop="selectRoomFeature('chat', $event)">
-      <span class="hover-tip">电脑 · 倾诉</span>
-      <div v-if="showFirstRunGuide && guideStage === 'computer'" class="guide-target-badge">点这里：倾诉</div>
-    </button>
-
-    <!-- 交互热区 — 床（情绪回顾） -->
-    <button type="button" :class="['hot-zone zone-bed', { 'is-selected': selectedRoomFeatureId === 'trend' }]" :aria-pressed="selectedRoomFeatureId === 'trend'" aria-label="床头：回顾近期情绪" @click.stop="selectRoomFeature('trend', $event)">
-      <span class="bed-label">床头 · 情绪回顾</span>
-    </button>
-
-    <!-- 交互热区 — 窗户（悬浮提示） -->
-    <button v-if="licensedCityMediaAvailable" type="button" :class="['hot-zone zone-window', { 'is-selected': selectedRoomFeatureId === 'window' }]" :aria-pressed="selectedRoomFeatureId === 'window'" aria-label="窗户：看看窗外" @click.stop="selectRoomFeature('window', $event)">
-      <span class="window-label">窗边 · 看看窗外</span>
-    </button>
-
-    <!-- 交互热区 — 音响1（音乐推荐） -->
-    <button v-if="bundledMediaAvailable" type="button" :class="['hot-zone zone-speaker zone-speaker-left', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
-      <span class="hover-tip">音响 · 音乐</span>
-      <div class="speaker-notes">
-        <span class="note n1">🎵</span>
-        <span class="note n2">🎶</span>
-        <span class="note n3">♪</span>
-        <span class="note n4">🎵</span>
-        <span class="note n5">♫</span>
-      </div>
-    </button>
-
-    <!-- 交互热区 — 音响2（音乐推荐） -->
-    <button v-if="bundledMediaAvailable" type="button" :class="['hot-zone zone-speaker zone-speaker-right', { 'is-selected': selectedRoomFeatureId === 'music' }]" :aria-pressed="selectedRoomFeatureId === 'music'" aria-label="音响：打开音乐推荐" @click.stop="selectRoomFeature('music', $event)">
-      <span class="hover-tip">音响 · 音乐</span>
-      <div class="speaker-notes">
-        <span class="note n1">🎶</span>
-        <span class="note n2">♫</span>
-        <span class="note n3">🎵</span>
-        <span class="note n4">♪</span>
-        <span class="note n5">🎶</span>
-      </div>
-    </button>
-
     <RoomActionBar
       :feature="selectedRoomFeature"
       :moods="dailyCheckInOptions"
@@ -207,72 +268,29 @@
     />
 
 
-    <nav class="bottom-nav">
-      <button ref="chatNavButton" class="bnav-item" @click="goToChat">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-          </svg>
-        </div>
-        <span class="bnav-label">倾诉</span>
-      </button>
-      <button class="bnav-item" @click="openWorkspacePanel('healing')">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-          </svg>
-        </div>
-        <span class="bnav-label">治愈</span>
-      </button>
-      <button :class="['bnav-item bnav-treehole', { 'is-guide-target': showFirstRunGuide && guideStage === 'mood-card' }]" @click="handleGuideTreeholeTarget">
-        <div v-if="showFirstRunGuide && guideStage === 'mood-card'" class="guide-target-badge nav-guide-badge">点这里：树洞</div>
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-            <line x1="9" y1="9" x2="9.01" y2="9"/>
-            <line x1="15" y1="9" x2="15.01" y2="9"/>
-          </svg>
-        </div>
-        <span class="bnav-label">树洞</span>
-      </button>
-      <button class="bnav-item" @click="openWorkspacePanel('report')">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-        </div>
-        <span class="bnav-label">报告</span>
-      </button>
-      <button class="bnav-item" @click="goProfile">
-        <div class="icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-        </div>
-        <span class="bnav-label">我的</span>
-      </button>
-    </nav>
-
     <!-- ══ 个人中心面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showProfilePanel" class="profile-overlay" @click="showProfilePanel = false">
-        <div class="profile-panel" @click.stop>
+      <div v-if="showProfilePanel" class="profile-overlay" @click.self="closeWorkspacePanel('profile')">
+        <div class="profile-panel" data-workspace="profile" role="dialog" aria-modal="true" aria-label="个人空间" @click.stop @keydown.esc="closeWorkspacePanel('profile')">
           <!-- 关闭按钮 -->
-          <div class="panel-close" @click="showProfilePanel = false">
+          <button type="button" class="panel-close" aria-label="关闭个人空间" @click="closeWorkspacePanel('profile')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 18L18 6M6 6l12 12"/>
             </svg>
-          </div>
+          </button>
 
           <!-- 头像区 -->
           <div class="panel-hero">
-            <div class="panel-avatar">{{ displayNickname[0] }}</div>
+            <button type="button" class="panel-avatar" title="更换头像" @click.stop="showAvatarPicker = true">
+              <img v-if="avatarSrc" :src="avatarSrc" alt="我的头像" />
+              <template v-else>{{ displayNickname[0] }}</template>
+            </button>
+            <AvatarPickerModal
+              v-if="showAvatarPicker"
+              :nickname="displayNickname"
+              @close="showAvatarPicker = false"
+              @change="src => { avatarSrc = src }"
+            />
             <div class="panel-name">{{ displayNickname }}</div>
             <div class="panel-uid">ID {{ userStore.userId }}</div>
             <span v-if="userStore.isAdmin" class="panel-badge">教师</span>
@@ -356,6 +374,15 @@
                 <div class="pbadge-desc">{{ b.desc }}</div>
                 <div v-if="b.unlocked" class="pbadge-check">✓</div>
               </div>
+            </div>
+          </div>
+
+          <!-- 设置 -->
+          <div class="panel-section">
+            <div class="panel-sec-title">更多空间</div>
+            <div class="profile-space-grid">
+              <button type="button" @click="handleGuideTreeholeTarget">树洞回声<small>看看相似的心情</small></button>
+              <button type="button" @click="openWorkspacePanel('report', $event.currentTarget)">情绪报告<small>回顾自己的记录</small></button>
             </div>
           </div>
 
@@ -451,26 +478,28 @@
     <!-- ══ 出去看看 — 交通工具选择 ══ -->
     <Transition name="panel-slide">
       <div v-if="showTransportPanel" class="profile-overlay" @click.self="closeWorkspacePanel('transport')">
-        <div class="profile-panel transport-panel" data-workspace="transport" @click.stop @keydown.esc="closeWorkspacePanel('transport')">
+        <div ref="transportPanelRoot" class="profile-panel transport-panel" data-workspace="transport" role="dialog" aria-modal="true" aria-labelledby="window-journey-title" @click.stop @keydown="handleTransportPanelKeydown">
           <button type="button" class="panel-close" aria-label="关闭出发方式" @click="closeWorkspacePanel('transport')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           <div class="trend-header">
-            <h2>🚪 选择出发方式</h2>
-            <p>请选择你的交通工具</p>
+            <span class="window-journey-kicker">从房间出发</span>
+            <h2 id="window-journey-title">窗外漫游</h2>
+            <p>选一段路线，去城市里完成一件具体的小事。</p>
           </div>
-          <div class="transport-list">
-            <button class="transport-item" @click="openCityPanel('subway')">
-              <span class="transport-icon">🚇</span>
-              <span class="transport-name">地铁</span>
-              <span class="transport-arrow">›</span>
+          <div class="window-route-list" aria-label="可前往的城市">
+            <button class="window-route-item is-xian" type="button" @click="startWindowJourney('西安')">
+              <span class="window-route-mark" aria-hidden="true">影</span>
+              <span class="window-route-copy"><strong>去西安</strong><small>坐上地铁，完成一件皮影作品</small></span>
+              <span class="window-route-meta">皮影工坊 · 约 6 分钟</span>
             </button>
-            <button class="transport-item" @click="openCityPanel('bus')">
-              <span class="transport-icon">🚌</span>
-              <span class="transport-name">巴士</span>
-              <span class="transport-arrow">›</span>
+            <button class="window-route-item is-luoyang" type="button" @click="startWindowJourney('洛阳')">
+              <span class="window-route-mark" aria-hidden="true">拓</span>
+              <span class="window-route-copy"><strong>去洛阳</strong><small>穿过古城，亲手完成一次拓印</small></span>
+              <span class="window-route-meta">拓印工坊 · 约 5 分钟</span>
             </button>
           </div>
+          <p class="window-journey-note">旅程只提供休闲体验，不根据选择推断你的情绪。</p>
         </div>
       </div>
     </Transition>
@@ -504,7 +533,7 @@
     <Transition name="transition-fade">
       <div v-if="showXianTransition" class="metro-transition" :class="`phase-${xianPhase}`">
         <div class="metro-bg">
-          <div class="metro-fallback" aria-label="西安城市转场"></div>
+          <img src="/images/xian-metro.jpg" alt="西安地铁" />
           <div class="metro-window metro-window-left"></div>
           <div class="metro-window metro-window-right"></div>
         </div>
@@ -528,13 +557,13 @@
       <div v-if="showXianPanel" class="xian-fullscreen">
         <!-- 全屏西安场景图 -->
         <div class="xian-bg-wrap">
-          <div class="xian-bg-img city-fallback" aria-label="西安城市背景"></div>
+          <img src="/images/xian.png" alt="西安古城" class="xian-bg-img" />
           <div class="xian-bg-vignette"></div>
         </div>
 
         <!-- 顶部导航栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="closeXianPanel(); showCityPanel = true">
+          <button ref="xianBackButton" class="xian-back-btn" @click="closeXianPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -553,7 +582,7 @@
         </div>
 
         <!-- 视频播放热区 -->
-        <div v-if="bundledMediaAvailable && !showPuppetPopup && !showVideoPlayer" class="xian-hotspot xian-video-hotspot" @click="openVideoPlayer">
+        <div v-if="!showPuppetPopup && !showVideoPlayer" class="xian-hotspot xian-video-hotspot" @click="openVideoPlayer">
           <div class="hs-outer-ring"></div>
           <div class="hs-inner">
             <span class="hs-emoji">🎬</span>
@@ -690,7 +719,7 @@
       <div v-if="showLuoyangTransition" class="metro-transition" :class="`phase-${luoyangPhase}`">
         <!-- 地铁车厢背景 -->
         <div class="metro-bg">
-          <div class="metro-fallback" aria-label="洛阳城市转场"></div>
+          <img src="/images/luoyang-metro.jpg" alt="洛阳地铁" />
           <!-- 两侧窗外运动模糊 -->
           <div class="metro-window metro-window-left"></div>
           <div class="metro-window metro-window-right"></div>
@@ -723,13 +752,13 @@
       <div v-if="showLuoyangPanel" class="xian-fullscreen luoyang-fullscreen">
         <!-- 全屏洛阳场景图 -->
         <div class="xian-bg-wrap">
-          <div class="xian-bg-img city-fallback" aria-label="洛阳城市背景"></div>
+          <img src="/images/luoyang.png" alt="洛阳古城" class="xian-bg-img" />
           <div class="xian-bg-vignette"></div>
         </div>
 
         <!-- 顶部返回栏 -->
         <div class="xian-top-bar">
-          <button class="xian-back-btn" @click="closeLuoyangPanel(); showCityPanel = true">
+          <button ref="luoyangBackButton" class="xian-back-btn" @click="closeLuoyangPanel(); showCityPanel = true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
             <span class="back-home-text">回家</span>
           </button>
@@ -748,7 +777,7 @@
         </div>
 
         <!-- 视频播放热区 -->
-        <div v-if="bundledMediaAvailable && !showRubbingPopup && !showLuoyangVideoPlayer" class="xian-hotspot luoyang-video-hotspot" @click="openLuoyangVideoPlayer">
+        <div v-if="!showRubbingPopup && !showLuoyangVideoPlayer" class="xian-hotspot luoyang-video-hotspot" @click="openLuoyangVideoPlayer">
           <div class="hs-outer-ring"></div>
           <div class="hs-inner">
             <span class="hs-emoji">🎬</span>
@@ -867,7 +896,7 @@
 
     <!-- ══ 音乐推荐面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="bundledMediaAvailable && showMusicPanel" class="profile-overlay" @click.self="closeWorkspacePanel('music')">
+      <div v-if="showMusicPanel" class="profile-overlay" @click.self="closeWorkspacePanel('music')">
         <div class="profile-panel music-panel" data-workspace="music" @click.stop @keydown.esc="closeWorkspacePanel('music')">
           <button type="button" class="panel-close" aria-label="关闭音乐推荐" @click="closeWorkspacePanel('music')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
@@ -876,20 +905,22 @@
           <!-- 标题 -->
           <div class="trend-header">
             <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
-              <h2>🎵 今日音乐推荐</h2>
-              <button v-if="bundledMediaAvailable" class="music-toggle-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
+              <h2>听歌与放松</h2>
+              <button class="music-toggle-btn" @click="toggleMusic" :title="musicOn ? '关闭背景音乐' : '开启背景音乐'">
                 <svg v-if="musicOn" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 3v12.26A3 3 0 107.5 18c0-.17.02-.34.04-.5H7.5a.5.5 0 01-.5-.5V7H17v7.26A3 3 0 1015.5 17c0-.17.02-.34.04-.5H15.5a.5.5 0 01-.5-.5V3H9z"/></svg>
                 <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3v12.26A3 3 0 107.5 18H7.5V7H17v5M3 3l18 18"/></svg>
                 {{ musicOn ? '关音乐' : '开音乐' }}
               </button>
             </div>
             <p v-if="primaryEmotion">
-              你今天的<span class="emotion-badge">{{ getEmoji(primaryEmotion) }} {{ primaryEmotion }}</span>占了{{ primaryEmotionPct }}%，为你定制了以下歌单
+              也可以按你主动记录过的心情，探索下面的曲风推荐。
             </p>
-            <p v-else>还没有情绪记录，先来倾诉一下吧 💬</p>
+            <p v-else>不需要先倾诉或记录心情，选一首喜欢的就好。</p>
           </div>
 
           <!-- 算法说明卡片 -->
+          <MusicListeningShelf ref="listeningShelf" @playing="pauseOtherMusic" />
+          <details v-if="primaryEmotion" class="music-recommendation-details"><summary>查看曲风推荐依据</summary>
           <div class="algo-card" v-if="primaryEmotion">
             <div class="algo-title">📊 推荐算法</div>
             <div class="algo-factors">
@@ -913,7 +944,7 @@
               </div>
               <div class="algo-factor">
                 <div class="factor-bar-wrap">
-                  <div class="factor-bar" style="width:15%; background:#7FB3A6;"></div>
+                  <div class="factor-bar" style="width:15%; background:#8FCBA6;"></div>
                 </div>
                 <div class="factor-meta">
                   <span class="factor-label">{{ timeFactorLabel }}</span>
@@ -922,7 +953,7 @@
               </div>
               <div class="algo-factor">
                 <div class="factor-bar-wrap">
-                  <div class="factor-bar" style="width:15%; background:#E8C468;"></div>
+                  <div class="factor-bar" style="width:15%; background:#D9B46A;"></div>
                 </div>
                 <div class="factor-meta">
                   <span class="factor-label">{{ weatherFactorLabel }}</span>
@@ -932,7 +963,8 @@
             </div>
           </div>
 
-          <!-- 可选授权媒体播放器；公开构建默认关闭 -->
+          <!-- 隐藏音频元素：通过后端代理播放网易云音频 -->
+          </details>
           <audio ref="musicAudioEl" class="am-hidden-audio" preload="none" controls></audio>
 
           <!-- 推荐歌单卡片列表 -->
@@ -1008,7 +1040,7 @@
                         target="_blank"
                         rel="noopener noreferrer"
                         @click.stop
-                        title="查看已配置媒体详情"
+                        title="在网易云查看详情"
                       >
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
                       </a>
@@ -1017,14 +1049,14 @@
                 </div>
               </Transition>
               <!-- 来源标注 -->
-              <div class="mc-source" v-if="musicRecs.length">来源：由部署者配置并核验授权</div>
+              <div class="mc-source" v-if="musicRecs.length">来源：网易云音乐</div>
             </div>
           </div>
 
           <!-- 空状态 -->
           <div class="empty-state" v-else-if="!primaryEmotion">
             <div class="empty-icon">🎶</div>
-            <p>分享你的心情，获取专属音乐推荐</p>
+            <p>记录心情后可探索更多曲风；上方心岛曲目随时可听。</p>
           </div>
         </div>
       </div>
@@ -1053,6 +1085,30 @@
               {{ t.label }}
             </button>
           </div>
+
+          <div v-if="reportLoading" class="trend-agent-report report-loading" role="status">
+            <div class="loading-orb"></div><p>Agent 正在整理对话线索与主动反馈…</p>
+          </div>
+          <section v-else-if="reportData" class="trend-agent-report" aria-labelledby="trend-agent-report-title">
+            <div class="trend-agent-report-head">
+              <div><small>30天描述性整理</small><h3 id="trend-agent-report-title">Agent 情绪报告</h3></div>
+              <button type="button" @click="generateReport">重新整理</button>
+            </div>
+            <p class="report-summary">{{ reportData.overview }}</p>
+            <div class="report-source-grid">
+              <div><strong>{{ reportData.sources?.self_records || 0 }}</strong><small>主动记录/反馈</small></div>
+              <div><strong>{{ reportData.sources?.conversation_signals || 0 }}</strong><small>倾诉情绪线索</small></div>
+              <div><strong>{{ reportData.sources?.conversation_summary ? '已纳入' : '未生成' }}</strong><small>完整倾诉小结</small></div>
+            </div>
+            <ol v-if="reportData.timeline?.length" class="emotion-timeline" aria-label="近期情绪线索">
+              <li v-for="(item, i) in reportData.timeline.slice(0, 6)" :key="`${item.time}-${i}`"><span>{{ item.emotion }}</span><small>{{ item.source }} · {{ formatReportTime(item.time) }}</small></li>
+            </ol>
+            <ol v-if="reportData.latest_conversation?.trajectory?.length" class="conversation-trajectory" aria-label="最近一次倾诉的情绪变化">
+              <li v-for="point in reportData.latest_conversation.trajectory" :key="point.phase"><strong>{{ point.phase }} · {{ point.emotion }}</strong><p>{{ point.observation }}</p></li>
+            </ol>
+            <div class="trend-agent-next"><strong>当前可能更需要</strong><p>{{ reportData.support_focus }}</p><ul><li v-for="(step, i) in reportData.next_steps" :key="i">{{ step }}</li></ul></div>
+            <p class="report-boundary">{{ reportData.boundary }}</p>
+          </section>
 
           <!-- 空状态 -->
           <div class="empty-state" v-if="!trendStats.trend?.length && !Object.keys(trendStats.distribution||{}).length">
@@ -1155,7 +1211,16 @@
     <!-- ══ 聊天面板 ══ -->
     <Transition name="panel-slide">
       <div v-if="showChatPanel" class="profile-overlay" @click.self="closeWorkspacePanel('chat')">
-        <div class="profile-panel chat-panel" data-workspace="chat" @click.stop @keydown.esc="closeWorkspacePanel('chat')">
+        <div
+          ref="chatPanelRoot"
+          class="profile-panel chat-panel"
+          data-workspace="chat"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="student-chat-title"
+          @click.stop
+          @keydown="handleChatPanelKeydown"
+        >
           <!-- 关闭按钮 -->
           <button class="panel-close" type="button" aria-label="关闭倾诉面板" @click="closeWorkspacePanel('chat')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -1166,16 +1231,26 @@
           <!-- 顶部 -->
           <div class="chat-header">
             <div class="header-center">
-              <img src="/images/logo.jpg" class="ai-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="ai-avatar ai-logo" alt="咕团" />
               <div>
-                <div class="ai-name">咕哝 AI</div>
+                <div id="student-chat-title" class="ai-name">咕哝倾诉空间</div>
                 <div class="ai-status">
                   <span class="status-dot" :class="{thinking: chatLoading}"></span>
-                  {{ chatLoading ? '正在整理...' : 'AI 情绪支持工具' }}
+                  {{ chatLoading ? '正在思考...' : '在线，随时倾听' }}
                 </div>
               </div>
             </div>
             <button
+              class="chat-memory-button"
+              type="button"
+              aria-label="查看小满记得的事"
+              title="小满记得的事"
+              @click="showMemorySheet = true"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h5"/></svg>
+            </button>
+            <button
+              v-if="!chatUrgentLocked"
               class="chat-end-button"
               type="button"
               :disabled="chatLoading || !chatMessages.some(item => item.role === 'user')"
@@ -1186,19 +1261,25 @@
           <!-- 消息列表 -->
           <div class="chat-messages" ref="msgBox">
             <div class="welcome-wrap" v-if="chatMessages.length === 0">
-              <img src="/images/logo.jpg" class="welcome-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="welcome-avatar ai-logo" alt="咕团" />
               <div class="welcome-bubble">
-                <p>你好，我是咕哝 AI 情绪支持工具。</p>
-                <p>我不是心理医生，也不能承诺绝对保密。请勿发送姓名、学校、电话或精确地址。</p>
+                <p>先不用把话组织好。</p>
+                <p>一件小事、一段说不清的感受，或者今天的好消息，都可以从这里开始。你也可以告诉我：先听着，不急着给建议。</p>
               </div>
+            </div>
+            <div v-if="!chatMessages.length" class="conversation-starters" aria-label="选择倾诉开场">
+              <button v-for="starter in conversationStarters" :key="starter.title" type="button" @click="prepareConversation(starter.text)"><strong>{{ starter.title }}</strong><span>{{ starter.text }}</span></button>
+            </div>
+            <div class="chat-ai-consent" role="status">
+              <span><strong>{{ consentTitle }}</strong><small>{{ consentDetail }}</small></span>
             </div>
 
             <div v-for="(m, i) in chatMessages" :key="i" :class="['msg-row', m.role]">
-              <img v-if="m.role === 'assistant'" src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
+              <img v-if="m.role === 'assistant'" :src="selectedPetFrame" class="msg-avatar ai-logo" alt="咕团" />
               <div class="bubble-wrap">
-                <div v-if="m.emotion" class="emotion-tag">
+                <div v-if="m.role === 'user' && m.emotion" class="emotion-tag" :title="m.emotion_basis?.length ? `依据：${m.emotion_basis.join('；')}` : '基于本轮表达的非诊断性情绪线索'">
                   <span>{{ getEmotionEmoji(m.emotion) }}</span>
-                  <span>{{ m.emotion }}</span>
+                  <span>{{ m.emotion }}{{ m.emotion_intensity && m.emotion_intensity !== '不确定' ? ` · ${m.emotion_intensity}` : '' }}</span>
                 </div>
                 <div class="bubble">
                   <span>{{ m.content }}</span>
@@ -1211,7 +1292,7 @@
             </div>
 
             <div v-if="chatLoading" class="msg-row assistant">
-              <img src="/images/logo.jpg" class="msg-avatar ai-logo" alt="咕哝" />
+              <img :src="selectedPetFrame" class="msg-avatar ai-logo" alt="咕团" />
               <div class="bubble-wrap">
                 <div class="bubble typing-bubble">
                   <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -1220,7 +1301,37 @@
             </div>
           </div>
 
-          <section v-if="showEndConfirmation" class="chat-end-confirm" role="status" aria-live="polite">
+          <section
+            v-if="chatUrgentLocked"
+            ref="chatUrgentSupport"
+            class="chat-urgent-support"
+            role="alert"
+            aria-live="assertive"
+            aria-labelledby="chat-urgent-title"
+            tabindex="-1"
+          >
+            <strong id="chat-urgent-title">先保持真人支持，不要独处</strong>
+            <p>请先去到可信成年人身边并远离危险物。若已采取行动或正处在迫切危险中，立即拨打 110 或 120；也可拨打 12356。咕哝是 AI 支持工具，不能替代真人危机干预。</p>
+            <div class="chat-urgent-calls" aria-label="紧急求助电话">
+              <a href="tel:12356">拨打 12356</a>
+              <a href="tel:110">拨打 110</a>
+              <a href="tel:120">拨打 120</a>
+            </div>
+            <label><input v-model="safetyCurrentSafe" type="checkbox"> 我现在在安全地点，身边没有危险物</label>
+            <label><input v-model="safetyContactedAdult" type="checkbox"> 我已经联系并和一位可信成年人待在一起</label>
+            <small v-if="!safetyCurrentSafe || !safetyContactedAdult" class="chat-resolve-hint">
+              请先勾选以上两项，确认你已在安全地点并已联系可信成年人。
+            </small>
+            <button
+              class="chat-safety-resolve"
+              type="button"
+              :disabled="!safetyCurrentSafe || !safetyContactedAdult || safetyResolving"
+              @click="resolveUrgentChat"
+            >{{ safetyResolving ? '正在确认…' : '确认已完成安全交接，开始新话题' }}</button>
+            <p v-if="safetyResolveError" class="chat-safety-error" role="status">{{ safetyResolveError }}</p>
+          </section>
+
+          <section v-if="showEndConfirmation && !chatUrgentLocked" class="chat-end-confirm" role="status" aria-live="polite">
             <div>
               <strong>要结束本次倾诉并生成小结吗？</strong>
               <span>会整理整段对话；这不是诊断或量表结果。</span>
@@ -1232,7 +1343,7 @@
           </section>
 
           <!-- 快捷按钮 -->
-          <div class="quick-wrap">
+          <div v-if="!chatUrgentLocked" class="quick-wrap">
             <div
               class="quick-scroll"
               ref="quickScroll"
@@ -1242,15 +1353,15 @@
               @mouseup="onQuickMouseUp"
               @mouseleave="onQuickMouseUp"
             >
-              <button v-for="e in emotions" :key="e.text" class="quick-btn" @click="sendChatMsg(e.text)">
+              <button v-for="e in (chatMessages.length ? conversationFollowups : emotions)" :key="e.text" class="quick-btn" @click="chatMessages.length ? prepareConversation(e.text) : sendChatMsg(e.text)">
                 <span>{{ e.emoji }}</span> {{ e.text }}
               </button>
             </div>
           </div>
 
           <!-- 输入栏 -->
-          <div class="input-bar">
-            <button class="voice-btn" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading" :title="recording ? '停止录音' : '语音输入'">
+          <div v-if="!chatUrgentLocked" class="input-bar">
+            <button class="voice-btn" :class="{ recording }" @click="toggleVoice" :disabled="chatLoading || !voiceInputEnabled" :title="voiceInputEnabled ? (recording ? '停止录音' : '语音输入') : '语音输入需独立授权后启用'">
               <svg v-if="!recording" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 14c1.7 0 3-1.3 3-3V5c0-1.7-1.3-3-3-3S9 3.3 9 5v6c0 1.7 1.3 3 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7h-1.7z"/></svg>
               <span v-else class="rec-wave"></span>
             </button>
@@ -1275,7 +1386,7 @@
     <!-- 倾诉结束后才出现：像素房间中的液态玻璃小结入口 -->
     <Transition name="summary-orb">
       <button
-        v-if="summaryStatus !== 'idle'"
+        v-if="summaryStatus !== 'idle' && !showLeisurePanel"
         ref="summaryOrbButton"
         class="student-summary-orb"
         :class="[`is-${summaryStatus}`, { 'has-unread': summaryUnread }]"
@@ -1286,7 +1397,7 @@
         @click="openSummaryDrawer"
       >
         <span class="summary-orb-pixel" aria-hidden="true">
-          <img src="/images/logo.jpg" alt="" />
+          <img :src="selectedPetFrame" alt="" />
         </span>
         <span class="summary-orb-copy">
           <strong>{{ summaryStatus === 'processing' ? '正在整理' : summaryStatus === 'error' ? '整理失败' : '倾诉小结' }}</strong>
@@ -1304,7 +1415,7 @@
 
         <template v-if="supportDrawerMode === 'plan' && summaryStatus === 'ready' && conversationSummary">
           <p class="support-eyebrow">本次倾诉小结</p>
-          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是——</h2>
+          <h2 id="support-drawer-title" ref="supportModeHeading" tabindex="-1">我听到的是</h2>
           <div class="support-emotion-state" :data-level="conversationSummary.intensity">
             <span class="support-emotion-icon" aria-hidden="true">{{ getEmotionEmoji(conversationSummary.dominant_emotion) }}</span>
             <div><small>主要情绪</small><strong>{{ conversationSummary.dominant_emotion }} · {{ conversationSummary.intensity }}</strong></div>
@@ -1392,32 +1503,45 @@
       </div>
     </Transition>
 
+    <!-- ══ 休闲角：游戏与 Agent 进度共用一个工作区 ══ -->
+    <Transition name="panel-slide">
+      <div v-if="showLeisurePanel" class="profile-overlay leisure-overlay" @click.self="closeWorkspacePanel('leisure')">
+        <StudentIslandWorkspace
+          :storage-scope="String(userStore.userId || '')"
+          @close="closeWorkspacePanel('leisure')"
+          @activity="handleIslandActivity"
+          @safety="handleLeisureSafetySignal"
+          @open-chat="handleLeisureSafetyHandoff"
+        />
+      </div>
+    </Transition>
+
     <!-- ══ 树洞面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showTreeHolePanel" class="profile-overlay" @click="showTreeHolePanel = false">
-        <div class="profile-panel treehole-panel" @click.stop>
-          <div class="panel-close" @click="showTreeHolePanel = false">
+      <div v-if="showTreeHolePanel" class="profile-overlay" @click.self="closeWorkspacePanel('treehole')">
+        <div class="profile-panel treehole-panel" data-workspace="treehole" role="dialog" aria-modal="true" aria-label="树洞回声" @click.stop @keydown.esc="closeWorkspacePanel('treehole')">
+          <button type="button" class="panel-close" aria-label="关闭树洞" @click="closeWorkspacePanel('treehole')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
-          <TreeHoleView :inline="true" @close="showTreeHolePanel = false" />
+          </button>
+          <TreeHoleView :inline="true" @close="closeWorkspacePanel('treehole')" @open-chat="closeWorkspacePanel('treehole'); goToChat()" />
         </div>
       </div>
     </Transition>
 
     <!-- ══ 报告面板 ══ -->
     <Transition name="panel-slide">
-      <div v-if="showReportPanel" class="profile-overlay" @click="showReportPanel = false">
-        <div class="profile-panel report-panel" @click.stop>
-          <div class="panel-close" @click="showReportPanel = false">
+      <div v-if="showReportPanel" class="profile-overlay" @click.self="closeWorkspacePanel('report')">
+        <div class="profile-panel report-panel" data-workspace="report" role="dialog" aria-modal="true" aria-label="情绪记录回顾" @click.stop @keydown.esc="closeWorkspacePanel('report')">
+          <button type="button" class="panel-close" aria-label="关闭情绪记录回顾" @click="closeWorkspacePanel('report')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-          </div>
+          </button>
           <div class="trend-header">
             <h2>📊 情绪报告</h2>
-            <p>了解你的心理健康状态</p>
+            <p>回顾近期记录与变化，不替代专业评估</p>
           </div>
 
           <!-- 生成报告入口 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length > 0" class="report-intro">
+          <div v-if="!reportData && !reportLoading" class="report-intro">
             <div class="report-intro-quote">
               <span class="rq-mark">"</span>
               <p>每一段心情都值得被记录</p>
@@ -1459,25 +1583,37 @@
           <div v-if="reportData" class="report-content">
             <div class="report-section">
               <h3>🎯 情绪总览</h3>
-              <p class="report-summary">{{ reportData.summary }}</p>
+              <p class="report-summary">{{ reportData.overview }}</p>
             </div>
-            <div class="report-section" v-if="reportData.suggestions?.length">
-              <h3>💡 建议与关怀</h3>
+            <div class="report-section report-source-grid">
+              <h3>本次报告采用的线索</h3>
+              <div><strong>{{ reportData.sources?.self_records || 0 }}</strong><small>主动记录与活动后反馈</small></div>
+              <div><strong>{{ reportData.sources?.conversation_signals || 0 }}</strong><small>倾诉对话情绪线索</small></div>
+              <div><strong>{{ reportData.sources?.conversation_summary ? '已纳入' : '未生成' }}</strong><small>完整倾诉小结</small></div>
+            </div>
+            <div class="report-section" v-if="reportData.timeline?.length">
+              <h3>情绪变化线</h3>
+              <ol class="emotion-timeline"><li v-for="(item, i) in reportData.timeline" :key="`${item.time}-${i}`"><span>{{ item.emotion }}</span><small>{{ item.source }} · {{ formatReportTime(item.time) }}</small></li></ol>
+            </div>
+            <div class="report-section" v-if="reportData.latest_conversation?.trajectory?.length">
+              <h3>最近一次倾诉中的变化</h3>
+              <ol class="conversation-trajectory"><li v-for="point in reportData.latest_conversation.trajectory" :key="point.phase"><strong>{{ point.phase }} · {{ point.emotion }}</strong><p>{{ point.observation }}</p></li></ol>
+            </div>
+            <div class="report-section"><h3>当前可能更需要</h3><p class="report-summary">{{ reportData.support_focus }}</p></div>
+            <div class="report-section" v-if="reportData.next_steps?.length">
+              <h3>下一步</h3>
               <ul class="report-suggestions">
-                <li v-for="(s, i) in reportData.suggestions" :key="i">{{ s }}</li>
+                <li v-for="(s, i) in reportData.next_steps" :key="i">{{ s }}</li>
               </ul>
             </div>
-            <div class="report-section" v-if="reportData.positive_affirmation">
-              <h3>🌈 每日寄语</h3>
-              <p class="report-affirmation">「{{ reportData.positive_affirmation }}」</p>
-            </div>
+            <p class="report-boundary">{{ reportData.boundary }}</p>
             <button class="report-back-btn" @click="reportData = null">
               <span>←</span> 返回重新生成
             </button>
           </div>
 
           <!-- 空状态 -->
-          <div v-if="!reportData && !reportLoading && chatMessages.length === 0" class="report-empty">
+          <div v-if="false" class="report-empty">
             <div class="report-empty-art">
               <div class="re-seed">🌱</div>
               <div class="re-soil"></div>
@@ -1487,7 +1623,7 @@
               每一次倾诉都是一颗种子，<br>
               等它们慢慢发芽，就会开出属于你的心情花园。
             </div>
-            <button class="report-empty-btn" @click="showReportPanel = false; goToChat()">
+            <button class="report-empty-btn" @click="closeWorkspacePanel('report'); goToChat()">
               去种下第一颗心情种子 →
             </button>
           </div>
@@ -1495,27 +1631,43 @@
       </div>
     </Transition>
 
-
-    <!-- 隐藏音频元素2 -->
-    <audio ref="audioEl" preload="none" />
-
-    <footer class="beian-footer">
-      心理健康教育与支持 · 不替代专业服务
-    </footer>
+    <CompanionMemorySheet v-if="showMemorySheet" @close="showMemorySheet = false" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, reactive, defineAsyncComponent, onMounted, onUnmounted, watch, nextTick } from 'vue'
+const MusicListeningShelf = defineAsyncComponent(() => import('../components/MusicListeningShelf.vue'))
+const listeningShelf = ref(null)
+const conversationStarters = [
+  { title: '先听我说', text: '我想先说说，暂时不用给建议。' },
+  { title: '一起理清楚', text: '最近有件事反复占着我的心思，我想一起理一理。' },
+  { title: '留住好消息', text: '今天有一个让我开心的小瞬间，想和你分享。' },
+]
+const conversationFollowups = [
+  { emoji: '💬', text: '先听我说，暂时不用给建议。' },
+  { emoji: '📝', text: '我想一起整理一下这件事。' },
+  { emoji: '🌱', text: '我想试一个很小的步骤。' },
+  { emoji: '☕', text: '我想先停一会儿，不用追问。' },
+]
+function prepareConversation(text) { chatInput.value = text; nextTick(() => inputEl.value?.focus()) }
+function pauseOtherMusic() { stopBgm(); musicAudioEl.value?.pause(); activeSongId.value = null }
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { updateProfile, changePassword } from '../api/user'
-import { getMoodStats, getMoodInsight } from '../api/mood'
+import { getMoodStats, getMoodInsight, getEmotionReport } from '../api/mood'
+import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
+import { isOfflineCompanionUrgent } from '../utils/companionSafety'
+import { devHourOverride } from '../utils/timeOfDay'
+import { isBgmMuted, isBgmOn, startBgm, stopBgm, subscribeBgm, toggleBgm } from '../utils/bgm'
+import { deleteStudentAgentRun, getLatestStudentAgentRun } from '../api/studentAgent'
 import {
   completeChatSession,
+  createChatSafetyHandoff,
   deleteChatSummary,
   getChatHistory,
   getLatestChatSummary,
+  resolveChatSafety,
   sendMessage,
   startChatSession,
 } from '../api/chat'
@@ -1523,21 +1675,43 @@ import HealingView from './HealingView.vue'
 import TreeHoleView from './TreeHoleView.vue'
 import StudentAgentRail from '../components/StudentAgentRail.vue'
 import RoomActionBar from '../components/RoomActionBar.vue'
+import CompanionMemorySheet from '../components/student/CompanionMemorySheet.vue'
+import StudentIslandWorkspace from '../components/island/StudentIslandWorkspace.vue'
+import AvatarPickerModal from '../components/AvatarPickerModal.vue'
+import { getAvatarSrc } from '../utils/avatar'
+
+const showAvatarPicker = ref(false)
+const avatarSrc = ref(getAvatarSrc())
+import petHomeDay from '../assets/island/home-day.png'
+import petHomeDusk from '../assets/island/home-dusk.png'
+import petHomeNight from '../assets/island/home-night.png'
 
 const router = useRouter()
 const userStore = useUserStore()
+const SPLASH_SEEN_KEY = 'shengyu_home_entered'
 const splashVersion = (import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || 'local').split('+')[0]
-const displayNickname = computed(() => (userStore.nickname || '朋友').trim() || '朋友')
+const displayNickname = computed(() => (userStore.nickname || '朋友').replace(/^(?:合成|演示)+|演示$/g, '').trim() || '朋友')
 
 // ═══ 个人中心面板 ═══
 const showProfilePanel = ref(false)
 const showChatPanel = ref(false)
+const showMemorySheet = ref(false)
 const showSupportDrawer = ref(false)
 const supportCloseButton = ref(null)
 const supportModeHeading = ref(null)
 const chatNavButton = ref(null)
+const islandNavButton = ref(null)
+const profileNavButton = ref(null)
 const summaryOrbButton = ref(null)
 const chatSessionId = ref('')
+const chatPanelRoot = ref(null)
+const chatUrgentSupport = ref(null)
+const chatUrgentLocked = ref(false)
+const safetyCurrentSafe = ref(false)
+const safetyContactedAdult = ref(false)
+const safetyResolving = ref(false)
+const safetyResolveError = ref('')
+const leisureSafetyHandoffFailed = ref(false)
 const summarySessionId = ref('')
 const showEndConfirmation = ref(false)
 const summaryStatus = ref('idle')
@@ -1545,15 +1719,27 @@ const summaryUnread = ref(false)
 const conversationSummary = ref(null)
 const showAgentRail = ref(false)
 const selectedRoomFeatureId = ref('')
+const transportPanelRoot = ref(null)
+const xianBackButton = ref(null)
+const luoyangBackButton = ref(null)
 let roomFeatureTrigger = null
 let workspaceTrigger = null
 let activeWorkspaceKey = ''
+let leisureSafetyHandoffPromise = null
 const studentAgentState = reactive({
   status: 'standby',
   phase: 'waiting',
+  source: 'unavailable',
   riskLevel: 'unassessed',
   signal: 'continue',
   emotion: '',
+  runCode: '',
+  intentSummary: '',
+  tools: [],
+  events: [],
+  plan: [],
+  modelName: '',
+  deliverable: null,
   verifiedSteps: [],
   messageCount: 0,
   lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
@@ -1565,10 +1751,12 @@ const studentAgentSteps = computed(() => {
   const chatError = phase === 'chat_error'
   const verified = new Set(studentAgentState.verifiedSteps.map(step => step.id))
   const workflowStep = id => studentAgentState.verifiedSteps.find(step => step.id === id)
+  const planningStep = workflowStep('task_plan') || workflowStep('planning') || workflowStep('plan')
   const steps = [
-    { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待后端核对本轮表达', status: chatError ? 'error' : verified.has('observation') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
-    { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || '检查危机、伤害与需要成人介入的线索', status: urgent ? 'attention' : verified.has('safety') ? 'completed' : 'waiting' },
-    { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '由后端返回本轮可确认的情绪标签', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
+    { id: 'safety', label: '安全优先分流', summary: workflowStep('safety')?.summary || (phase === 'chat' ? '安全分流进行中；通过后才进入任务理解与规划' : '检查危机、伤害与需要成人介入的线索'), status: chatError ? 'error' : urgent ? 'attention' : verified.has('safety') ? 'completed' : phase === 'chat' ? 'running' : 'waiting' },
+    { id: 'understand', label: '理解本轮表达', summary: workflowStep('observation')?.summary || '等待安全分流通过后核对本轮表达', status: urgent ? 'blocked' : verified.has('observation') ? 'completed' : 'waiting' },
+    { id: 'planning', label: '规划受限支持', summary: planningStep?.summary || '等待安全分流与任务理解结果，不预先执行工具', status: urgent ? 'blocked' : (verified.has('task_plan') || verified.has('planning') || verified.has('plan')) ? 'completed' : 'waiting' },
+    { id: 'emotion', label: '本轮情绪线索', summary: workflowStep('emotion')?.summary || '整理本轮表达中的候选情绪线索，可由你修正', status: urgent ? 'blocked' : verified.has('emotion') ? 'completed' : 'waiting' },
     { id: 'next_step', label: '支持回应编排', summary: phase === 'end_candidate' ? '本轮回应已完成，等待你确认是否生成完整小结' : workflowStep('response')?.summary || '等待安全检查后生成支持回应', status: urgent ? 'blocked' : phase === 'end_candidate' ? 'attention' : verified.has('response') ? 'completed' : 'waiting' },
     { id: 'summary', label: '倾诉后小结', summary: summaryError ? '上次整理未完成，可以安全重试' : '结束后整合完整会话并进行输出审查', status: urgent ? 'blocked' : summaryError ? 'error' : phase === 'summary' ? 'running' : phase === 'complete' ? 'completed' : 'waiting' },
   ]
@@ -1581,6 +1769,62 @@ function toggleAgentRail() {
     clearRoomFeature()
   }
   showAgentRail.value = next
+}
+
+async function deleteCurrentStudentAgentRun() {
+  if (!studentAgentState.runCode || studentAgentState.status === 'running') return
+  if (!window.confirm('删除后将无法恢复本次 Agent 轨迹，聊天原文不会因此删除。确定继续吗？')) return
+  try {
+    await deleteStudentAgentRun(studentAgentState.runCode)
+    Object.assign(studentAgentState, {
+      status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed',
+      signal: 'continue', emotion: '', runCode: '', intentSummary: '', tools: [], events: [], plan: [],
+      modelName: '', deliverable: null, verifiedSteps: [], messageCount: 0, lastEvent: '本次 Agent 轨迹已删除',
+    })
+    showAgentRail.value = false
+  } catch {
+    studentAgentState.lastEvent = '删除未完成，请稍后重试'
+  }
+}
+
+function applyVerifiedAgentRun(run) {
+  if (!run) return
+  studentAgentState.runCode = run.run_code || ''
+  studentAgentState.intentSummary = run.intent_summary || ''
+  studentAgentState.tools = Array.isArray(run.tools) ? run.tools : []
+  studentAgentState.events = Array.isArray(run.events) ? run.events : []
+  studentAgentState.plan = Array.isArray(run.plan) ? run.plan : []
+  studentAgentState.modelName = run.model_name || ''
+  studentAgentState.deliverable = run.deliverable && typeof run.deliverable === 'object' ? run.deliverable : null
+  studentAgentState.messageCount = Number(run.context_message_count || 0)
+}
+
+async function restoreLatestStudentAgentRun() {
+  try {
+    const response = await getLatestStudentAgentRun()
+    const run = response.data
+    if (!run) return
+    applyVerifiedAgentRun(run)
+    studentAgentState.status = run.status === 'attention' && run.risk_level === 'urgent' ? 'urgent'
+      : run.status === 'attention' ? 'attention'
+        : run.status === 'failed' ? 'error' : run.status === 'running' ? 'running' : 'ready'
+    studentAgentState.phase = run.status === 'running' ? 'chat'
+      : run.status === 'failed' ? 'chat_error'
+        : run.risk_level === 'urgent' ? 'urgent'
+          : run.status === 'attention' ? 'delivery_attention' : 'responded'
+    studentAgentState.signal = run.deliverable?.conversation_signal || 'continue'
+    studentAgentState.emotion = run.deliverable?.emotion === '不确定' ? '' : (run.deliverable?.emotion || '')
+    studentAgentState.riskLevel = run.risk_level || 'unassessed'
+    studentAgentState.source = run.status === 'running' ? 'pending'
+      : run.status === 'failed' ? 'unavailable'
+        : run.model_name === 'deepseek-companion' ? 'deepseek_companion'
+          : ['xunfei-constrained', 'xunfei-response-strategy-selector'].includes(run.model_name) ? 'xunfei_constrained'
+            : run.model_name === 'safety-override' ? 'safety_override'
+              : run.degraded && Object.keys(run.deliverable || {}).length ? 'degraded' : 'deterministic'
+    studentAgentState.lastEvent = run.events?.at(-1)?.summary || '已恢复最近一次智能体任务'
+  } catch {
+    // 学生端主体功能不因轨迹恢复失败而中断。
+  }
 }
 const summaryOrbLabel = computed(() => {
   if (summaryStatus.value === 'processing') return '正在整理本次倾诉'
@@ -1611,6 +1855,7 @@ watch(supportDrawerMode, async () => {
   focusWithoutScroll(supportModeHeading.value)
 })
 const showHealingPanel = ref(false)
+const showLeisurePanel = ref(false)
 const showTreeHolePanel = ref(false)
 const showReportPanel = ref(false)
 const showStatusPicker = ref(false)
@@ -1618,8 +1863,11 @@ const showStatusPicker = ref(false)
 function closeRoomWorkspaces(except = '') {
   const panels = roomWorkspacePanels()
   Object.entries(panels).forEach(([key, panel]) => {
-    if (key !== except) panel.value = false
+    const agentChatPair = (except === 'agent' && key === 'chat')
+    if (key !== except && !agentChatPair) panel.value = false
   })
+  // Agent 始终由学生主动展开。进入聊天或其他工作区时先收起，
+  // 只有点击 Agent 状态胶囊时才保留当前聊天并显示轨迹。
   if (except !== 'agent') showAgentRail.value = false
 }
 
@@ -1629,6 +1877,7 @@ function roomWorkspacePanels() {
     chat: showChatPanel,
     support: showSupportDrawer,
     healing: showHealingPanel,
+    leisure: showLeisurePanel,
     treehole: showTreeHolePanel,
     report: showReportPanel,
     pet: showPetCompanionPanel,
@@ -1646,10 +1895,56 @@ function openWorkspacePanel(key, trigger = roomFeatureTrigger || document.active
   workspaceTrigger = trigger?.focus ? trigger : workspaceTrigger
   activeWorkspaceKey = key
   panel.value = true
+  if (key === 'report' || key === 'trend') {
+    reportData.value = null
+    generateReport()
+  }
   nextTick(() => {
     const focusTarget = document.querySelector(`[data-workspace="${key}"] .panel-close, [data-workspace="${key}"] .pet-panel-close`)
     focusWithoutScroll(focusTarget)
   })
+}
+
+async function handleIslandActivity(placeId) {
+  if (placeId === 'home') {
+    closeWorkspacePanel('leisure')
+    await nextTick()
+    openWorkspacePanel('pet')
+    return
+  }
+  if (placeId === 'rest') {
+    closeWorkspacePanel('leisure')
+    await nextTick()
+    openWorkspacePanel('healing')
+    return
+  }
+}
+
+async function handleLeisureSafetySignal() {
+  applyChatSessionStatus('urgent')
+  leisureSafetyHandoffFailed.value = false
+  const request = createChatSafetyHandoff('happiness_exchange')
+    .then(response => {
+      chatSessionId.value = response.data.session_id
+      return response
+    })
+    .catch(() => {
+      leisureSafetyHandoffFailed.value = true
+      return null
+    })
+    .finally(() => {
+      if (leisureSafetyHandoffPromise === request) leisureSafetyHandoffPromise = null
+    })
+  leisureSafetyHandoffPromise = request
+  await request
+}
+
+async function handleLeisureSafetyHandoff() {
+  closeWorkspacePanel('leisure')
+  await nextTick()
+  await router.push(leisureSafetyHandoffFailed.value
+    ? { path: '/chat', query: { handoff: 'failed' } }
+    : { path: '/chat' })
 }
 
 function closeWorkspacePanel(key) {
@@ -1657,7 +1952,67 @@ function closeWorkspacePanel(key) {
   if (panel) panel.value = false
   if (activeWorkspaceKey !== key) return
   activeWorkspaceKey = ''
-  nextTick(() => focusWithoutScroll(workspaceTrigger))
+  nextTick(() => {
+    const fallback = key === 'leisure' ? islandNavButton.value : ['profile', 'treehole', 'report'].includes(key) ? profileNavButton.value : chatNavButton.value
+    focusWithoutScroll(workspaceTrigger?.isConnected ? workspaceTrigger : fallback)
+  })
+}
+
+function handlePetPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    if (petHideAndSeekActive.value) {
+      cancelPetHideAndSeek()
+      return
+    }
+    closeWorkspacePanel('pet')
+    return
+  }
+  if (event.key !== 'Tab' || !petPanelRoot.value) return
+  const focusable = [...petPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function handleChatPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeWorkspacePanel('chat')
+    return
+  }
+}
+
+function handleTransportPanelKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeWorkspacePanel('transport')
+    return
+  }
+  if (event.key !== 'Tab' || !transportPanelRoot.value) return
+  const focusable = [...transportPanelRoot.value.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0)
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 // ═══ 复访引导：每日仪式 + 首次教学 ═══
@@ -1665,13 +2020,21 @@ const FIRST_RUN_GUIDE_KEY = 'shengyu_first_run_guide_completed_version'
 const FIRST_RUN_GUIDE_VERSION = '4.3.0'
 const FIRST_RUN_MOOD_CARD_KEY = 'shengyu_first_run_mood_card'
 const DAILY_RETURN_STATE_KEY = 'shengyu_daily_return_state'
-const PET_COMPANION_STATE_KEY = 'shengyu_pet_companion_v4_5_0'
-const PET_VISUAL_KEY = 'shengyu_pet_visual_v4_5_4'
-const ROOM_PET_POSITION_KEY = 'shengyu_room_pet_position_v4_5_5'
-const COMPANIONSHIP_STREAK_KEY = 'shengyu_companionship_streak'
-const LAST_ACTIVE_DATE_KEY = 'shengyu_last_active_date'
+const PET_COMPANION_STATE_KEY = 'shengyu_guguan_v5_1_0_alpha_6'
 const todayKey = new Date().toISOString().slice(0, 10)
-const showFirstRunGuide = ref(localStorage.getItem(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
+function studentStorageKey(base) {
+  return `${base}:${userStore.userId || 'guest'}`
+}
+function safeStudentStorageGet(base) {
+  try { return localStorage.getItem(studentStorageKey(base)) } catch { return null }
+}
+function safeStudentStorageSet(base, value) {
+  try { localStorage.setItem(studentStorageKey(base), value); return true } catch { return false }
+}
+function safeStudentStorageRemove(base) {
+  try { localStorage.removeItem(studentStorageKey(base)); return true } catch { return false }
+}
+const showFirstRunGuide = ref(safeStudentStorageGet(FIRST_RUN_GUIDE_KEY) !== FIRST_RUN_GUIDE_VERSION)
 const guideStage = ref('computer')
 const firstRunMoodCard = ref(loadFirstRunMoodCard())
 const isFirstRunChatPending = computed(() => showFirstRunGuide.value && guideStage.value === 'confession')
@@ -1701,7 +2064,6 @@ const dailyReturnTask = computed(() => {
   return dailyReturnTasks[sum % dailyReturnTasks.length]
 })
 const dailyReturnState = reactive(loadDailyReturnState())
-const companionshipStreak = ref(loadCompanionshipStreak())
 const petMoodMessages = {
   tired: ['今天有点累的话，先靠着我坐一会儿。', '不用马上恢复精神，我会慢慢陪你。'],
   annoyed: ['烦的时候不用讲清楚全部，先说一句也可以。', '我在这里，先把最吵的那件事放下来。'],
@@ -1711,176 +2073,162 @@ const petMoodMessages = {
 }
 const petCompanionState = reactive(loadPetCompanionState())
 const showPetCompanionPanel = ref(false)
-const bundledMediaAvailable = false
-const licensedCityMediaAvailable = false
-const PET_VISUALS = [
-  { key: 'bubu', name: '布布', frames: Array.from({ length: 8 }, (_, index) => `/pets/bubu/frame-${String(index + 1).padStart(2, '0')}.png`) },
-]
-const selectedPetVisualKey = ref(loadPetVisualKey())
-const petAnimationFrame = ref(0)
-let petAnimationTimer = null
-const selectedPetVisual = computed(() => PET_VISUALS.find(visual => visual.key === selectedPetVisualKey.value) || PET_VISUALS[0])
-const selectedPetFrame = computed(() => selectedPetVisual.value.frames[petAnimationFrame.value % selectedPetVisual.value.frames.length])
+const petPanelRoot = ref(null)
+const GUGUAN_ASSETS = Object.freeze({
+  idle: '/images/guguan/guguan-idle.webp',
+  happy: '/images/guguan/guguan-happy.webp',
+  eating: '/images/guguan/guguan-eating.webp',
+  sleeping: '/images/guguan/guguan-sleeping.webp',
+})
+const petVisualState = ref('idle')
+const petHideAndSeekActive = ref(false)
+const petHideSpots = Object.freeze(['花丛后', '小窝里', '树影下'])
+const petHiddenSpot = ref('')
+const petHideGuesses = ref(0)
+const petHideTrigger = ref(null)
+const petHideGuessButtons = ref([])
+let petVisualTimer = null
+const selectedPetFrame = computed(() => GUGUAN_ASSETS[petVisualState.value] || GUGUAN_ASSETS.idle)
 
-const roomRoot = ref(null)
-const roomPetPosition = reactive(loadRoomPetPosition())
-const petIsMoving = ref(false)
-let petMoveTimer = null
-const petRoamingBubble = computed(() => petIsMoving.value ? '我来了' : '点房间，我会过去')
-
-function loadRoomPetPosition() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(ROOM_PET_POSITION_KEY) || 'null')
-    if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
-      return safeRoomPetPosition(Number(saved.x), Number(saved.y))
-    }
-  } catch {}
-  return safeRoomPetPosition(window.innerWidth * .72, window.innerHeight * .76)
-}
-function safeRoomPetPosition(x, y) {
-  const minX = Math.max(92, window.innerWidth * .38)
-  const maxX = Math.max(minX, window.innerWidth - 58)
-  const minY = Math.max(220, window.innerHeight * .58)
-  const maxY = Math.max(minY, window.innerHeight - 96)
-  return {
-    x: Math.min(Math.max(x, minX), maxX),
-    y: Math.min(Math.max(y, minY), maxY),
-  }
-}
-function saveRoomPetPosition() {
-  localStorage.setItem(ROOM_PET_POSITION_KEY, JSON.stringify({ x: roomPetPosition.x, y: roomPetPosition.y }))
-}
 function openPetPlayground() {
   openWorkspacePanel('pet')
 }
-function handleRoomPetMove(event) {
-  if (showSplash.value || showPetCompanionPanel.value) return
-  const target = event.target
-  if (target?.closest?.('button, a, input, textarea, select, .hot-zone, .bottom-nav, .room-status-bar, .room-onboarding-cue, .room-action-bar, .transport-panel, .profile-panel, .chat-panel, .report-panel, .healing-panel, .treehole-panel')) return
-  const next = safeRoomPetPosition(event.clientX, event.clientY)
-  roomPetPosition.x = next.x
-  roomPetPosition.y = next.y
-  saveRoomPetPosition()
-  petIsMoving.value = true
-  if (petMoveTimer) clearTimeout(petMoveTimer)
-  petMoveTimer = setTimeout(() => { petIsMoving.value = false }, 720)
-}
-function loadPetVisualKey() {
-  const saved = localStorage.getItem(PET_VISUAL_KEY)
-  return PET_VISUALS.some(visual => visual.key === saved) ? saved : 'bubu'
-}
-function selectPetVisual(key) {
-  if (!PET_VISUALS.some(visual => visual.key === key)) return
-  selectedPetVisualKey.value = key
-  petAnimationFrame.value = 0
-  localStorage.setItem(PET_VISUAL_KEY, key)
-  setPetStatus('happy', `${selectedPetVisual.value.name}靠近了一点，准备继续陪你。`)
-}
-function startPetAnimation() {
-  if (petAnimationTimer) clearInterval(petAnimationTimer)
-  petAnimationTimer = setInterval(() => {
-    petAnimationFrame.value = (petAnimationFrame.value + 1) % selectedPetVisual.value.frames.length
-  }, 180)
+function showPetVisual(state, duration = 1800) {
+  petVisualState.value = GUGUAN_ASSETS[state] ? state : 'idle'
+  if (petVisualTimer) clearTimeout(petVisualTimer)
+  if (state === 'idle') return
+  petVisualTimer = setTimeout(() => { petVisualState.value = 'idle' }, duration)
 }
 
 const PET_COMPANION_PROFILES = {
-  xiaoqing: {
-    id: 'xiaoqing', avatar: '🌸', image: '/pets/bubu/frame-01.png', name: '温柔倾听模式（AI）', shortName: '倾听模式', desc: '由 AI 提供轻柔、耐心的情绪整理，不代表真人或专业人员。',
-    greeting: '我在这里。你可以慢慢说，今天最让你卡住的那件事是什么？',
-    replies: {
-      default: ['慢慢说，我会认真听完。', '你现在的感受是真实的，也值得被好好对待。', '不用急着变好，先把心里的声音放下来。'],
-      sad: ['听起来你真的撑了很久。先深呼吸一下，我们一点点把它说清楚。', '难过不是软弱，它是在提醒你有些需求需要被看见。'],
-      anxious: ['焦虑来的时候，先把它拆成一件具体的小事。现在最担心的是什么？', '我们先回到当下：喝口水、放慢呼吸，然后只处理眼前一步。'],
-      tired: ['累了就先靠一会儿，不需要马上证明自己。', '你的身体在提醒你要休息，这不是退步。'],
-      happy: ['真好，这份开心值得被记住。能告诉我它从哪里来的吗？'],
-      hello: ['你好呀，我在。今天想从哪一句开始说？'],
-    },
-  },
-  aze: {
-    id: 'aze', avatar: '☀️', image: '/pets/bubu/frame-01.png', name: '行动陪伴模式（AI）', shortName: '行动模式', desc: '由 AI 帮助拆出低负担小步骤，不代表真人或专业人员。',
-    greeting: '来了？坐。先别一个人扛，说说现在最难处理的是哪一块。',
-    replies: {
-      default: ['我听着，先把情况讲清楚。', '稳住，我们先找一个能做的小动作。', '别急着全解决，先解决最靠近你的那一步。'],
-      sad: ['难受就先说出来，别憋着。说完我们再想办法。', '低谷不是终点，只是现在这段路比较暗。'],
-      anxious: ['担心可以理解。我们先区分眼前能做的事和暂时不能控制的事。', '压力大时先别硬扛，先做一件能立刻完成的小事。'],
-      tired: ['累就先停。能量不够的时候，休息本身就是任务。'],
-      happy: ['可以啊，这状态就对了。把这个小胜利记下来。'],
-      hello: ['在。今天遇到什么事了？'],
-    },
-  },
   gunong: {
-    id: 'gunong', avatar: '🌿', image: '/pets/bubu/frame-01.png', name: '咕哝 AI', shortName: '咕哝 AI', desc: 'AI 情绪支持工具，帮助倾诉、复盘和寻找下一步，不替代真人支持。',
-    greeting: '我一直在这里。你不用组织得很完整，先说一句现在最真实的感受就可以。',
-    replies: {
-      default: ['我听见了。能再多说一点吗？', '这件事对你来说应该不轻松，我们先把它放在桌面上看一看。', '我会陪你说完，不急着给答案。'],
-      sad: ['现在不需要马上好起来。先允许自己难过一会儿。', '如果这份难过有名字，它更像委屈、失落，还是无助？'],
-      anxious: ['先把注意力拉回现在：你能看到的三样东西是什么？', '焦虑常常把未来放大。我们先确认眼前真正需要处理的一步。'],
-      tired: ['今天先降低要求。能好好休息，也是照顾自己的一部分。'],
-      happy: ['这份轻松很珍贵。要不要把它记录成今天的一个小亮点？'],
-      hello: ['你好，我在。今天想聊聊什么？'],
-    },
+    id: 'gunong', image: GUGUAN_ASSETS.idle, name: '咕团', shortName: '咕团', desc: '原创的房间陪伴宠物，只根据你明确说出的内容回应。',
+    greeting: '咕。你不用组织得很完整，先说一句现在最想让我听见的话就可以。',
   },
 }
-const petCompanions = ref(Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc })))
-const activePetCompanionId = ref('gunong')
 const petCompanionActive = ref(false)
 const petCompanionMsgs = ref([])
 const petCompanionInput = ref('')
 const petCompanionTyping = ref(false)
+const petCompanionMode = ref('idle')
+const petCompanionRisk = ref('routine')
+const petCompanionError = ref('')
+const petCompanionWorkflow = ref([])
 const petChatMessages = ref(null)
-const activePetCompanion = computed(() => PET_COMPANION_PROFILES[activePetCompanionId.value] || PET_COMPANION_PROFILES.gunong)
-const activePetImage = computed(() => selectedPetFrame.value)
+const petUrgentHandoff = ref(null)
+const petSafetyFragments = ref([])
+const petCompanionQuickPrompts = ['今天有点累', '想安静待一会', '有件开心的小事']
+const petCompanionModeLabel = computed(() => ({
+  idle: '安全检查会先于陪伴回应',
+  checking: '正在完成安全检查',
+  ready: petCompanionRisk.value === 'professional' ? '建议同时连接可信成年人' : '安全检查已完成',
+  urgent: '普通陪伴已停止，正在显示安全支持',
+  unavailable: '安全服务暂不可用，未继续分析',
+}[petCompanionMode.value] || '安全检查会先于陪伴回应'))
 
-async function loadPetCompanions() {
-  try {
-    const res = await axios.get(`${API}/api/companion/list`)
-    if (Array.isArray(res.data?.companions) && res.data.companions.length) {
-      petCompanions.value = res.data.companions.map(c => ({ ...c, image: PET_COMPANION_PROFILES[c.id]?.image || selectedPetFrame.value }))
-    }
-  } catch (e) {
-    petCompanions.value = Object.values(PET_COMPANION_PROFILES).map(({ id, avatar, image, name, desc }) => ({ id, avatar, image, name, desc }))
-  }
-}
-
-async function startPetCompanion(companion = activePetCompanion.value) {
-  const id = companion.id || 'gunong'
-  activePetCompanionId.value = id
+async function startPetCompanion() {
   petCompanionActive.value = true
+  if (petCompanionMode.value === 'urgent') {
+    await nextTick()
+    petUrgentHandoff.value?.focus()
+    return
+  }
+  try {
+    const status = await getCompanionSafetyStatus()
+    if (status.data?.urgent) {
+      petCompanionMode.value = 'urgent'
+      petCompanionRisk.value = 'urgent'
+      petCompanionError.value = status.data.message
+      petCompanionWorkflow.value = [
+        { id: 'safety', status: 'attention', summary: '已恢复本次紧急安全状态' },
+        { id: 'context', status: 'blocked', summary: '普通陪伴保持停止' },
+        { id: 'response', status: 'blocked', summary: '请先连接真人安全支持' },
+      ]
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+      return
+    }
+  } catch {}
   petCompanionMsgs.value = []
+  petCompanionMode.value = 'idle'
+  petCompanionRisk.value = 'routine'
+  petCompanionError.value = ''
+  petCompanionWorkflow.value = []
   bumpPetAffinityOnce('talkDate')
   setPetStatus(petMoodStatus.value, '它坐近了一点，准备认真听你说。')
-  const fallbackGreeting = PET_COMPANION_PROFILES[id]?.greeting || '我在这里，想说什么都可以。'
-  try {
-    const res = await axios.post(`${API}/api/companion/start`, null, { params: { user_id: Number(userStore.userId) || 1, character_id: id } })
-    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.greeting || fallbackGreeting })
-  } catch (e) {
-    petCompanionMsgs.value.push({ role: 'assistant', content: fallbackGreeting })
-  }
+  petCompanionMsgs.value.push({ role: 'assistant', content: PET_COMPANION_PROFILES.gunong.greeting })
   await nextTick()
   if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
+}
+
+function usePetQuickPrompt(prompt) {
+  petCompanionInput.value = prompt
+  sendPetCompanionMsg()
 }
 
 async function sendPetCompanionMsg() {
   const content = petCompanionInput.value.trim()
   if (!content || petCompanionTyping.value) return
   petCompanionMsgs.value.push({ role: 'user', content })
+  petSafetyFragments.value = [...petSafetyFragments.value, content].slice(-3)
   petCompanionInput.value = ''
   petCompanionTyping.value = true
+  petCompanionMode.value = 'checking'
+  petCompanionError.value = ''
   await nextTick()
   if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
   try {
-    const res = await sendMessage(Number(userStore.userId), content)
-    petCompanionMsgs.value.push({ role: 'assistant', content: res.data?.reply || '安全支持服务暂时没有返回内容，请稍后重试。' })
+    const res = await sendCompanionMessage(content)
+    const payload = res.data || {}
+    if (!payload.reply || !['routine', 'watch', 'professional', 'urgent'].includes(payload.risk_level)) throw new Error('invalid companion response')
+    petCompanionRisk.value = payload.risk_level
+    petCompanionWorkflow.value = Array.isArray(payload.workflow) ? payload.workflow : []
+    petCompanionMode.value = payload.risk_level === 'urgent' ? 'urgent' : 'ready'
+    petCompanionError.value = payload.risk_level === 'urgent' ? payload.reply : ''
+    petCompanionMsgs.value.push({ role: 'assistant', content: payload.reply })
+    if (payload.risk_level === 'urgent') {
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+    }
   } catch (e) {
-    petCompanionMsgs.value.push({ role: 'assistant', content: '暂时无法连接安全支持服务。若你可能伤害自己或他人，或无法保证当下安全，请立即联系身边可信成年人，并拨打12356、110或120；否则请稍后重试。' })
+    const offlineUrgent = petSafetyFragments.value.some(isOfflineCompanionUrgent)
+      || isOfflineCompanionUrgent(petSafetyFragments.value.slice(-2).join(''))
+      || isOfflineCompanionUrgent(petSafetyFragments.value.join(''))
+    if (offlineUrgent) {
+      const urgent = '这些话可能表示你现在无法保证安全。请先不要独处，马上去到一位可信成年人身边并拨打12356；如果已经采取行动或危险迫近，请立即拨打110或120。'
+      petCompanionRisk.value = 'urgent'
+      petCompanionMode.value = 'urgent'
+      petCompanionError.value = urgent
+      petCompanionMsgs.value.push({ role: 'assistant', content: urgent })
+      await nextTick()
+      petUrgentHandoff.value?.focus()
+    } else {
+      petCompanionMode.value = 'unavailable'
+      petCompanionMsgs.value.push({ role: 'assistant', content: '安全检查暂时没有完成，所以咕团不会继续猜测或分析这句话。你可以稍后重试，或打开倾诉入口继续说。' })
+    }
   } finally {
     petCompanionTyping.value = false
     await nextTick()
     if (petChatMessages.value) petChatMessages.value.scrollTop = petChatMessages.value.scrollHeight
   }
-}function loadDailyReturnState() {
+}
+async function goToChatFromPet() {
   try {
-    const saved = JSON.parse(localStorage.getItem(DAILY_RETURN_STATE_KEY) || 'null')
+    const handoff = await handoffCompanionToChat()
+    chatSessionId.value = handoff.data.session_id
+    closeWorkspacePanel('pet')
+    goToChat()
+  } catch {
+    petCompanionError.value = `${petCompanionError.value} 安全倾诉入口暂时未连接，请先拨打12356；危险迫近时拨打110或120。`.trim()
+    focusPetUrgentSupport()
+  }
+}
+function focusPetUrgentSupport() {
+  nextTick(() => petUrgentHandoff.value?.focus())
+}
+function loadDailyReturnState() {
+  try {
+    const saved = JSON.parse(safeStudentStorageGet(DAILY_RETURN_STATE_KEY) || 'null')
     if (saved?.date === todayKey) {
       return {
         date: todayKey,
@@ -1892,7 +2240,7 @@ async function sendPetCompanionMsg() {
   return { date: todayKey, mood: '', completedTask: false }
 }
 function saveDailyReturnState() {
-  localStorage.setItem(DAILY_RETURN_STATE_KEY, JSON.stringify({
+  safeStudentStorageSet(DAILY_RETURN_STATE_KEY, JSON.stringify({
     date: dailyReturnState.date,
     mood: dailyReturnState.mood,
     completedTask: dailyReturnState.completedTask,
@@ -1901,36 +2249,69 @@ function saveDailyReturnState() {
 
 function loadPetCompanionState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PET_COMPANION_STATE_KEY) || 'null')
+    const saved = JSON.parse(safeStudentStorageGet(PET_COMPANION_STATE_KEY) || 'null')
     if (saved && typeof saved === 'object') {
       return {
-        affinity: Number.isFinite(Number(saved.affinity)) ? Number(saved.affinity) : 1,
+        schemaVersion: 2,
+        bond: clampPetValue(saved.bond ?? (Number(saved.affinity || 1) * 2), 1, 40),
+        comfort: clampPetValue(saved.comfort, 0, 100, 72),
+        fullness: clampPetValue(saved.fullness, 0, 100, 68),
+        energy: clampPetValue(saved.energy, 0, 100, 76),
+        totalCare: clampPetValue(saved.totalCare ?? saved.affinity, 0, 999, 1),
         lastInteractionDate: saved.lastInteractionDate || '',
         pettedDate: saved.pettedDate || '',
         fedDate: saved.fedDate || '',
+        restedDate: saved.restedDate || '',
+        groomedDate: saved.groomedDate || '',
+        playedDate: saved.playedDate || '',
+        hideDate: saved.hideDate || '',
         talkDate: saved.talkDate || '',
         taskDate: saved.taskDate || '',
         mood: saved.mood || '',
         status: saved.status || 'okay',
-        message: saved.message || '我在这里，想靠近时就来坐坐。',
+        accessory: saved.accessory === 'star' ? 'star' : '',
+        message: saved.message || '咕。想靠近时就来坐坐，我不会催你。',
+        memories: Array.isArray(saved.memories) ? saved.memories.slice(0, 6) : [],
       }
     }
   } catch {}
-  return { affinity: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', message: '我在这里，想靠近时就来坐坐。' }
+  return { schemaVersion: 2, bond: 2, comfort: 72, fullness: 68, energy: 76, totalCare: 1, lastInteractionDate: '', pettedDate: '', fedDate: '', restedDate: '', groomedDate: '', playedDate: '', hideDate: '', talkDate: '', taskDate: '', mood: '', status: 'okay', accessory: '', message: '咕。想靠近时就来坐坐，我不会催你。', memories: [] }
+}
+function clampPetValue(value, min, max, fallback = min) {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback
 }
 function savePetCompanionState() {
-  localStorage.setItem(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState }))
+  safeStudentStorageSet(PET_COMPANION_STATE_KEY, JSON.stringify({ ...petCompanionState, memories: petCompanionState.memories.slice(0, 6) }))
 }
 const petMoodStatus = computed(() => {
   if (timeOfDay.value === 'night' && !['很累', '有点烦'].includes(petCompanionState.mood)) return 'sleepy'
   return petCompanionState.status || 'okay'
 })
 const petAffinityLabel = computed(() => {
-  if (petCompanionState.affinity >= 8) return '你们已经很熟悉了'
-  if (petCompanionState.affinity >= 4) return '你们正在慢慢熟悉'
-  return '它还在慢慢认识你'
+  return `咕团 · ${petGrowthStage.value.name}`
 })
 const petCompanionMessage = computed(() => petCompanionState.message || pickPetMessage(petMoodStatus.value))
+const petGrowthStage = computed(() => {
+  if (petCompanionState.bond >= 18) return { name: '默契期', nextAt: 40, startAt: 18, copy: '它开始熟悉你照顾彼此的节奏。' }
+  if (petCompanionState.bond >= 6) return { name: '熟悉期', nextAt: 18, startAt: 6, copy: '一次次轻松互动，会慢慢积累默契。' }
+  return { name: '初遇期', nextAt: 6, startAt: 0, copy: '先认识彼此，不需要完成打卡任务。' }
+})
+const petGrowthProgress = computed(() => {
+  const stage = petGrowthStage.value
+  return clampPetValue(((petCompanionState.bond - stage.startAt) / Math.max(1, stage.nextAt - stage.startAt)) * 100, 0, 100)
+})
+const petCareMeters = computed(() => [
+  { key: 'comfort', label: '安心', value: petCompanionState.comfort, state: petCompanionState.comfort >= 80 ? '很放松' : petCompanionState.comfort >= 55 ? '安稳' : '想靠近' },
+  { key: 'fullness', label: '饱足', value: petCompanionState.fullness, state: petCompanionState.fullness >= 80 ? '吃饱了' : petCompanionState.fullness >= 55 ? '刚刚好' : '想吃点心' },
+  { key: 'energy', label: '精神', value: petCompanionState.energy, state: petCompanionState.energy >= 80 ? '有活力' : petCompanionState.energy >= 55 ? '从容' : '想休息' },
+])
+const petCanPlay = computed(() => petCompanionState.energy >= 10)
+const petCurrentNeed = computed(() => {
+  const lowest = petCareMeters.value.reduce((current, meter) => meter.value < current.value ? meter : current)
+  return lowest.key === 'comfort' ? '此刻想被摸摸' : lowest.key === 'fullness' ? '此刻想吃一块种子饼' : '此刻想和你安静休息'
+})
+const petRecentMemories = computed(() => petCompanionState.memories.length ? petCompanionState.memories.slice(0, 3) : [{ id: 'first-meet', time: '今天', copy: '咕团搬进了你的房间，正在慢慢认识你。' }])
 const dailyStatusLabel = computed(() => {
   if (dailyReturnState.date === todayKey && dailyReturnState.mood) return dailyReturnState.mood
   return '留下一句话'
@@ -1971,7 +2352,7 @@ const roomFeatures = computed(() => ({
   pet: {
     id: 'pet',
     symbol: '·',
-    location: selectedPetVisual.value.name,
+    location: '咕团',
     title: petAffinityLabel.value,
     description: petCompanionMessage.value,
     actionLabel: '和它待一会',
@@ -2018,15 +2399,25 @@ function runSelectedRoomFeature() {
 
 function pickPetMessage(status) {
   const list = petMoodMessages[status] || petMoodMessages.okay
-  const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.affinity
+  const seed = todayKey.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) + petCompanionState.bond
   return list[seed % list.length]
 }
 function bumpPetAffinityOnce(field, amount = 1) {
   if (petCompanionState[field] !== todayKey) {
-    petCompanionState.affinity += amount
+    petCompanionState.bond = clampPetValue(petCompanionState.bond + amount, 1, 40)
+    petCompanionState.totalCare = clampPetValue(petCompanionState.totalCare + 1, 0, 999)
     petCompanionState[field] = todayKey
   }
   petCompanionState.lastInteractionDate = todayKey
+}
+function rememberPetCare(copy) {
+  const now = new Date()
+  petCompanionState.memories.unshift({
+    id: `${now.getTime()}-${petCompanionState.totalCare}`,
+    time: `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+    copy,
+  })
+  petCompanionState.memories = petCompanionState.memories.slice(0, 6)
 }
 function setPetStatus(status, message) {
   petCompanionState.status = status
@@ -2035,16 +2426,137 @@ function setPetStatus(status, message) {
   savePetCompanionState()
 }
 function petPetting() {
+  const firstPetToday = petCompanionState.pettedDate !== todayKey
   bumpPetAffinityOnce('pettedDate')
-  setPetStatus('happy', '它蹭了蹭你，好像认真收到了这份靠近。')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 12, 0, 100)
+  if (firstPetToday) rememberPetCare('你摸了摸咕团，它把这份靠近记在了星尾巴里。')
+  showPetVisual('happy')
+  setPetStatus('happy', '咕！它蹭了蹭你，星尾巴亮了一下。')
+}
+const PET_HOME_RESPONSES = [
+  '咕！它眯起眼睛，往你手心里蹭了蹭。',
+  '星尾巴亮了一下，它又靠近了你一点。',
+  '咕团软软地叫了一声，开心得原地跳了跳。',
+  '它把脑袋歪过来，像是在等你再摸一下。',
+]
+let petHomeResponseIndex = 0
+const petReactionActive = ref(false)
+const petReactionKey = ref(0)
+let petReactionTimer = null
+function petGuguanHome(event) {
+  petPetting()
+  setPetStatus('happy', PET_HOME_RESPONSES[petHomeResponseIndex % PET_HOME_RESPONSES.length])
+  petHomeResponseIndex = (petHomeResponseIndex + 1) % PET_HOME_RESPONSES.length
+  petReactionKey.value += 1
+  petReactionActive.value = true
+  if (petReactionTimer) clearTimeout(petReactionTimer)
+  petReactionTimer = setTimeout(() => { petReactionActive.value = false }, 1500)
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  event?.currentTarget?.querySelector('img')?.animate?.([
+    { transform: 'translateY(0) scale(1)' },
+    { transform: 'translateY(-18px) scale(1.06)', offset: .25 },
+    { transform: 'translateY(-4px) scale(1.01)', offset: .5 },
+    { transform: 'translateY(-12px) scale(1.04)', offset: .72 },
+    { transform: 'translateY(0) scale(1)' },
+  ], { duration: 640, easing: 'steps(6, end)' })
 }
 function feedPetSnack() {
   bumpPetAffinityOnce('fedDate')
-  setPetStatus('happy', '小点心已经收下了，它看起来安心了一点。')
+  petCompanionState.fullness = clampPetValue(petCompanionState.fullness + 15, 0, 100)
+  rememberPetCare('咕团认真吃完了一块种子饼。')
+  showPetVisual('eating')
+  setPetStatus('happy', '种子饼收下了。咕团的脸颊鼓鼓的。')
+}
+function restWithPet() {
+  bumpPetAffinityOnce('restedDate')
+  petCompanionState.energy = clampPetValue(petCompanionState.energy + 14, 0, 100)
+  rememberPetCare('你和咕团安静休息了一会儿。')
+  showPetVisual('sleeping', 2600)
+  setPetStatus('sleepy', '不用做什么，和咕团一起把呼吸放慢一点。')
+}
+function groomPet() {
+  bumpPetAffinityOnce('groomedDate')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 10, 0, 100)
+  rememberPetCare('你顺着绒毛轻轻梳了几下，咕团舒服得眯起眼睛。')
+  showPetVisual('happy')
+  setPetStatus('happy', '咕...梳到耳朵旁边时，它开心地抖了抖叶芽。')
+}
+function playBallWithPet() {
+  if (!petCanPlay.value) {
+    setPetStatus('sleepy', '咕团抱着星星球打了个哈欠。先去小窝休息一会儿吧。')
+    return
+  }
+  bumpPetAffinityOnce('playedDate')
+  petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 8, 0, 100)
+  petCompanionState.energy = clampPetValue(petCompanionState.energy - 5, 0, 100)
+  rememberPetCare('你把星星球滚了出去，咕团扑了个满怀。')
+  showPetVisual('happy', 2200)
+  setPetStatus('happy', '接到了！咕团抱住星星球，还想再来一次。')
+}
+async function startPetHideAndSeek() {
+  const seed = new Date().getMinutes() + petCompanionState.totalCare
+  petHiddenSpot.value = petHideSpots[seed % petHideSpots.length]
+  petHideGuesses.value = 0
+  petHideAndSeekActive.value = true
+  setPetStatus('okay', '咕团悄悄藏起来了。听，好像有叶芽晃动的声音。')
+  await nextTick()
+  petHideGuessButtons.value?.[0]?.focus()
+}
+function finishPetHideAndSeek() {
+  petHideAndSeekActive.value = false
+  petHideGuesses.value = 0
+  nextTick(() => petHideTrigger.value?.focus())
+}
+function cancelPetHideAndSeek() {
+  finishPetHideAndSeek()
+  showPetVisual('idle')
+  setPetStatus('okay', '这局先停在这里。咕团从藏身处回来，继续陪你待着。')
+}
+function guessPetHidingSpot(spot) {
+  const found = spot === petHiddenSpot.value
+  if (found) {
+    finishPetHideAndSeek()
+    bumpPetAffinityOnce('hideDate', 2)
+    petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 9, 0, 100)
+    rememberPetCare(`你在${spot}找到了咕团，它笑得叶芽都在发亮。`)
+    showPetVisual('happy', 2400)
+    setPetStatus('happy', `找到啦！咕团从${spot}跳出来，星尾巴亮成了一小圈。`)
+  } else {
+    petHideGuesses.value += 1
+    if (petHideGuesses.value >= 2) {
+      finishPetHideAndSeek()
+      bumpPetAffinityOnce('hideDate', 2)
+      petCompanionState.comfort = clampPetValue(petCompanionState.comfort + 6, 0, 100)
+      rememberPetCare(`咕团从${petHiddenSpot.value}探出头，和你结束了这局捉迷藏。`)
+      showPetVisual('happy', 2200)
+      setPetStatus('happy', `原来在${petHiddenSpot.value}。咕团自己探出了头，这局也一起玩完啦。`)
+    } else {
+      showPetVisual('idle')
+      setPetStatus('okay', `这里没有。咕团还躲在原来的地方，再猜最后一次吧。`)
+    }
+  }
+}
+function togglePetAccessory() {
+  petCompanionState.accessory = petCompanionState.accessory === 'star' ? '' : 'star'
+  rememberPetCare(petCompanionState.accessory ? '你帮咕团戴上了星星发卡。' : '你替咕团收好了星星发卡。')
+  showPetVisual('happy')
+  setPetStatus('happy', petCompanionState.accessory ? '星星发卡戴好啦。咕团转了一小圈给你看。' : '发卡收进小盒子里，下次还可以再戴。')
+}
+async function walkPetToIsland() {
+  rememberPetCare('你和咕团约好去心岛散一会儿步。')
+  savePetCompanionState()
+  closeWorkspacePanel('pet')
+  await nextTick()
+  openWorkspacePanel('leisure', islandNavButton.value, 'island')
 }
 async function talkWithPet() {
   showPetCompanionPanel.value = true
-  await startPetCompanion(activePetCompanion.value)
+  if (petCompanionMode.value === 'urgent') {
+    focusPetUrgentSupport()
+    return
+  }
+  showPetVisual('happy')
+  await startPetCompanion()
 }
 function updatePetFromMood(option) {
   petCompanionState.mood = option
@@ -2054,26 +2566,11 @@ function updatePetFromMood(option) {
   else setPetStatus('okay')
 }
 
-function loadCompanionshipStreak() {
-  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
-  return Number.isFinite(saved) && saved > 0 ? saved : 1
-}
-function updateCompanionshipStreak() {
-  const saved = Number.parseInt(localStorage.getItem(COMPANIONSHIP_STREAK_KEY) || '0', 10)
-  const lastActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY)
-  if (lastActiveDate === todayKey) return Number.isFinite(saved) && saved > 0 ? saved : 1
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const nextStreak = lastActiveDate === yesterday && Number.isFinite(saved) && saved > 0 ? saved + 1 : 1
-  localStorage.setItem(COMPANIONSHIP_STREAK_KEY, String(nextStreak))
-  localStorage.setItem(LAST_ACTIVE_DATE_KEY, todayKey)
-  return nextStreak
-}
 function selectDailyMood(option) {
   dailyReturnState.mood = option
   dailyReturnState.date = todayKey
   saveDailyReturnState()
   updatePetFromMood(option)
-  companionshipStreak.value = updateCompanionshipStreak()
 }
 function completeDailyTask() {
   dailyReturnState.completedTask = true
@@ -2081,7 +2578,6 @@ function completeDailyTask() {
   saveDailyReturnState()
   bumpPetAffinityOnce('taskDate')
   setPetStatus('happy', '谢谢你留下这一刻。我会安静陪着你，不需要每天打卡。')
-  companionshipStreak.value = updateCompanionshipStreak()
   if (dailyReturnTask.value.action === 'treehole') {
     openWorkspacePanel('treehole')
     return
@@ -2094,7 +2590,7 @@ function completeDailyTask() {
 }
 function loadFirstRunMoodCard() {
   try {
-    const saved = JSON.parse(localStorage.getItem(FIRST_RUN_MOOD_CARD_KEY) || 'null')
+    const saved = JSON.parse(safeStudentStorageGet(FIRST_RUN_MOOD_CARD_KEY) || 'null')
     if (saved?.summary && saved?.suggestion) return saved
     if (saved?.title || saved?.copy) {
       return buildFirstRunMoodCard(saved.copy || saved.title || '', saved)
@@ -2117,23 +2613,22 @@ function buildFirstRunMoodCard(message = '', reply = {}) {
 function completeFirstRunAfterChat(message, reply) {
   if (!showFirstRunGuide.value || guideStage.value !== 'confession' || !reply?.reply) return
   firstRunMoodCard.value = buildFirstRunMoodCard(message, reply)
-  localStorage.setItem(FIRST_RUN_MOOD_CARD_KEY, JSON.stringify(firstRunMoodCard.value))
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+  safeStudentStorageSet(FIRST_RUN_MOOD_CARD_KEY, JSON.stringify(firstRunMoodCard.value))
+  safeStudentStorageSet(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
   guideStage.value = 'mood-card'
 }
 function focusGuideTarget() {
-  const selector = guideStage.value === 'confession' ? '.chat-panel .input-wrap input' : '.zone-monitor'
-  const target = document.querySelector(selector)
-  target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-  if (guideStage.value === 'confession') focusWithoutScroll(inputEl.value)
-  else selectRoomFeature('chat')
+  if (guideStage.value === 'confession') { handleGuideChatTarget(); return }
+  const target = chatNavButton.value
+  target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  target?.focus({ preventScroll: true })
 }
 function handleGuideChatTarget() {
-  goToChat()
   if (showFirstRunGuide.value && guideStage.value === 'computer') {
     guideStage.value = 'confession'
-    nextTick(() => focusWithoutScroll(inputEl.value))
+    try { sessionStorage.setItem('gy_guide_pending_chat', '1') } catch {}
   }
+  goToChat()
 }
 function openTreeHoleFromMoodCard() {
   showFirstRunGuide.value = false
@@ -2147,7 +2642,7 @@ function handleGuideTreeholeTarget() {
 }
 function skipFirstRunGuide() {
   showFirstRunGuide.value = false
-  localStorage.setItem(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
+  safeStudentStorageSet(FIRST_RUN_GUIDE_KEY, FIRST_RUN_GUIDE_VERSION)
 }
 const nickname = ref(userStore.nickname || '')
 const stats = reactive({ moodCount: 0, chatCount: 0, days: 0 })
@@ -2184,47 +2679,23 @@ const reportLoading = ref(false)
 async function generateReport() {
   reportLoading.value = true
   try {
-    // 使用已有的情绪数据生成报告
-    const res = await getMoodStats({ period: 30 })
-    const distribution = res.distribution || {}
-    const count = res.count || 0
-
-    const topMood = Object.entries(distribution).sort((a, b) => b[1] - a[1])[0]
-    const topMoodLabel = topMood ? topMood[0] : '暂无'
-    const topMoodCount = topMood ? topMood[1] : 0
-
-    const suggestions = ['从最近一条记录开始，补充当时发生了什么和你希望获得的支持']
-    if (topMoodLabel === '焦虑' || topMoodLabel === '紧张') {
-      suggestions.push('如果你愿意，可以试试治愈空间的短时呼吸练习，留意它是否适合此刻的你')
-    }
-    if (topMoodLabel === '悲伤' || topMoodLabel === '低落') {
-      suggestions.push('可以继续倾诉，或告诉一位你信任的人现在更希望被怎样陪伴')
-    }
-
-    const affirmations = [
-      '你已经做得很好了，不必对自己太苛刻',
-      '每一天都是新的开始，你值得被温柔以待',
-      '感到疲惫也没关系，休息也是前进的一种方式',
-      '你的存在本身就有意义',
-      '慢慢来，比较快'
-    ]
-
-    reportData.value = {
-      summary: count
-        ? `近30天保存了 ${count} 次学生主动记录，出现较多的自报或系统归纳标签是「${topMoodLabel}」（${topMoodCount} 次）。这只是对已有记录的描述性整理，不是心理测评，也不能代表整体心理状态。`
-        : '近30天暂时没有可整理的主动记录。这不代表任何心理状态，也不是心理测评结果。',
-      suggestions,
-      positive_affirmation: affirmations[Math.floor(Math.random() * affirmations.length)]
-    }
+    const res = await getEmotionReport(30)
+    reportData.value = res.data
   } catch (e) {
     console.error('生成报告失败:', e)
     reportData.value = {
-      summary: '暂无足够的情绪数据来生成报告，请先多倾诉几次吧。',
-      suggestions: ['去和咕哝聊聊天，记录你的情绪'],
-      positive_affirmation: '每一步都算数，你正在路上。'
+      overview: '报告暂时没有生成成功，现有记录没有丢失。',
+      sources: {}, timeline: [], next_steps: ['稍后重试，或先继续倾诉和主动记录'],
+      support_focus: '先保留你的原始感受，不根据本次失败做任何判断。',
+      boundary: '这不是心理测评或医学结论。'
     }
   }
   reportLoading.value = false
+}
+
+function formatReportTime(value) {
+  const date = new Date(value)
+  return !value || Number.isNaN(date.getTime()) ? '时间未知' : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 // ═══ 出去看看 — 交通工具 & 城市 ═══
@@ -2250,6 +2721,15 @@ function openCityPanel(type) {
   showCityPanel.value = true
 }
 
+function startWindowJourney(cityName) {
+  selectedTransport.value = 'subway'
+  const city = cityData.subway.find(item => item.name === cityName)
+  if (!city) return
+  showTransportPanel.value = false
+  if (activeWorkspaceKey === 'transport') activeWorkspaceKey = ''
+  selectCity(city)
+}
+
 function selectCity(city) {
   if (city.name === '西安') {
     startXianTransition()
@@ -2270,12 +2750,15 @@ const xianPhase = ref(0)
 const metroAudioEl = ref(null)
 
 // 西安城市音乐播放列表
-const xianPlaylist = []
+const xianPlaylist = [
+  '/audio/xian-song1.mp3',
+  '/audio/xian-song2.mp3',
+  '/audio/xian-song3.mp3',
+]
 const xianMusicEl = ref(null)
 const xianMusicIndex = ref(0)
 
 function playXianCityMusic() {
-  if (!bundledMediaAvailable || xianPlaylist.length === 0) return
   if (!xianMusicEl.value) {
     xianMusicEl.value = new Audio()
     xianMusicEl.value.volume = 0.5
@@ -2298,11 +2781,8 @@ function stopXianCityMusic() {
 }
 
 function playMetroAudio(src) {
-  if (!bundledMediaAvailable || !src) return
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 创建并播放地铁音乐
   if (!metroAudioEl.value) {
     metroAudioEl.value = new Audio()
@@ -2320,25 +2800,31 @@ function stopMetroAudio() {
   }
 }
 
+function enterXianCity() {
+  showXianTransition.value = false
+  showXianPanel.value = true
+  xianPhase.value = 0
+  stopMetroAudio()
+  playXianCityMusic()
+  nextTick(() => focusWithoutScroll(xianBackButton.value))
+}
+
 function startXianTransition() {
   showCityPanel.value = false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    enterXianCity()
+    return
+  }
   showXianTransition.value = true
   xianPhase.value = 0
 
   // 播放西安地铁音乐
-  playMetroAudio('')
+  playMetroAudio('/audio/xian-metro.mp3')
 
   setTimeout(() => { xianPhase.value = 1 }, 1500)
   setTimeout(() => { xianPhase.value = 2 }, 3200)
   setTimeout(() => { xianPhase.value = 3 }, 4800)
-  setTimeout(() => {
-    showXianTransition.value = false
-    showXianPanel.value = true
-    xianPhase.value = 0
-    // 转场结束，停止地铁音乐，开始播放西安城市音乐
-    stopMetroAudio()
-    playXianCityMusic()
-  }, 6200)
+  setTimeout(enterXianCity, 6200)
 }
 
 const showPuppetPopup = ref(false)
@@ -2347,7 +2833,7 @@ const shadowPuppetStep = ref(0) // 0=未开始, 1-7=步骤, 8=完成
 // 视频播放
 const showVideoPlayer = ref(false)
 const videoRef = ref(null)
-const videoSrc = ref('')
+const videoSrc = ref('/videos/puppet-show.mp4')
 
 const shadowPuppetSteps = [
   {
@@ -2428,9 +2914,7 @@ function closeXianPanel() {
   shadowPuppetStep.value = 0
   // 停止西安城市音乐，恢复背景音乐
   stopXianCityMusic()
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
-  }
+  if (!isBgmMuted()) startBgm()
 }
 
 function startPuppetMaking() {
@@ -2445,12 +2929,9 @@ function closePuppetPopup() {
 
 // ═══ 视频播放 ═══
 function openVideoPlayer() {
-  if (!bundledMediaAvailable || !videoSrc.value) return
   showVideoPlayer.value = true
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 暂停西安城市音乐
   if (xianMusicEl.value) {
     xianMusicEl.value.pause()
@@ -2465,16 +2946,16 @@ function closeVideoPlayer() {
   // 如果在西安面板内，恢复城市音乐而非BGM
   if (showXianPanel.value && xianMusicEl.value) {
     xianMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 function onVideoEnded() {
   // 视频播放结束，恢复音乐
   if (showXianPanel.value && xianMusicEl.value) {
     xianMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 
@@ -2498,15 +2979,18 @@ const rubbingSteps = [
 // 洛阳视频播放
 const showLuoyangVideoPlayer = ref(false)
 const luoyangVideoRef = ref(null)
-const luoyangVideoSrc = ref('')
+const luoyangVideoSrc = ref('/videos/luoyang-rubbing.mp4')
 
 // 洛阳城市音乐播放列表
-const luoyangPlaylist = []
+const luoyangPlaylist = [
+  '/audio/luoyang-song1.mp3',
+  '/audio/luoyang-song2.mp3',
+  '/audio/luoyang-song3.mp3',
+]
 const luoyangMusicEl = ref(null)
 const luoyangMusicIndex = ref(0)
 
 function playLuoyangCityMusic() {
-  if (!bundledMediaAvailable || luoyangPlaylist.length === 0) return
   if (!luoyangMusicEl.value) {
     luoyangMusicEl.value = new Audio()
     luoyangMusicEl.value.volume = 0.5
@@ -2528,26 +3012,32 @@ function stopLuoyangCityMusic() {
   }
 }
 
+function enterLuoyangCity() {
+  showLuoyangTransition.value = false
+  showLuoyangPanel.value = true
+  luoyangPhase.value = 0
+  stopMetroAudio()
+  playLuoyangCityMusic()
+  nextTick(() => focusWithoutScroll(luoyangBackButton.value))
+}
+
 function startLuoyangTransition() {
   showCityPanel.value = false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    enterLuoyangCity()
+    return
+  }
   showLuoyangTransition.value = true
   luoyangPhase.value = 0
 
   // 播放洛阳地铁音乐
-  playMetroAudio('')
+  playMetroAudio('/audio/luoyang-metro.mp3')
 
   // 转场时间线
   setTimeout(() => { luoyangPhase.value = 1 }, 1500)   // 启动运动感
   setTimeout(() => { luoyangPhase.value = 2 }, 3200)   // 开始模糊
   setTimeout(() => { luoyangPhase.value = 3 }, 4800)   // 白屏
-  setTimeout(() => {
-    showLuoyangTransition.value = false
-    showLuoyangPanel.value = true
-    luoyangPhase.value = 0
-    // 转场结束，停止地铁音乐，播放洛阳城市音乐
-    stopMetroAudio()
-    playLuoyangCityMusic()
-  }, 6200)                                              // 显示洛阳
+  setTimeout(enterLuoyangCity, 6200)                    // 显示洛阳
 }
 
 function openLuoyangPanel() {
@@ -2560,9 +3050,7 @@ function closeLuoyangPanel() {
   closeRubbingPopup()
   // 停止洛阳城市音乐，恢复背景音乐
   stopLuoyangCityMusic()
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
-  }
+  if (!isBgmMuted()) startBgm()
 }
 function startRubbing() {
   showRubbingPopup.value = true
@@ -2587,12 +3075,9 @@ function resetRubbing() {
 }
 
 function openLuoyangVideoPlayer() {
-  if (!bundledMediaAvailable || !luoyangVideoSrc.value) return
   showLuoyangVideoPlayer.value = true
   // 暂停背景音乐
-  if (audioEl.value && musicOn.value) {
-    audioEl.value.pause()
-  }
+  stopBgm()
   // 暂停洛阳城市音乐
   if (luoyangMusicEl.value) {
     luoyangMusicEl.value.pause()
@@ -2607,15 +3092,15 @@ function closeLuoyangVideoPlayer() {
   // 如果在洛阳面板内，恢复城市音乐而非BGM
   if (showLuoyangPanel.value && luoyangMusicEl.value) {
     luoyangMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 function onLuoyangVideoEnded() {
   if (showLuoyangPanel.value && luoyangMusicEl.value) {
     luoyangMusicEl.value.play().catch(() => {})
-  } else if (audioEl.value && musicOn.value) {
-    audioEl.value.play().catch(() => {})
+  } else if (!isBgmMuted()) {
+    startBgm()
   }
 }
 
@@ -2638,7 +3123,32 @@ function nextStep() {
 }
 
 // ═══ 微信状态 ═══
-const userStatus = ref(JSON.parse(localStorage.getItem('shengyu_user_status') || 'null'))
+const USER_STATUS_KEY = 'shengyu_user_status'
+const STATUS_HISTORY_KEY = 'shengyu_status_history'
+function clearUnscopedStudentStatus() {
+  try {
+    localStorage.removeItem(USER_STATUS_KEY)
+    localStorage.removeItem(STATUS_HISTORY_KEY)
+  } catch {}
+}
+function loadUserStatus() {
+  try {
+    const value = JSON.parse(safeStudentStorageGet(USER_STATUS_KEY) || 'null')
+    if (!value || typeof value.emoji !== 'string' || typeof value.text !== 'string') return null
+    return { emoji: value.emoji.slice(0, 8), text: value.text.slice(0, 40) }
+  } catch { return null }
+}
+function loadStatusHistory() {
+  try {
+    const value = JSON.parse(safeStudentStorageGet(STATUS_HISTORY_KEY) || '[]')
+    if (!Array.isArray(value)) return []
+    return value.filter(item => item && /^\d{4}-\d{2}-\d{2}$/.test(item.date) && typeof item.emoji === 'string' && typeof item.text === 'string')
+      .slice(-366)
+      .map(item => ({ date: item.date, emoji: item.emoji.slice(0, 8), text: item.text.slice(0, 40) }))
+  } catch { return [] }
+}
+clearUnscopedStudentStatus()
+const userStatus = ref(loadUserStatus())
 const statusInput = ref('')
 
 const presetStatuses = [
@@ -2674,18 +3184,18 @@ const presetStatuses = [
 function addStatusHistory(emoji, text) {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
-  const history = JSON.parse(localStorage.getItem('shengyu_status_history') || '[]')
+  const history = loadStatusHistory()
   // 同一天覆盖，新增日期追加
   const idx = history.findIndex(h => h.date === dateStr)
   if (idx >= 0) { history[idx] = { date: dateStr, emoji, text } }
   else { history.push({ date: dateStr, emoji, text }) }
-  localStorage.setItem('shengyu_status_history', JSON.stringify(history))
+  safeStudentStorageSet(STATUS_HISTORY_KEY, JSON.stringify(history.slice(-366)))
   buildStatusCalendar()
 }
 
 function setStatus(item) {
   userStatus.value = { emoji: item.emoji, text: item.text }
-  localStorage.setItem('shengyu_user_status', JSON.stringify(userStatus.value))
+  safeStudentStorageSet(USER_STATUS_KEY, JSON.stringify(userStatus.value))
   addStatusHistory(item.emoji, item.text)
   showStatusPicker.value = false
 }
@@ -2693,27 +3203,33 @@ function setCustomStatus() {
   const text = statusInput.value.trim()
   if (!text) return
   userStatus.value = { emoji: '💬', text }
-  localStorage.setItem('shengyu_user_status', JSON.stringify(userStatus.value))
+  safeStudentStorageSet(USER_STATUS_KEY, JSON.stringify(userStatus.value))
   addStatusHistory('💬', text)
   statusInput.value = ''
   showStatusPicker.value = false
 }
 function clearStatus() {
   userStatus.value = null
-  localStorage.removeItem('shengyu_user_status')
+  safeStudentStorageRemove(USER_STATUS_KEY)
   showStatusPicker.value = false
 }
 const distribution = ref({})
 const totalMoodCount = computed(() => Object.values(distribution.value).reduce((a, b) => a + b, 0))
 
-// 情绪分布 — 评判说明
-const moodJudgeNote = {
-  '开心': '通过对话中的积极关键词、感叹词、愉悦语气和正面事件描述综合判定',
-  '平静': '由中性平稳的叙述节奏、日常话题和低情绪波动表达判定',
-  '焦虑': '依据不安词汇、反复确认、急促表达和对未来的担忧信号识别',
-  '难过': '从低能量措辞、悲伤表达、回避性话题和自我否定倾向判断',
-  '愤怒': '基于激烈用语、否定句式、不满情绪和对事件的强烈反应分析',
+// 新七类是主动记录的唯一选项；旧标签保留用于历史记录与对话识别。
+const MOOD_EMOJI = {
+  '愤怒': '😠', '厌恶': '🤢', '恐惧': '😨', '开心': '😊', '中性': '😐', '悲伤': '😢', '惊讶': '😲',
+  '平静': '😌', '焦虑': '😟', '难过': '😢',
 }
+const MOOD_COLOR = {
+  '愤怒': '#D4776A', '厌恶': '#B8903E', '恐惧': '#8B7BA6', '开心': '#8FCBA6',
+  '中性': '#A8A29A', '悲伤': '#6F82A6', '惊讶': '#D9B46A',
+  '平静': '#8FCBA6', '焦虑': '#D9B46A', '难过': '#6F82A6',
+}
+// 情绪分布说明：数据只来自学生主动选择的心情记录，不从对话语气推断。
+const moodJudgeNote = Object.fromEntries(
+  Object.keys(MOOD_EMOJI).map(label => [label, `你主动选择“${label}”的记录次数，占当前心情记录总数的比例`]),
+)
 // 占比最大时的安慰/建议
 const moodComfort = {
   '开心': '太棒了！保持这份好心情，你值得每一刻的快乐 🌟',
@@ -2721,6 +3237,11 @@ const moodComfort = {
   '焦虑': '焦虑是大脑在提醒你重视某事，不是你的敌人。试着深呼吸，你已经做得很好了 💛',
   '难过': '难过没关系，它是你柔软内心的证明。如果愿意，我一直在这里倾听 🤍',
   '愤怒': '愤怒是边界被触碰的信号。允许自己生气，但别让情绪控制你。找个出口释放它吧 💪',
+  '厌恶': '厌恶感在提醒你，有些东西不适合你。先离远一点，保护好自己的边界 🛡️',
+  '恐惧': '害怕的时候，说明你在认真保护自己。先找一个让你安心的地方，慢慢呼吸 🫧',
+  '中性': '平静地记录也是一种照顾自己。没有强烈情绪的日子，同样值得被看见 🌿',
+  '悲伤': '悲伤让心里的重量慢下来。不用急着好起来，我会在这里陪你一会儿 🤍',
+  '惊讶': '惊讶说明生活里还有意想不到的事。先停一停，等心里的波纹散开 ✨',
 }
 const topMoodLabels = computed(() => {
   const dist = distribution.value
@@ -2749,10 +3270,36 @@ function toggleCard(idx) {
   expandedCard.value = expandedCard.value === idx ? -1 : idx
 }
 
-function toggleSongPlay() {}
+function toggleSongPlay(song) {
+  listeningShelf.value?.pause()
+  if (activeSongId.value === song.songId) {
+    // 暂停当前
+    activeSongId.value = null
+    if (musicAudioEl.value) {
+      musicAudioEl.value.pause()
+      musicAudioEl.value.src = ''
+    }
+  } else {
+    // 播放新歌：先尝试用后端 /api/music/play 代理播放
+    activeSongId.value = song.songId
+    if (musicAudioEl.value) {
+      // 监听播放失败，失败后跳转网易云网页
+      const onError = () => {
+        musicAudioEl.value.removeEventListener('error', onError)
+        // 播放失败，跳转网易云网页
+        window.open(`https://music.163.com/song?id=${song.songId}`, '_blank')
+        activeSongId.value = null
+      }
+      musicAudioEl.value.addEventListener('error', onError)
+      musicAudioEl.value.src = playAudioUrl(song.songId)
+      musicAudioEl.value.play().catch(() => {
+        // autoplay 被拦，用户手动点播放按钮时不会再进这里
+      })
+    }
+  }
+}
 
 function openMusicPanel() {
-  if (!bundledMediaAvailable) return
   openWorkspacePanel('music')
   expandedCard.value = -1
   activeSongId.value = null
@@ -2762,12 +3309,14 @@ function openMusicPanel() {
   }
 }
 
+// 后端代理音频 URL（绕过网易云 Referer 限制）
 function playAudioUrl(songId) {
-  return bundledMediaAvailable && songId ? '' : ''
+  return `${import.meta.env.VITE_API_BASE || ''}/api/music/play?song_id=${songId}`
 }
 
+// 构建网易云歌曲详情页 URL
 function neteaseSongUrl(songId) {
-  return bundledMediaAvailable && songId ? '#' : '#'
+  return `https://music.163.com/song?id=${songId}`
 }
 
 // 封面图片加载失败时，替换为占位符
@@ -2798,30 +3347,30 @@ const primaryEmotionPct = computed(() => {
 // ─── 音乐风格库：每种风格对 5 种情绪的亲和力评分 (0-10)，并附带代表性歌曲 ───
 const musicStyles = [
   {
-    style: '欢快流行', emoji: '🎉', color: '#E8C468',
+    style: '欢快流行', emoji: '🎉', color: '#D9B46A',
     searchKeyword: '欢快 流行 华语',
     reason: '适合开心时放大愉悦感',
     affinity: { '开心': 10, '平静': 4, '焦虑': 1, '难过': 0, '愤怒': 2 },
     timeAffinity: { day: 9, evening: 6, night: 3 },
     weatherAffinity: { sun: 9, cloud: 7, rain: 3, snow: 3, fog: 4 },
-    // 仅作布局占位；公开构建不加载媒体。
+    // 代表性歌曲：歌名、歌手、网易云songId（用于iframe播放器）
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '晴天', artist: '周杰伦', songId: 186016, cover: 'https://p1.music.126.net/ZGffiDQZrGj5s_hnR1CNbg==/109951165566379710.jpg' },
+      { name: '告白气球', artist: '周杰伦', songId: 569213183, cover: 'https://p1.music.126.net/e4hVwChbCGUZ37Wrd9B6yQ==/109951163919066717.jpg' },
+      { name: '小幸运', artist: '田馥甄', songId: 2917134, cover: 'https://p1.music.126.net/TQxwpNMQWiih1b19b4KKGw==/1681153278877522.jpg' },
     ]
   },
   {
-    style: '治愈轻音乐', emoji: '🎹', color: '#7FB3A6',
+    style: '治愈轻音乐', emoji: '🎹', color: '#8FCBA6',
     searchKeyword: '治愈 轻音乐 纯音乐',
     reason: '安抚焦虑，带来内心平静',
     affinity: { '开心': 5, '平静': 8, '焦虑': 10, '难过': 9, '愤怒': 4 },
     timeAffinity: { day: 6, evening: 9, night: 10 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 10, snow: 9, fog: 9 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '城南花已开', artist: '三亩地', songId: 1359357042, cover: 'https://p1.music.126.net/i-7ktILRPImJ0NwiH8DABg==/109951162885959979.jpg' },
+      { name: '夜的钢琴曲五', artist: '石进', songId: 67295, cover: 'https://p1.music.126.net/zdjtruSEpZNwmlwWcohpsg==/109951163167564492.jpg' },
+      { name: '所念皆星河', artist: 'CMJ', songId: 1444918783, cover: 'https://p1.music.126.net/3VeuCpgZlZDD1Gxb-KBJqg==/109951164953114721.jpg' },
     ]
   },
   {
@@ -2832,9 +3381,9 @@ const musicStyles = [
     timeAffinity: { day: 7, evening: 9, night: 7 },
     weatherAffinity: { sun: 7, cloud: 9, rain: 8, snow: 7, fog: 8 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '成都', artist: '赵雷', songId: 436514312, cover: 'https://p1.music.126.net/34YW1QtKxJ_3YnX9ZzKhzw==/2946691234868155.jpg' },
+      { name: '理想三旬', artist: '赵雷', songId: 483671599, cover: 'https://p1.music.126.net/ZZAQGWl9mR7g5xCyWWH3Pw==/19149094509535913.jpg' },
+      { name: '给他', artist: '赵雷', songId: 436514315, cover: 'https://p1.music.126.net/7EYBYjQeiq98Qf4guhhmVA==/109951168738695464.jpg' },
     ]
   },
   {
@@ -2845,9 +3394,9 @@ const musicStyles = [
     timeAffinity: { day: 9, evening: 7, night: 2 },
     weatherAffinity: { sun: 10, cloud: 7, rain: 3, snow: 2, fog: 3 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '你要跳舞吗', artist: '新裤子', songId: 1356068210, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '生活因你而火热', artist: '新裤子', songId: 1356068220, cover: 'https://p1.music.126.net/0lflIySgfNfAq5zBaasoDg==/109951165787458877.jpg' },
+      { name: '没有理想的人不伤心', artist: '新裤子', songId: 29787149, cover: 'https://p1.music.126.net/UsI2lB7qV2fhvBIjY0DCjQ==/109951172945816490.jpg' },
     ]
   },
   {
@@ -2858,9 +3407,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 10, night: 8 },
     weatherAffinity: { sun: 7, cloud: 8, rain: 9, snow: 6, fog: 7 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '关键词', artist: '林俊杰', songId: 37115780, cover: 'https://p1.music.126.net/xZAbLHvJbuotr2E-Z8w5DA==/109951165971294045.jpg' },
+      { name: '修炼爱情', artist: '林俊杰', songId: 25706282, cover: 'https://p1.music.126.net/625-tE8OzdM-rWO37PgqlQ==/109951168111472442.jpg' },
+      { name: '不为谁而作的歌', artist: '林俊杰', songId: 436514197, cover: 'https://p1.music.126.net/D7-9kByFrvbgiuEnC0dDfA==/109951165970794886.jpg' },
     ]
   },
   {
@@ -2871,22 +3420,22 @@ const musicStyles = [
     timeAffinity: { day: 8, evening: 5, night: 1 },
     weatherAffinity: { sun: 8, cloud: 6, rain: 5, snow: 3, fog: 4 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '山海', artist: '草东没有派对', songId: 1358695895, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '丑', artist: '草东没有派对', songId: 5276217, cover: 'https://p1.music.126.net/I-nsxE9zdpuin9g_mckpXg==/86861418611919.jpg' },
+      { name: '大风吹', artist: '刘柏辛', songId: 1496091321, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
     ]
   },
   {
-    style: '自然白噪音', emoji: '🌿', color: '#6DB58B',
+    style: '自然白噪音', emoji: '🌿', color: '#8FCBA6',
     searchKeyword: '自然 白噪音 雨声',
     reason: '回归自然的频率，抚平焦躁',
     affinity: { '开心': 3, '平静': 10, '焦虑': 8, '难过': 6, '愤怒': 4 },
     timeAffinity: { day: 7, evening: 8, night: 10 },
     weatherAffinity: { sun: 5, cloud: 8, rain: 10, snow: 8, fog: 9 },
     songs: [
-      { name: '示例声音一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例声音二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例声音三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '雨声白噪音', artist: '自然之声', songId: 1465849737, cover: 'https://p1.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '森林鸟鸣', artist: '自然之声', songId: 1465849758, cover: 'https://p2.music.126.net/C6Vro2l0BH59Wka9gOaC6w==/109951171180358170.jpg' },
+      { name: '海浪声', artist: '自然之声', songId: 1444918786, cover: 'https://p1.music.126.net/jsBhqms-CD7T_DYCxnIQjA==/109951166460341641.jpg' },
     ]
   },
   {
@@ -2897,9 +3446,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 9, night: 8 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: 'Fly Me to the Moon', artist: 'Frank Sinatra', songId: 4168622, cover: 'https://p2.music.126.net/bJRtgoTCe0YspTrkdYo0Tw==/676199651127457.jpg' },
+      { name: 'What a Wonderful World', artist: 'Louis Armstrong', songId: 26383868, cover: 'https://p1.music.126.net/N3qjM1qskbd7Dx_Dynvt1w==/109951169912228684.jpg' },
+      { name: 'L-O-V-E', artist: 'Nat King Cole', songId: 18402858, cover: 'https://p1.music.126.net/bTFrV7URxgZ0o-isyGD7xQ==/109951170244545780.jpg' },
     ]
   },
   {
@@ -2910,9 +3459,9 @@ const musicStyles = [
     timeAffinity: { day: 9, evening: 5, night: 1 },
     weatherAffinity: { sun: 9, cloud: 6, rain: 3, snow: 2, fog: 3 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '野狼Disco', artist: '宝石Gem', songId: 1359094256, cover: 'https://p2.music.126.net/RsYEUlA8agDF8zaer4CGPg==/697090372021875.jpg' },
+      { name: '我tm年轻人', artist: 'Bridge', songId: 1444918784, cover: 'https://p1.music.126.net/zpHpJYRJLlAUJaXO9kWQgA==/109951169037909968.jpg' },
+      { name: '经济舱', artist: '满舒克', songId: 1298137594, cover: 'https://p2.music.126.net/Asu2_uqMi8hu_Ro8cbKOTA==/109951169642450108.jpg' },
     ]
   },
   {
@@ -2923,9 +3472,9 @@ const musicStyles = [
     timeAffinity: { day: 6, evening: 8, night: 7 },
     weatherAffinity: { sun: 6, cloud: 8, rain: 9, snow: 8, fog: 7 },
     songs: [
-      { name: '示例曲目一', artist: '由部署者配置', songId: 1, cover: '' },
-      { name: '示例曲目二', artist: '由部署者配置', songId: 2, cover: '' },
-      { name: '示例曲目三', artist: '由部署者配置', songId: 3, cover: '' },
+      { name: '后来', artist: '刘若英', songId: 254128, cover: 'https://p2.music.126.net/N_dKBZBGibWNhrjDTEgxXg==/109951168163382132.jpg' },
+      { name: '红豆', artist: '王菲', songId: 254033, cover: 'https://p2.music.126.net/YDfgFWb0Hom_z1rmyhB5ng==/115448720932051.jpg' },
+      { name: '情非得已', artist: '庾澄庆', songId: 254492, cover: 'https://p2.music.126.net/nSCOYgdN2yo1e-NdQWa4CQ==/18511377767232313.jpg' },
     ]
   },
 ]
@@ -2962,11 +3511,18 @@ const emotionTendency = computed(() => {
   const dist = distribution.value
   if (!Object.keys(dist).length) return 0
   const total = totalMoodCount.value
-  const pos = (dist['开心'] || 0) + (dist['平静'] || 0) * 0.5
+  const pos = (dist['开心'] || 0) + (dist['中性'] || 0) * 0.5 + (dist['平静'] || 0) * 0.5
   const neg = (dist['焦虑'] || 0) + (dist['难过'] || 0) + (dist['愤怒'] || 0)
+    + (dist['厌恶'] || 0) + (dist['恐惧'] || 0) + (dist['悲伤'] || 0)
   if (total === 0) return 0
   return Math.round(((pos - neg) / total) * 100)
 })
+
+// 新情绪并入原有曲风亲和力维度；旧标签保留以兼容历史记录。
+const MUSIC_MOOD_BASE = { '厌恶': '愤怒', '恐惧': '焦虑', '悲伤': '难过', '中性': '平静', '惊讶': '开心' }
+function musicMoodAffinity(style, label) {
+  return style.affinity[label] ?? style.affinity[MUSIC_MOOD_BASE[label]] ?? 0
+}
 
 // ─── 核心推荐算法 ───
 const musicRecs = computed(() => {
@@ -2985,11 +3541,16 @@ const musicRecs = computed(() => {
   const tendency = emotionTendency.value
 
   const scored = musicStyles.map(s => {
-    const primaryMatch = s.affinity[primary] || 0
+    const primaryMatch = musicMoodAffinity(s, primary)
     const emotionScore = (primaryMatch / 10) * 50
 
-    const posAffinity = Math.max(s.affinity['开心'] || 0, s.affinity['平静'] || 0)
-    const negAffinity = Math.max(s.affinity['焦虑'] || 0, s.affinity['难过'] || 0, s.affinity['愤怒'] || 0)
+    const posAffinity = Math.max(
+      musicMoodAffinity(s, '开心'), musicMoodAffinity(s, '平静'), musicMoodAffinity(s, '中性'),
+    )
+    const negAffinity = Math.max(
+      musicMoodAffinity(s, '焦虑'), musicMoodAffinity(s, '难过'), musicMoodAffinity(s, '愤怒'),
+      musicMoodAffinity(s, '厌恶'), musicMoodAffinity(s, '恐惧'), musicMoodAffinity(s, '悲伤'),
+    )
     let tendencyBonus = 0
     if (tendency > 0) {
       tendencyBonus = (posAffinity / 10) * (tendency / 100) * 20
@@ -3004,8 +3565,8 @@ const musicRecs = computed(() => {
 
     let scoreColor
     if (totalScore >= 75) scoreColor = '#D4776A'
-    else if (totalScore >= 60) scoreColor = '#E8C468'
-    else if (totalScore >= 40) scoreColor = '#7FB3A6'
+    else if (totalScore >= 60) scoreColor = '#D9B46A'
+    else if (totalScore >= 40) scoreColor = '#8FCBA6'
     else scoreColor = '#8B8B8B'
 
     return {
@@ -3040,10 +3601,7 @@ const topMood = computed(() => {
   if (!Object.keys(dist).length) return '--'
   return Object.entries(dist).sort((a, b) => b[1] - a[1])[0][0]
 })
-const topMoodEmoji = computed(() => {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[topMood.value] || '--'
-})
+const topMoodEmoji = computed(() => MOOD_EMOJI[topMood.value] || '--')
 const sortedDist = computed(() => {
   const dist = trendStats.value.distribution || {}
   return Object.fromEntries(Object.entries(dist).sort((a, b) => b[1] - a[1]))
@@ -3072,12 +3630,10 @@ const xLabels = computed(() => {
 })
 
 function getMoodEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[label] || '🙂'
+  return MOOD_EMOJI[label] || '🙂'
 }
 function getMoodColor(label) {
-  const c = { '开心': '#6DB58B', '平静': '#7FB3A6', '焦虑': '#E8C468', '难过': '#8EAFC4', '愤怒': '#D4776A' }
-  return c[label] || '#C8BEB4'
+  return MOOD_COLOR[label] || '#C8BEB4'
 }
 function getDistWidth(count) {
   const total = Object.values(trendStats.value.distribution || {}).reduce((a, b) => a + b, 0)
@@ -3118,7 +3674,7 @@ const badges = computed(() => [
 const moodCalendar = ref([])
 
 function buildStatusCalendar() {
-  const history = JSON.parse(localStorage.getItem('shengyu_status_history') || '[]')
+  const history = loadStatusHistory()
   // 把当前状态也加入今天（如果历史里没有今天的话）
   const today = new Date().toISOString().slice(0, 10)
   if (userStatus.value && !history.find(h => h.date === today)) {
@@ -3152,8 +3708,7 @@ function buildStatusCalendar() {
 }
 
 function getEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡' }
-  return map[label] || '🙂'
+  return MOOD_EMOJI[label] || '🙂'
 }
 
 function getPercent(count) {
@@ -3191,7 +3746,7 @@ async function handleLogout() {
     return
   }
   try {
-    await userStore.ensureDemoSession()
+    await userStore.ensureStudentSession()
   } catch {
     router.push('/teacher-login')
   }
@@ -3203,69 +3758,26 @@ function openProfile() {
   loadStats()
 }
 
-// ─── 欢迎遮罩 & BGM ───
-const showSplash = ref(true)
+// ─── 欢迎遮罩 & BGM（与聊天 / 回顾 / 我的共用单例） ───
+const showSplash = ref(safeSessionGet(SPLASH_SEEN_KEY) !== '1')
+const musicOn = ref(isBgmOn())
 const audioEl = ref(null)
-const musicOn = ref(true)
+let unsubscribeBgm = () => {}
 
-// BGM播放列表
-const bgmPlaylist = []
-const bgmIndex = ref(0)
-
-function initBgmPlaylist() {
-  if (!bundledMediaAvailable || !audioEl.value || bgmPlaylist.length === 0) return
-  audioEl.value.addEventListener('ended', () => {
-    bgmIndex.value = (bgmIndex.value + 1) % bgmPlaylist.length
-    audioEl.value.src = bgmPlaylist[bgmIndex.value]
-    if (musicOn.value) {
-      audioEl.value.play().catch(() => {})
-    }
-  })
+function safeSessionGet(key) {
+  try { return sessionStorage.getItem(key) } catch { return null }
 }
 
-function enterApp() {
+async function enterApp() {
   showSplash.value = false
-  if (!bundledMediaAvailable || bgmPlaylist.length === 0) return
-  // 用户触发点击，绕过浏览器自动播放限制
-  if (audioEl.value) {
-    bgmIndex.value = 0
-    audioEl.value.src = bgmPlaylist[0]
-    audioEl.value.volume = 0
-    audioEl.value.play().then(() => {
-      // 渐入音量
-      let vol = 0
-      const fade = setInterval(() => {
-        vol = Math.min(vol + 0.04, 0.45)
-        audioEl.value.volume = vol
-        if (vol >= 0.45) clearInterval(fade)
-      }, 80)
-    }).catch(() => {})
-    initBgmPlaylist()
-  }
+  try { sessionStorage.setItem(SPLASH_SEEN_KEY, '1') } catch {}
+  // 用户手势内启动，绕过浏览器自动播放限制
+  musicOn.value = await startBgm()
 }
 
-function toggleMusic() {
-  if (!bundledMediaAvailable || !audioEl.value || bgmPlaylist.length === 0) return
-  if (musicOn.value) {
-    // 渐出后暂停
-    let vol = audioEl.value.volume
-    const fade = setInterval(() => {
-      vol = Math.max(vol - 0.05, 0)
-      audioEl.value.volume = vol
-      if (vol <= 0) { clearInterval(fade); audioEl.value.pause() }
-    }, 50)
-  } else {
-    // 恢复播放并渐入
-    audioEl.value.play().then(() => {
-      let vol = 0
-      const fade = setInterval(() => {
-        vol = Math.min(vol + 0.04, 0.45)
-        audioEl.value.volume = vol
-        if (vol >= 0.45) clearInterval(fade)
-      }, 80)
-    }).catch(() => {})
-  }
-  musicOn.value = !musicOn.value
+async function toggleMusic() {
+  listeningShelf.value?.pause()
+  musicOn.value = await toggleBgm()
 }
 
 // ─── 调试模式 ───
@@ -3273,13 +3785,25 @@ const debugTime = ref('auto')
 const debugWeather = ref('auto')
 
 // ─── 时间 ───
-const currentHour = ref(new Date().getHours())
+const currentHour = ref(devHourOverride() ?? new Date().getHours())
 const currentTime = ref('')
+const celestialNow = ref(fixPreviewHour(new Date()))
 let timer = null
 
+function fixPreviewHour(now) {
+  const hour = devHourOverride()
+  if (hour === null) return now
+  const fixed = new Date(now)
+  fixed.setHours(hour, 0, 0, 0)
+  return fixed
+}
+
 function tick() {
-  const now = new Date()
-  if (debugTime.value === 'auto') currentHour.value = now.getHours()
+  const now = fixPreviewHour(new Date())
+  celestialNow.value = now
+  const previewHour = devHourOverride()
+  if (previewHour !== null) currentHour.value = previewHour
+  else if (debugTime.value === 'auto') currentHour.value = now.getHours()
   currentTime.value = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -3289,20 +3813,98 @@ const timeOfDay = computed(() => {
   if (h >= 17 && h < 20) return 'evening'
   return 'night'
 })
+const petHomeScene = computed(() => timeOfDay.value === 'day' ? petHomeDay : timeOfDay.value === 'evening' ? petHomeDusk : petHomeNight)
 
-// ─── 屏幕尺寸检测 ───
-const isDesktop = ref(window.innerWidth >= 768)
-function onResize() { isDesktop.value = window.innerWidth >= 768 }
+// ─── 天象：太阳走日间弧线，月亮走夜间弧线并按真实月相盈亏 ───
+const SYNODIC_MONTH = 29.530588853
+const NEW_MOON_EPOCH = Date.UTC(2000, 0, 6, 18, 14)
 
-// ─── 昼夜背景图 ───
-const bgImage = computed(() => {
-  if (isDesktop.value) {
-    if (timeOfDay.value === 'day') return '/images/电脑端-白天.jpg'
-    if (timeOfDay.value === 'evening') return '/images/电脑端-傍晚.jpg'
-    return '/images/电脑端-夜晚.jpg'
+function lerpHex(from, to, t) {
+  const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const [fr, fg, fb] = channels(from)
+  const [tr, tg, tb] = channels(to)
+  const mix = (a, b) => Math.round(a + (b - a) * t).toString(16).padStart(2, '0')
+  return `#${mix(fr, tr)}${mix(fg, tg)}${mix(fb, tb)}`
+}
+
+function discRows(radius, step, fill, opacity) {
+  const rows = []
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const half = Math.sqrt(Math.max(0, radius * radius - (y + h / 2) ** 2))
+    if (half < 1) continue
+    rows.push({ x: Math.round(-half), y: Math.round(y), w: Math.round(half * 2), h: Math.round(h), fill, opacity })
   }
-  if (timeOfDay.value === 'day') return '/images/白天.png'
-  return '/images/夜晚.png'
+  return rows
+}
+
+function ringRows(radius, thickness, step, fill, opacity) {
+  const rows = []
+  const inner = radius - thickness
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const mid = y + h / 2
+    const outer = Math.sqrt(Math.max(0, radius * radius - mid * mid))
+    if (outer < 1) continue
+    const innerHalf = Math.abs(mid) < inner ? Math.sqrt(Math.max(0, inner * inner - mid * mid)) : 0
+    const band = Math.max(0, Math.round(outer - innerHalf))
+    if (band < 1) continue
+    rows.push({ x: Math.round(-outer), y: Math.round(y), w: band, h: Math.round(h), fill, opacity })
+    if (innerHalf > 1) rows.push({ x: Math.round(innerHalf), y: Math.round(y), w: band, h: Math.round(h), fill, opacity })
+  }
+  return rows
+}
+
+function moonLitRows(radius, step, phase, fill, opacity) {
+  const angle = phase * Math.PI * 2
+  const waxing = phase < 0.5
+  const cosine = Math.cos(waxing ? angle : Math.PI * 2 - angle)
+  const rows = []
+  for (let y = -radius; y < radius; y += step) {
+    const h = Math.min(step, radius - y)
+    const half = Math.sqrt(Math.max(0, radius * radius - (y + h / 2) ** 2))
+    if (half < 1) continue
+    const boundary = Math.round(cosine * half)
+    const start = waxing ? boundary : -Math.round(half)
+    const end = waxing ? Math.round(half) : -boundary
+    if (end - start < 1) continue
+    rows.push({ x: start, y: Math.round(y), w: end - start, h: Math.round(h), fill, opacity })
+  }
+  return rows
+}
+
+const celestialState = computed(() => {
+  const now = celestialNow.value
+  const hour = now.getHours() + now.getMinutes() / 60
+  const rects = []
+  let kind = 'sun'
+  let x = 800
+  let y = 430
+  if (hour >= 6 && hour < 18) {
+    const progress = (hour - 6) / 12
+    x = 560 + 480 * progress
+    y = 430 - 220 * Math.sin(Math.PI * progress)
+    const horizon = Math.min(1, Math.abs(progress * 2 - 1))
+    const main = lerpHex('#f3d69d', '#e9a05b', horizon)
+    const ring = lerpHex('#d8a967', '#bf7a42', horizon)
+    rects.push(...discRows(196, 12, ring, 0.07))
+    rects.push(...ringRows(166, 7, 10, ring, 0.4))
+    rects.push(...discRows(150, 10, main, 0.55))
+  } else {
+    kind = 'moon'
+    const progress = hour >= 18 ? (hour - 18) / 12 : (hour + 6) / 12
+    x = 1040 - 480 * progress
+    y = 430 - 220 * Math.sin(Math.PI * progress)
+    const days = (now.getTime() - NEW_MOON_EPOCH) / 86400000
+    const age = ((days % SYNODIC_MONTH) + SYNODIC_MONTH) % SYNODIC_MONTH
+    const phase = age / SYNODIC_MONTH
+    const illumination = (1 - Math.cos(phase * Math.PI * 2)) / 2
+    rects.push(...discRows(150, 12, '#e3c27d', 0.05))
+    rects.push(...ringRows(128, 6, 9, '#cba968', 0.12 + 0.2 * illumination))
+    rects.push(...discRows(110, 9, '#f2e3c0', 0.05))
+    rects.push(...moonLitRows(110, 9, phase, '#f8ebca', 0.94))
+  }
+  return { kind, x: Math.round(x), y: Math.round(y), rects }
 })
 
 const greeting = computed(() => {
@@ -3351,13 +3953,27 @@ function refreshWeather() {
   }
 }
 
-// ─── 导航 ───
-function goToChat()  { openChatPanel() }
-function goToTrend() { openTrendPanel() }
-function goProfile() { openProfile() }
+// ─── 导航：房间只负责场景，倾诉 / 回顾 / 我的各自是路由页 ───
+function goToChat()  { router.push('/chat') }
+async function goToTrend() { await router.push('/trend') }
+function goProfile() { router.push('/profile') }
 
 // ═══ 聊天面板 ═══
 const chatInput = ref('')
+const externalAiConsent = ref(false)
+const companionEngine = ref(null)
+const consentTitle = computed(() => {
+  if (!externalAiConsent.value) return '当前使用本地安全回应'
+  return companionEngine.value === 'legacy_xunfei' ? '讯飞策略协作已启用' : 'DeepSeek 小满对话已启用'
+})
+const consentDetail = computed(() => {
+  if (!externalAiConsent.value) return '模型服务暂不可用，系统会继续提供本地安全回应。'
+  if (companionEngine.value === 'legacy_xunfei') {
+    return '无需单独申请即可对话；文字倾诉只在本地提取情绪、主题、功能影响等去标识化结构线索，由模型选择回应策略、后端生成安全话术。聊天原文、姓名、学校、联系方式、精确地址和原始录音不会发送给外部模型，危机判断始终由本地安全规则优先处理。'
+  }
+  return '无需单独申请即可对话；对话原文会发送给平台接入的 DeepSeek 模型，用于生成本轮回应和本次小结。小满会在你主动说起时，记住少量关于你的小事，让下一次聊天能接上；你可以在「小满记得的事」里随时查看或删除。姓名、学校、联系方式、精确地址和原始录音不会发送。危机判断与风险等级始终由本地安全规则优先处理。'
+})
+const voiceInputEnabled = ref(false)
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const chatInputPlaceholder = computed(() => isFirstRunChatPending.value ? '把今天最想说的一句话丢给我' : '说说你的感受...')
@@ -3419,46 +4035,94 @@ function onQuickMouseUp() {
 }
 
 function getEmotionEmoji(emotion) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😟', '难过': '😢', '愤怒': '😡', '疲惫': '😴' }
-  return map[emotion] || '🙂'
+  const extra = {
+    '疲惫': '😴', '孤独': '🌙', '委屈': '💧', '害怕': '🫧', '复杂': '🌀', '不确定': '…',
+  }
+  return MOOD_EMOJI[emotion] || extra[emotion] || '🙂'
 }
 
 async function sendChatMsg(text) {
   const msg = text || chatInput.value.trim()
-  if (!msg || chatLoading.value) return
+  if (!msg || chatLoading.value || chatUrgentLocked.value) return
   chatInput.value = ''
   showEndConfirmation.value = false
   chatMessages.value.push({ role: 'user', content: msg })
+  const userMessageIndex = chatMessages.value.length - 1
   studentAgentState.status = 'running'
   studentAgentState.phase = 'chat'
+  studentAgentState.source = 'pending'
   studentAgentState.verifiedSteps = []
-  studentAgentState.messageCount = chatMessages.value.filter(item => item.role === 'user').length
-  studentAgentState.lastEvent = '正在理解这条表达并检查是否需要优先安全协助'
+  studentAgentState.runCode = ''
+  studentAgentState.intentSummary = ''
+  studentAgentState.tools = []
+  studentAgentState.events = []
+  studentAgentState.plan = []
+  studentAgentState.modelName = ''
+  studentAgentState.deliverable = null
+  studentAgentState.messageCount = 0
+  studentAgentState.lastEvent = '安全分流进行中；通过后才会理解表达并规划支持'
   await nextTick()
   scrollChatBottom()
   chatLoading.value = true
   try {
-    if (!chatSessionId.value) {
-      const session = await startChatSession(false)
-      chatSessionId.value = session.data.session_id
+    await userStore.ensureStudentSession(true)
+    const session = await startChatSession(false)
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    applyChatSessionStatus(session.data?.status)
+    chatSessionId.value = session.data.session_id
+    const requestKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`
+    let res
+    try {
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
+    } catch (err) {
+      if (err.response?.status !== 409 || !String(err.response.data?.detail || '').includes('隐私说明已更新')) throw err
+      const fresh = await startChatSession(true)
+      chatSessionId.value = fresh.data.session_id
+      externalAiConsent.value = !!fresh.data.external_ai_enabled
+      companionEngine.value = fresh.data.companion_engine || null
+      voiceInputEnabled.value = !!fresh.data.voice_input_enabled
+      res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value, requestKey)
     }
-    const res = await sendMessage(Number(userStore.userId), msg, 'text', chatSessionId.value)
     await nextTick()
     if (res.data?.reply) {
-      chatMessages.value.push({ role: 'assistant', content: res.data.reply, emotion: res.data.emotion })
+      chatMessages.value[userMessageIndex] = {
+        ...chatMessages.value[userMessageIndex], emotion: res.data.emotion,
+        emotion_intensity: res.data.emotion_intensity, emotion_basis: res.data.emotion_basis,
+        analysis_source: res.data.analysis_source,
+      }
+      chatMessages.value.push({ role: 'assistant', content: res.data.reply })
       chatSessionId.value = res.data.session_id || chatSessionId.value
       completeFirstRunAfterChat(msg, res.data)
       showEndConfirmation.value = res.data.conversation_signal === 'end_candidate'
       studentAgentState.signal = res.data.conversation_signal || 'continue'
+      studentAgentState.source = res.data.analysis_source === 'deepseek_companion'
+        ? 'deepseek_companion'
+        : res.data.analysis_source === 'xunfei_constrained'
+          ? 'xunfei_constrained'
+          : res.data.analysis_source === 'safety_override'
+            ? 'safety_override'
+            : 'deterministic'
       studentAgentState.emotion = res.data.emotion || ''
       studentAgentState.riskLevel = res.data.risk_level || 'routine'
       studentAgentState.verifiedSteps = Array.isArray(res.data.workflow) ? res.data.workflow : []
+      applyVerifiedAgentRun(res.data.agent_run)
       if (studentAgentState.signal === 'urgent') {
+        chatUrgentLocked.value = true
+        safetyCurrentSafe.value = false
+        safetyContactedAdult.value = false
         studentAgentState.status = 'urgent'
+        studentAgentState.source = 'safety_override'
         studentAgentState.phase = 'urgent'
         studentAgentState.riskLevel = 'urgent'
         studentAgentState.lastEvent = '普通分析已停止，当前优先显示安全协助路径'
         showAgentRail.value = false
+        nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
+      } else if (res.data.agent_run?.status === 'attention') {
+        studentAgentState.status = 'attention'
+        studentAgentState.phase = 'delivery_attention'
+        studentAgentState.lastEvent = '交付验收未全部通过，本轮未宣称完成；可查看核验项后安全重试'
       } else {
         studentAgentState.status = 'ready'
         studentAgentState.phase = showEndConfirmation.value ? 'end_candidate' : 'responded'
@@ -3469,13 +4133,15 @@ async function sendChatMsg(text) {
     } else {
       chatMessages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试...' })
       studentAgentState.status = 'error'
+      studentAgentState.source = 'unavailable'
       studentAgentState.phase = 'chat_error'
       studentAgentState.lastEvent = '本轮没有获得有效结果，聊天内容已保留，可以稍后重试'
     }
   } catch (err) {
     console.error('发送失败:', err)
-    chatMessages.value.push({ role: 'assistant', content: '网络异常，请检查连接后重试...' })
+    chatMessages.value.push({ role: 'assistant', content: '这次连接没有完成，你刚才的话还在。请再试一次。' })
     studentAgentState.status = 'error'
+    studentAgentState.source = 'unavailable'
     studentAgentState.phase = 'chat_error'
     studentAgentState.lastEvent = '本轮协作未完成，聊天内容已保留，可以稍后重试'
   }
@@ -3486,7 +4152,7 @@ async function sendChatMsg(text) {
 }
 
 function requestConversationEnd() {
-  if (!chatMessages.value.some(item => item.role === 'user') || chatLoading.value) return
+  if (chatUrgentLocked.value || !chatMessages.value.some(item => item.role === 'user') || chatLoading.value) return
   showEndConfirmation.value = true
   studentAgentState.phase = 'end_candidate'
   studentAgentState.lastEvent = '等待你确认是否结束；未确认前不会生成分析小结'
@@ -3523,8 +4189,8 @@ async function completeConversation() {
   summaryStatus.value = 'processing'
   studentAgentState.status = 'running'
   studentAgentState.phase = 'summary'
+  studentAgentState.source = 'pending'
   studentAgentState.lastEvent = '正在整合完整会话、生成下一步并复核输出安全性'
-  showAgentRail.value = true
   summaryUnread.value = false
   try {
     const res = await completeChatSession(chatSessionId.value)
@@ -3542,6 +4208,11 @@ async function completeConversation() {
     studentAgentState.status = 'ready'
     studentAgentState.phase = 'complete'
     studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
+    studentAgentState.source = res.data.metadata?.degraded
+      ? 'degraded'
+      : res.data.metadata?.model_name === 'xunfei-constrained'
+        ? 'xunfei_constrained'
+        : 'deterministic'
     studentAgentState.emotion = res.data.summary?.dominant_emotion || studentAgentState.emotion
     studentAgentState.messageCount = res.data.metadata?.message_count || studentAgentState.messageCount
     studentAgentState.verifiedSteps = [
@@ -3557,6 +4228,7 @@ async function completeConversation() {
     console.error('小结生成失败:', err)
     summaryStatus.value = 'error'
     studentAgentState.status = 'error'
+    studentAgentState.source = 'unavailable'
     studentAgentState.phase = 'summary'
     studentAgentState.lastEvent = '小结整理未完成，聊天记录仍然保留，可以重试'
   }
@@ -3587,6 +4259,12 @@ function closeSupportDrawer() {
 async function beginFreshConversation() {
   const res = await startChatSession(true)
   chatSessionId.value = res.data.session_id
+  applyChatSessionStatus(res.data?.status)
+  if (chatUrgentLocked.value) {
+    showSupportDrawer.value = false
+    showChatPanel.value = true
+    return
+  }
   chatMessages.value = []
   chatInput.value = ''
   showEndConfirmation.value = false
@@ -3605,6 +4283,12 @@ async function continueAfterSummary() {
     }
     const res = await startChatSession(true, summarySessionId.value || null)
     chatSessionId.value = res.data.session_id
+    applyChatSessionStatus(res.data?.status)
+    if (chatUrgentLocked.value) {
+      showSupportDrawer.value = false
+      showChatPanel.value = true
+      return
+    }
     chatInput.value = ''
     showEndConfirmation.value = false
     showSupportDrawer.value = false
@@ -3623,10 +4307,49 @@ async function startNewConversation() {
 
 function resetStudentAgentState() {
   Object.assign(studentAgentState, {
-    status: 'standby', phase: 'waiting', riskLevel: 'unassessed', signal: 'continue', emotion: '',
+    status: 'standby', phase: 'waiting', source: 'unavailable', riskLevel: 'unassessed', signal: 'continue', emotion: '',
     messageCount: 0, lastEvent: '等待你开始表达；普通聊天不弹出进度，安全信号会优先提示',
     verifiedSteps: [],
+    runCode: '', intentSummary: '', tools: [], events: [], plan: [], modelName: '', deliverable: null,
   })
+}
+
+function applyChatSessionStatus(status) {
+  chatUrgentLocked.value = status === 'urgent'
+  safetyCurrentSafe.value = false
+  safetyContactedAdult.value = false
+  safetyResolveError.value = ''
+  if (!chatUrgentLocked.value) return
+  showEndConfirmation.value = false
+  studentAgentState.status = 'urgent'
+  studentAgentState.source = 'safety_override'
+  studentAgentState.phase = 'urgent'
+  studentAgentState.riskLevel = 'urgent'
+  studentAgentState.signal = 'urgent'
+  studentAgentState.lastEvent = '普通分析已停止，当前优先保持真人安全支持'
+  showAgentRail.value = false
+  nextTick(() => focusWithoutScroll(chatUrgentSupport.value))
+}
+
+async function resolveUrgentChat() {
+  if (!chatSessionId.value || !safetyCurrentSafe.value || !safetyContactedAdult.value || safetyResolving.value) return
+  safetyResolving.value = true
+  safetyResolveError.value = ''
+  try {
+    await resolveChatSafety(chatSessionId.value, true, true)
+    const session = await startChatSession(true)
+    chatSessionId.value = session.data.session_id
+    chatMessages.value = []
+    chatInput.value = ''
+    applyChatSessionStatus(session.data?.status)
+    resetStudentAgentState()
+    await nextTick()
+    focusWithoutScroll(inputEl.value)
+  } catch (err) {
+    safetyResolveError.value = err?.response?.data?.detail || '暂时无法开始新话题，请继续和可信成年人待在一起。'
+  } finally {
+    safetyResolving.value = false
+  }
 }
 
 async function removeConversationSummary() {
@@ -3704,6 +4427,15 @@ async function toggleVoice() {
 
 async function startRecording() {
   try {
+    const session = await startChatSession(false)
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    if (!voiceInputEnabled.value) {
+      alert('语音输入需要独立授权，当前请使用文字输入')
+      return
+    }
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true } })
     audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
     const source = audioContext.createMediaStreamSource(mediaStream)
@@ -3761,8 +4493,19 @@ function stopRecording() {
   audioChunks = []
 }
 
-function playTTS(text) {
+async function playTTS(text) {
   if (!text) return
+  try {
+    const session = await startChatSession(false)
+    chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    if (!externalAiConsent.value) throw new Error('authorization unavailable')
+  } catch {
+    alert('教师端尚未启用语音模型协作')
+    return
+  }
   fetch('/api/chat/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: chatSessionId.value || null }) })
     .then(r => { if (!r.ok) throw new Error(); return r.blob() })
     .then(blob => {
@@ -3775,56 +4518,70 @@ function playTTS(text) {
 }
 
 async function openChatPanel() {
+  const pendingSafetyHandoff = leisureSafetyHandoffPromise
+  if (pendingSafetyHandoff) await pendingSafetyHandoff
   openWorkspacePanel('chat')
   chatInput.value = ''
   try {
     const session = await startChatSession(false)
     chatSessionId.value = session.data.session_id
+    externalAiConsent.value = !!session.data.external_ai_enabled
+    companionEngine.value = session.data.companion_engine || null
+    voiceInputEnabled.value = !!session.data.voice_input_enabled
+    applyChatSessionStatus(session.data?.status)
     const res = await getChatHistory(Number(userStore.userId), chatSessionId.value)
     if (res.data?.length) chatMessages.value = res.data
     else chatMessages.value = []
     scrollChatBottom()
   } catch {}
+  if (leisureSafetyHandoffFailed.value) {
+    applyChatSessionStatus('urgent')
+    safetyResolveError.value = '安全交接暂时未连接，请继续和可信成年人待在一起，并优先拨打 12356；危险迫近时拨打 110 或 120。'
+  }
 }
 
 async function loadLatestConversationSummary() {
   try {
     const res = await getLatestChatSummary()
-    if (applySummaryResponse(res.data, false)) {
-      studentAgentState.status = 'ready'
-      studentAgentState.phase = 'complete'
-      studentAgentState.riskLevel = res.data.summary?.risk_level || 'routine'
-      studentAgentState.emotion = res.data.summary?.dominant_emotion || ''
-      studentAgentState.messageCount = res.data.metadata?.message_count || 0
-      studentAgentState.verifiedSteps = [
-        { id: 'observation', status: 'completed', summary: '已整合完整会话中的事件与表达' },
-        { id: 'safety', status: 'completed', summary: '已完成整段会话安全复核' },
-        { id: 'emotion', status: 'completed', summary: '已完成完整会话情绪线索归纳' },
-        { id: 'response', status: 'completed', summary: '已生成并复核支持方案' },
-      ]
-      studentAgentState.lastEvent = '最近一次倾诉小结可再次查看'
-    }
+    applySummaryResponse(res.data, false)
   } catch {}
 }
 
-onMounted(() => { tick(); timer = setInterval(tick, 30000); refreshWeather(); window.addEventListener('resize', onResize); buildStatusCalendar(); loadStats(); loadPetCompanions(); startPetAnimation(); loadLatestConversationSummary() })
+const hasOpenOverlay = computed(() => {
+  const panels = roomWorkspacePanels()
+  return Object.values(panels).some(panel => panel.value)
+    || showStatusPicker.value || showPwdModal.value
+    || showXianPanel.value || showXianTransition.value
+    || showLuoyangPanel.value || showLuoyangTransition.value
+})
+watch(hasOpenOverlay, open => {
+  document.body.classList.toggle('lobby-modal-open', open)
+}, { immediate: true })
+
+onMounted(async () => {
+  unsubscribeBgm = subscribeBgm(value => { musicOn.value = value })
+  tick(); timer = setInterval(tick, 30000); refreshWeather(); buildStatusCalendar(); loadStats(); await loadLatestConversationSummary(); await restoreLatestStudentAgentRun()
+})
 onUnmounted(() => {
+  unsubscribeBgm()
   if (timer) clearInterval(timer)
-  if (petAnimationTimer) clearInterval(petAnimationTimer)
-  if (petMoveTimer) clearTimeout(petMoveTimer)
-  if (audioEl.value) audioEl.value.pause()
-  window.removeEventListener('resize', onResize)
+  if (petVisualTimer) clearTimeout(petVisualTimer)
+  if (petReactionTimer) clearTimeout(petReactionTimer)
+  document.body.classList.remove('lobby-modal-open')
 })
 </script>
 
 <style scoped>
+.music-panel .music-toggle-btn{display:none}.music-panel .trend-header{padding-right:42px}.chat-panel .msg-row .bubble{font-size:14px}.music-panel{border-radius:6px!important}
+.music-direct-entry{display:none}
+.conversation-starters{display:flex;flex-direction:column;gap:6px;margin:0 0 18px 42px}.conversation-starters button{display:flex;align-items:baseline;gap:12px;padding:12px;text-align:left;border:1px solid #70634e;border-radius:8px;background:#302923;color:#f4eddf;cursor:pointer;font:inherit}.conversation-starters button strong{font-size:13px;white-space:nowrap}.conversation-starters button span{font-size:12px;line-height:1.6;color:#dbceb8}.conversation-starters button:hover{background:#403729}.conversation-starters button:focus-visible{outline:3px solid #ead29b;outline-offset:2px}.music-recommendation-details{color:#d7cbb7;margin:12px 0}.music-recommendation-details summary{cursor:pointer;min-height:36px}.chat-panel .msg-row .bubble{white-space:pre-wrap;line-height:1.85}.chat-panel .welcome-bubble p{line-height:1.75}
+@media(min-width:900px){.music-direct-entry{display:flex}.music-panel{width:min(760px,92vw)!important}.chat-panel{width:min(720px,92vw)!important}.chat-panel .chat-messages{padding:20px 24px}.chat-panel .bubble-wrap{max-width:85%}.chat-panel .chat-ai-consent{margin-bottom:20px}}
+@media(max-width:600px){.conversation-starters{margin-left:0}.conversation-starters button{display:grid;gap:6px}}
 /* ═══════════ 全局 ═══════════ */
 .room {
   width: 100%; height: 100vh; position: relative; overflow: hidden;
   font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
 }
-
-
 
 /* ═══════════ 复访引导：每日仪式 + 首次提示 ═══════════ */
 .engagement-stack {
@@ -3950,52 +4707,8 @@ onUnmounted(() => {
   transform: translateY(-1px);
   background: #fff0c6;
 }
-  .room-roaming-pet {
-  position: fixed;
-  z-index: 36;
-  width: 88px;
-  min-height: 92px;
-  transform: translate(-50%, -78%);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: left 0.68s cubic-bezier(0.22, 1, 0.36, 1), top 0.68s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
-  pointer-events: auto;
-}
-.room-roaming-pet img {
-  width: 86px;
-  height: 86px;
-  object-fit: contain;
-  filter: drop-shadow(0 14px 18px rgba(0,0,0,0.34));
-}
-.room-roaming-pet span {
-  position: absolute;
-  left: 50%;
-  top: -16px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: rgba(38, 30, 42, 0.78);
-  color: #fff8e8;
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.2);
-  opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.room-roaming-pet:hover span,
-.room-roaming-pet.moving span {
-  opacity: 1;
-  transform: translate(-50%, -4px);
-}
-.room-roaming-pet.moving img {
-  animation: pet-run-bob 0.34s ease-in-out infinite;
-}
-@keyframes pet-run-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-6px) scale(1.03); }
-}
+  
+
 .pet-companion-card {
   position: fixed;
   right: 24px;
@@ -4086,12 +4799,6 @@ onUnmounted(() => {
 .pet-panel-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .pet-panel-actions button { min-height: 44px; border: none; border-radius: 15px; background: rgba(255,255,255,0.16); color: #fff8e8; font-size: 14px; font-weight: 900; font-family: inherit; cursor: pointer; }
 .pet-panel-actions button.is-primary { background: #ffd67e; color: #33220f; }
-.pet-visual-picker { margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.12); }
-.pet-visual-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.pet-visual-option { min-height: 98px; padding: 9px; border-radius: 17px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.1); color: #fff8e8; font-family: inherit; cursor: pointer; }
-.pet-visual-option.active { border-color: rgba(255,214,126,0.9); background: rgba(255,214,126,0.18); box-shadow: 0 12px 30px rgba(255,214,126,0.14); }
-.pet-visual-option img { width: 58px; height: 58px; object-fit: contain; display: block; margin: 0 auto 6px; filter: drop-shadow(0 8px 14px rgba(0,0,0,0.22)); }
-.pet-visual-option strong { display: block; text-align: center; font-size: 13px; }
 
 .first-run-guide {
   padding: 15px;
@@ -4238,7 +4945,7 @@ onUnmounted(() => {
 .guide-target-badge { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); padding: 7px 12px; border-radius: 999px; background: rgba(35, 25, 14, 0.86); color: #fff4cc; font-size: 13px; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
 .nav-guide-badge { top: -36px; }
 @keyframes guide-target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
-@media (max-width: 760px) {
+@media (max-width: 760px){
   .pet-companion-card {
     left: 12px;
     right: 12px;
@@ -4261,9 +4968,8 @@ onUnmounted(() => {
   .pet-panel-avatar span { font-size: 32px; }
   .pet-panel-actions { grid-template-columns: 1fr; }
   .pet-playground-stage { min-height: 220px; }
-  .room-roaming-pet { width: 72px; min-height: 76px; }
-  .room-roaming-pet img { width: 70px; height: 70px; }
-  .pet-visual-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  
+  
 }
 @media (max-width: 520px) {
   .engagement-stack {
@@ -4341,8 +5047,6 @@ onUnmounted(() => {
 .splash-fade-leave-to     { opacity: 0; filter: blur(8px); }
 
 /* ═══════════ 背景图 ═══════════ */
-.bg-wrap { position: absolute; inset: 0; z-index: 0; }
-.room-bg { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 
 /* ═══════════ 顶部信息栏 ═══════════ */
 .top-bar {
@@ -4396,95 +5100,12 @@ onUnmounted(() => {
 .music-toggle-btn:hover { background: rgba(255,255,255,0.15); color: #E8E2D8; }
 
 /* ═══════════ 交互热区 ═══════════ */
-.hot-zone {
-  position: absolute; z-index: 10;
-  cursor: pointer; border-radius: 8px; transition: background 0.3s;
-}
-.hot-zone:hover { background: rgba(255,255,255,0.06); }
-
 
 /* 窗户悬浮文字 */
-.window-label {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%) rotate(15deg) scale(0.96);
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(18, 24, 32, 0.48);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-shadow: 0 1px 8px rgba(0,0,0,0.6);
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.zone-window:hover .window-label {
-  opacity: 1;
-  transform: translate(-50%, -50%) rotate(15deg) scale(1.04);
-}
-
-.zone-monitor { top: 42%; left: 38%; width: 30%; height: 6%; }
-.zone-bed     { bottom: 20%; left: 8%; width: 26%; height: 20%; transform: rotate(-38deg); }
-.zone-window  { top: 14%; left: 12%; width: 30%; height: 33%; transform: rotate(-15deg); }
-.zone-speaker { width: 3%; height: 10%; border-radius: 30%; }
-.zone-speaker-left { top: 45%; left: 38.6%; }
-.zone-speaker-right { top: 44%; right: 45%; }
-.zone-speaker .hover-tip { font-size: 10px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
-.zone-speaker:hover .hover-tip { opacity: 1; }
 
 /* ── 音响热区 — 音符飘浮动画 ── */
-.zone-speaker { overflow: visible; }
-.zone-speaker .speaker-notes { display: none; }
-.zone-speaker:hover .speaker-notes { display: block; }
-.zone-speaker .speaker-notes .note {
-  position: absolute; pointer-events: none;
-  font-size: 16px; opacity: 0; filter: drop-shadow(0 0 6px rgba(255,215,0,0.7));
-  animation: note-float-up 1.4s ease-out infinite;
-}
-.zone-speaker .speaker-notes .note.n1 { animation-delay: 0s;   left: -16px; top: 60%; }
-.zone-speaker .speaker-notes .note.n2 { animation-delay: 0.25s; left: 14px;  top: 50%; }
-.zone-speaker .speaker-notes .note.n3 { animation-delay: 0.5s;  left: -8px;  top: 40%; }
-.zone-speaker .speaker-notes .note.n4 { animation-delay: 0.75s; left: 16px;  top: 30%; }
-.zone-speaker .speaker-notes .note.n5 { animation-delay: 1.0s;  left: 0px;   top: 20%; }
-
-@keyframes note-float-up {
-  0%   { opacity: 0; transform: translateY(0) scale(0.6) rotate(0deg); }
-  15%  { opacity: 1; }
-  70%  { opacity: 0.7; }
-  100% { opacity: 0; transform: translateY(-36px) scale(1.4) rotate(15deg); }
-}
-
-.hover-tip {
-  position: absolute; bottom: -8px; left: 50%;
-  font-size: 12px; padding: 4px 14px; border-radius: 12px;
-  white-space: nowrap; opacity: 0;
-  pointer-events: none; backdrop-filter: blur(6px);
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity 0.25s, transform 0.25s;
-}
-.hot-zone:hover .hover-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
-.night .hover-tip   { background: rgba(0,0,0,0.5); color: #E0D4C8; }
-.day .hover-tip,
-.evening .hover-tip { background: rgba(255,255,255,0.75); color: #5A5450; }
 
 /* 床上悬浮文字标签 */
-.bed-label {
-  position: absolute;
-  top: 40%; left: 50%;
-  transform: translate(-50%, -50%) rotate(38deg);
-  font-size: 13px; font-weight: 500;
-  color: rgba(255,255,255,0.92);
-  text-shadow: 0 1px 6px rgba(0,0,0,0.35);
-  white-space: nowrap;
-  pointer-events: none;
-  letter-spacing: 1px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.hot-zone:hover .bed-label { opacity: 1; }
 
 /* ═══════════ 出去看看面板 ═══════════ */
 .transport-panel, .city-panel { padding-top: 14px; }
@@ -4502,6 +5123,48 @@ onUnmounted(() => {
 .transport-icon { font-size: 28px; }
 .transport-name { flex: 1; text-align: left; font-weight: 500; }
 .transport-arrow { font-size: 20px; color: rgba(200,200,200,0.3); }
+.transport-panel { width: min(640px, calc(100vw - 32px)); }
+.window-journey-kicker { display: block; margin-bottom: 5px; color: #d8c58f; font-size: 11px; font-weight: 700; }
+.window-route-list { display: grid; gap: 10px; margin-top: 18px; }
+.window-route-item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 84px;
+  padding: 13px 15px;
+  border: 0;
+  border-radius: 14px;
+  color: #f7f1e5;
+  background: rgba(255, 255, 255, .07);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .18s ease, transform .18s cubic-bezier(.22, 1, .36, 1);
+}
+.window-route-item:hover { background: rgba(255, 255, 255, .12); transform: translateY(-2px); }
+.window-route-item:active { transform: translateY(0); }
+.window-route-item:focus-visible { outline: 3px solid #f0d58e; outline-offset: 2px; }
+.window-route-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  color: #2b241c;
+  background: #e1c77e;
+  font-size: 18px;
+  font-weight: 900;
+}
+.window-route-item.is-luoyang .window-route-mark { color: #20302a; background: #aacbb9; }
+.window-route-copy { min-width: 0; }
+.window-route-copy strong,
+.window-route-copy small { display: block; }
+.window-route-copy strong { font-size: 15px; }
+.window-route-copy small { margin-top: 5px; color: rgba(247, 241, 229, .74); font-size: 12px; line-height: 1.45; }
+.window-route-meta { color: rgba(247, 241, 229, .58); font-size: 11px; white-space: nowrap; }
+.window-journey-note { margin: 14px 2px 0; color: rgba(247, 241, 229, .58); font-size: 11px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .window-route-item { transition: none; } }
 
 .city-list { display: flex; flex-direction: column; gap: 10px; padding: 0 4px; }
 .city-item {
@@ -4527,61 +5190,7 @@ onUnmounted(() => {
   cursor: pointer; transition: all 0.2s;
 }
 .back-btn:hover { background: rgba(255,255,255,0.1); }
-.bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; align-items: center; justify-content: center;
-  gap: 10px; padding: 0 0 16px; z-index: 100;
-  background: transparent; pointer-events: none;
-}
-.bottom-nav::before {
-  content: ''; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-  width: 350px; height: 60px; border-radius: 30px;
-  background: rgba(0,0,0,0.25);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.2);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
-}
-.bnav-item {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px;
-  background: none; border: none; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  position: relative; z-index: 1;
-  width: 58px; height: 50px; border-radius: 14px;
-  color: rgba(255,255,255,0.7); transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
-  pointer-events: auto;
-}
-.bnav-item .icon-wrap {
-  width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 6px;
-  background: transparent; border: none;
-  transition: all 0.25s;
-}
-.bnav-item:hover {
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transform: scale(1.05);
-}
-.bnav-item:active { transform: scale(0.93); }
-.bnav-item.active {
-  color: #FFFFFF;
-  background: rgba(255,255,255,0.15);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12);
-}
-.bnav-item.active .icon-wrap { background: transparent; border: none; animation: none; }
-.bnav-item svg { width: 24px; height: 24px; }
-.bnav-item .bnav-label {
-  font-size: 13px; font-weight: 600;
-  opacity: 1; letter-spacing: 0.5px;
-  transition: opacity 0.2s;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.18);
-}
-.bnav-item.active .bnav-label { opacity: 1; font-weight: 600; }
+
 @keyframes tab-bounce {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.1); }
@@ -4589,20 +5198,10 @@ onUnmounted(() => {
 }
 
 /* 白天 */
-.day .bottom-nav::before { background: rgba(255,255,255,0.55); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border-color: rgba(255,255,255,0.5); box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.7); }
-.day .bnav-item           { color: rgba(30,35,40,0.90); }
-.day .bnav-item:hover     { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.day .bnav-item.active    { color: rgba(10,15,20,1.0); background: rgba(255,255,255,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.5); }
+
 /* 傍晚 */
-.evening .bottom-nav::before { background: rgba(40,30,20,0.3); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); border-color: rgba(255,255,255,0.15); box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
-.evening .bnav-item       { color: rgba(255,255,255,0.7); }
-.evening .bnav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.evening .bnav-item.active{ color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1); }
+
 /* 夜晚 */
-.night .bottom-nav::before { background: rgba(0,0,0,0.25); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border-color: rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1); }
-.night .bnav-item         { color: rgba(255,255,255,0.7); }
-.night .bnav-item:hover   { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.night .bnav-item.active  { color: #FFFFFF; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 0 16px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12); }
 
 /* ═══════════ 治愈面板 ═══════════ */
 .healing-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
@@ -4614,13 +5213,13 @@ onUnmounted(() => {
 .report-panel { padding-top: 14px; max-height: 82vh; overflow-y: auto; }
 .inline-gen-btn {
   display: block; width: 100%; padding: 14px;
-  background: linear-gradient(135deg, rgba(127,179,166,0.3), rgba(212,119,106,0.3));
+  background: linear-gradient(135deg, rgba(102,187,141,0.3), rgba(212,119,106,0.3));
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 14px; color: #E8E2D8;
   font-size: 15px; font-weight: 600; cursor: pointer;
   margin-bottom: 16px; transition: all 0.2s;
 }
-.inline-gen-btn:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(127,179,166,0.15); }
+.inline-gen-btn:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(102,187,141,0.15); }
 .inline-gen-btn:disabled { opacity: 0.5; cursor: wait; }
 .report-content { display: flex; flex-direction: column; gap: 16px; }
 .report-section {
@@ -4639,10 +5238,34 @@ onUnmounted(() => {
   padding-left: 16px; position: relative; line-height: 1.6;
 }
 .report-suggestions li::before {
-  content: '•'; position: absolute; left: 0; color: #7FB3A6;
+  content: '•'; position: absolute; left: 0; color: #8FCBA6;
 }
+.report-source-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.report-source-grid h3 { grid-column: 1 / -1; }
+.report-source-grid > div { padding: 10px; border-radius: 10px; background: rgba(102,187,141,.08); }
+.report-source-grid strong,.report-source-grid small { display: block; }
+.report-source-grid strong { color: #D9B46A; font-size: 15px; }
+.report-source-grid small { margin-top: 3px; color: rgba(232,226,216,.62); font-size: 10px; line-height: 1.45; }
+.emotion-timeline,.conversation-trajectory { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.emotion-timeline li { display: grid; grid-template-columns: 78px 1fr; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.035); }
+.emotion-timeline span { color: #B8D8CA; font-size: 12px; font-weight: 800; }
+.emotion-timeline small { color: rgba(232,226,216,.62); font-size: 10px; }
+.conversation-trajectory { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.conversation-trajectory li { padding: 10px; border-left: 3px solid #8FCBA6; border-radius: 8px; background: rgba(102,187,141,.07); }
+.conversation-trajectory strong { color: #E8E2D8; font-size: 11px; }
+.conversation-trajectory p { margin: 4px 0 0; color: rgba(232,226,216,.64); font-size: 10px; line-height: 1.5; }
+.report-boundary { margin: 0; color: rgba(232,226,216,.5); font-size: 10px; line-height: 1.6; }
+.trend-agent-report { display: grid; gap: 12px; margin: 14px 0 18px; padding: 15px; border: 1px solid rgba(184,216,202,.2); border-radius: 16px; background: linear-gradient(145deg,rgba(102,187,141,.12),rgba(95,79,112,.1)); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+.trend-agent-report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.trend-agent-report-head small { color: #9dcabb; font-size: 10px; }
+.trend-agent-report-head h3 { margin: 3px 0 0; color: #f1ece4; font-size: 16px; }
+.trend-agent-report-head button { min-height: 34px; padding: 0 11px; border: 1px solid rgba(184,216,202,.25); border-radius: 9px; color: #d8eee5; background: rgba(102,187,141,.12); cursor: pointer; }
+.trend-agent-next { padding: 11px; border-radius: 11px; background: rgba(255,255,255,.035); }
+.trend-agent-next strong { color: #e8e2d8; font-size: 12px; }
+.trend-agent-next p,.trend-agent-next li { color: rgba(232,226,216,.68); font-size: 11px; line-height: 1.6; }
+.trend-agent-next p { margin: 5px 0; }.trend-agent-next ul { margin: 0; padding-left: 18px; }
 .report-affirmation {
-  font-size: 14px; color: #E8C468; font-style: italic;
+  font-size: 14px; color: #D9B46A; font-style: italic;
   text-align: center; line-height: 1.8;
 }
 .report-back-btn {
@@ -4668,7 +5291,7 @@ onUnmounted(() => {
   font-style: italic; line-height: 1.6;
 }
 .rq-mark {
-  font-size: 22px; color: rgba(127,179,166,0.35);
+  font-size: 22px; color: rgba(102,187,141,0.35);
   vertical-align: middle; margin: 0 6px;
 }
 .report-intro-highlights {
@@ -4696,7 +5319,7 @@ onUnmounted(() => {
 }
 .report-intro-btn {
   width: 100%; max-width: 260px; padding: 12px;
-  background: #7FB3A6; border: none; border-radius: 12px;
+  background: #8FCBA6; border: none; border-radius: 12px;
   color: #1A1A1E; font-size: 14px; font-weight: 600;
   cursor: pointer; transition: all 0.2s;
 }
@@ -4719,7 +5342,7 @@ onUnmounted(() => {
 }
 .re-soil {
   width: 40px; height: 4px;
-  background: rgba(127,179,166,0.2);
+  background: rgba(102,187,141,0.2);
   border-radius: 2px; margin: 4px auto 0;
 }
 @keyframes seedFloat {
@@ -4736,14 +5359,14 @@ onUnmounted(() => {
 }
 .report-empty-btn {
   width: 100%; max-width: 240px; padding: 12px;
-  background: transparent; border: 1px solid rgba(127,179,166,0.35);
-  border-radius: 12px; color: #7FB3A6;
+  background: transparent; border: 1px solid rgba(102,187,141,0.35);
+  border-radius: 12px; color: #8FCBA6;
   font-size: 14px; font-weight: 500;
   cursor: pointer; transition: all 0.2s;
 }
 .report-empty-btn:hover {
-  background: rgba(127,179,166,0.08);
-  border-color: rgba(127,179,166,0.55);
+  background: rgba(102,187,141,0.08);
+  border-color: rgba(102,187,141,0.55);
 }
 
 /* 报告加载 */
@@ -4756,7 +5379,7 @@ onUnmounted(() => {
 }
 .rl-dots span {
   width: 6px; height: 6px;
-  background: rgba(127,179,166,0.4);
+  background: rgba(102,187,141,0.4);
   border-radius: 1px;
   animation: rlPulse 1.2s infinite both;
 }
@@ -4780,6 +5403,7 @@ onUnmounted(() => {
   backdrop-filter: blur(6px);
   display: flex; align-items: flex-end; justify-content: center;
 }
+.leisure-overlay { z-index: 400; }
 /* 面板主体 */
 .profile-panel {
   width: 100%; max-height: 85vh; position: relative;
@@ -4816,7 +5440,7 @@ onUnmounted(() => {
 .student-summary-orb:hover { transform: translateY(-50%) translateX(-3px); background: rgba(25,31,36,.96); }
 .student-summary-orb:focus-visible { outline: 3px solid #c8ead9; outline-offset: 4px; }
 .summary-orb-pixel { width: 40px; height: 40px; padding: 3px; border-radius: 9px 9px 9px 3px; background: rgba(188,217,202,.18); }
-.summary-orb-pixel img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; image-rendering: pixelated; }
+.summary-orb-pixel img { width: 100%; height: 100%; border-radius: 6px; object-fit: contain; image-rendering: pixelated; }
 .summary-orb-copy { display: grid; gap: 2px; text-align: left; }
 .summary-orb-copy strong { font-size: 13px; line-height: 1.2; }
 .summary-orb-copy small { color: rgba(245,240,232,.74); font-size: 10px; }
@@ -4932,6 +5556,7 @@ onUnmounted(() => {
   .chat-end-confirm { align-items: stretch; flex-direction: column; }
   .chat-end-actions { justify-content: flex-end; }
   .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
+  .chat-panel .chat-memory-button { right: 162px; width: 34px; height: 34px; }
 }
 
 /* 头像区 */
@@ -4944,8 +5569,9 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.12);
   display: flex; align-items: center; justify-content: center;
   font-size: 28px; font-weight: 700; color: #C8B8A8;
-  margin-bottom: 10px;
+  margin-bottom: 10px; overflow: hidden; padding: 0; cursor: pointer;
 }
+.panel-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .panel-name { font-size: 18px; font-weight: 600; color: #FFF; }
 .panel-uid { font-size: 12px; color: rgba(200,200,200,0.5); margin-top: 2px; }
 .panel-badge {
@@ -5175,7 +5801,7 @@ onUnmounted(() => {
 }
 .music-panel .trend-header .emotion-badge {
   display: inline-block; padding: 1px 8px; border-radius: 10px;
-  background: rgba(212,119,106,0.2); color: #E8C468;
+  background: rgba(212,119,106,0.2); color: #D9B46A;
   font-weight: 500;
 }
 
@@ -5213,7 +5839,7 @@ onUnmounted(() => {
   font-size: 12px; color: #B8B0A6; font-weight: 500;
 }
 .factor-w {
-  font-size: 12px; color: #E8C468; font-weight: 700;
+  font-size: 12px; color: #D9B46A; font-weight: 700;
 }
 
 /* 推荐歌单卡片 */
@@ -5530,12 +6156,16 @@ onUnmounted(() => {
 }
 .trend-panel .go-chat-btn:hover { background: #7A9A8C; }
 
-/* ══════════ 聊天面板 AI logo ══════════ */
+/* ══════════ 聊天面板 咕团头像 ══════════ */
 .ai-logo {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
+  padding: 2px;
+  border-radius: 4px;
+  border: 2px solid rgba(240, 216, 170, .3);
+  background: rgba(240, 216, 170, .12);
+  object-fit: contain;
+  image-rendering: pixelated;
   flex-shrink: 0;
 }
 
@@ -5558,21 +6188,18 @@ onUnmounted(() => {
 .night .weather-float { background: rgba(0,0,0,0.35); color: #C8D4E0; }
 
 /* ═══════════ 响应式 — 电脑端（≥768px）══════════ */
-@media (min-width: 768px) {
+@media (min-width: 768px){
   /* 全屏布局 */
   .room { max-width: 100%; }
-  .bg-wrap { inset: 0; }
-  .room-bg { object-fit: cover; object-position: center; }
+  
+  
 
   /* 电脑端热区适配（16:9 横屏图） */
-  .zone-monitor { top: 40%; left: 42%; width: 10%; height: 14%; }
-  .zone-bed     { top: 60%; left: 20%; width: 20%; height: 38%; transform: rotate(-44deg); }
+  
+  
 
   /* 床上文字适配 */
-  .bed-label {
-    transform: translate(-50%, -50%) rotate(44deg);
-    font-size: 16px;
-  }
+  
 
   /* 顶部信息栏放大 */
   .top-bar { top: 24px; }
@@ -5589,7 +6216,7 @@ onUnmounted(() => {
   .music-panel { max-height: 78vh; }
 
   /* 底部导航居中 */
-  .bottom-nav { max-width: 100%; left: 0; transform: none; }
+  
   /* 电脑端面板居中 */
   .profile-overlay { align-items: center; }
   .profile-panel {
@@ -5604,8 +6231,9 @@ onUnmounted(() => {
 
   /* 聊天面板电脑端 */
   .chat-panel .chat-messages { padding: 24px 24px 16px; }
-  .chat-panel .bubble-wrap { max-width: 60%; }
-  .chat-panel .welcome-bubble { max-width: 60%; }
+  .chat-panel { border-radius: 16px; }
+  .chat-panel .bubble-wrap { max-width: 68%; }
+  .chat-panel .welcome-bubble { max-width: 68%; }
   .chat-panel .quick-scroll { padding: 0 24px; }
   .chat-panel .input-bar { padding: 12px 24px; }
 
@@ -5615,38 +6243,73 @@ onUnmounted(() => {
 }
 
 /* ═══════════ 聊天面板 ═══════════ */
-.chat-panel { display: flex; flex-direction: column; padding: 0 !important; overflow: hidden !important; }
+.chat-panel {
+  --chat-ink: oklch(94% .014 72);
+  --chat-muted: oklch(74% .018 65);
+  --chat-subtle: oklch(61% .016 58);
+  --chat-base: oklch(16% .013 46);
+  --chat-surface: oklch(21% .017 48);
+  --chat-raised: oklch(25% .02 50);
+  --chat-line: oklch(40% .025 55);
+  --chat-accent: oklch(79% .085 75);
+  --chat-user: oklch(76% .075 72);
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden !important;
+  color: var(--chat-ink);
+  background: oklch(16% .013 46 / .96);
+  border: 1px solid var(--chat-line);
+  backdrop-filter: blur(26px) saturate(1.04);
+  transition: transform .2s cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  .room.agent-rail-open .chat-panel {
+    transform: translateX(calc((100vw - 1200px) / 2));
+  }
+}
 
 /* 顶部 */
 .chat-panel .chat-header {
   display: flex; align-items: center; justify-content: center;
   padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
-  background: rgba(25,25,30,0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: oklch(18% .015 47 / .96);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--chat-line);
   flex-shrink: 0;
 }
 .chat-panel .chat-end-button {
   position: absolute; right: 70px; min-height: 44px; padding: 9px 11px;
-  border: 1px solid rgba(188,217,202,.34); border-radius: 10px;
-  color: #dcebe3; background: rgba(143,185,166,.12); font-size: 12px; cursor: pointer;
+  border: 1px solid oklch(53% .05 72); border-radius: 10px;
+  color: var(--chat-accent); background: var(--chat-surface); font-size: 12px; cursor: pointer;
   transition: background .18s ease, border-color .18s ease, opacity .18s ease;
 }
-.chat-panel .chat-end-button:hover:not(:disabled) { background: rgba(143,185,166,.22); border-color: rgba(188,217,202,.58); }
+.chat-panel .chat-end-button:hover:not(:disabled) { background: var(--chat-raised); border-color: var(--chat-accent); }
 .chat-panel .chat-end-button:disabled { opacity: .38; cursor: not-allowed; }
-.chat-panel .chat-end-button:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
+.chat-panel .chat-end-button:focus-visible { outline: 3px solid var(--chat-accent); outline-offset: 3px; }
+.chat-panel .chat-memory-button {
+  position: absolute; right: 174px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border: 1px solid oklch(53% .05 72); border-radius: 10px;
+  color: var(--chat-accent); background: var(--chat-surface); cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+}
+.chat-panel .chat-memory-button:hover { background: var(--chat-raised); border-color: var(--chat-accent); }
+.chat-panel .chat-memory-button:focus-visible { outline: 3px solid var(--chat-accent); outline-offset: 3px; }
 .chat-panel .header-center { display: flex; align-items: center; gap: 10px; }
 .chat-panel .ai-avatar { font-size: 28px; }
-.chat-panel .ai-name { font-size: 15px; font-weight: 600; color: #E8E2D8; }
+.chat-panel .ai-name { font-size: 15px; font-weight: 650; color: var(--chat-ink); }
 .chat-panel .ai-status {
   display: flex; align-items: center; gap: 4px;
-  font-size: 11px; color: #8A847E; margin-top: 1px;
+  font-size: 11px; color: var(--chat-muted); margin-top: 1px;
 }
 .chat-panel .status-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: #82C4A0;
+  width: 7px; height: 7px; border-radius: 50%; background: oklch(77% .085 153);
   transition: background 0.3s;
 }
-.chat-panel .status-dot.thinking { background: #E8C468; animation: pulse-dot 1s infinite; }
+.chat-panel .status-dot.thinking { background: var(--chat-accent); animation: pulse-dot 1s infinite; }
 @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 /* 消息区域 */
@@ -5658,33 +6321,38 @@ onUnmounted(() => {
 .chat-end-confirm {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   margin: 0 16px 10px; padding: 12px 14px;
-  border: 1px solid rgba(188,217,202,.32); border-radius: 12px;
-  color: #f5f0e8; background: rgba(35,43,44,.94);
+  border: 1px solid var(--chat-line); border-radius: 12px;
+  color: var(--chat-ink); background: var(--chat-surface);
 }
 .chat-end-confirm > div:first-child { display: grid; gap: 3px; min-width: 0; }
 .chat-end-confirm strong { font-size: 13px; line-height: 1.4; }
-.chat-end-confirm span { color: rgba(245,240,232,.76); font-size: 11px; line-height: 1.45; }
+.chat-end-confirm span { color: var(--chat-muted); font-size: 11px; line-height: 1.45; }
 .chat-end-actions { display: flex; gap: 7px; flex-shrink: 0; }
-.chat-end-actions button { min-height: 44px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; color: #f5f0e8; background: rgba(255,255,255,.07); cursor: pointer; }
-.chat-end-actions .chat-end-primary { color: #17231e; border-color: #bcd9ca; background: #bcd9ca; font-weight: 700; }
-.chat-end-actions button:focus-visible { outline: 3px solid #c8ead9; outline-offset: 2px; }
+.chat-end-actions button { min-height: 44px; padding: 9px 12px; border: 1px solid var(--chat-line); border-radius: 9px; color: var(--chat-ink); background: var(--chat-raised); cursor: pointer; }
+.chat-end-actions .chat-end-primary { color: oklch(23% .03 60); border-color: var(--chat-accent); background: var(--chat-accent); font-weight: 700; }
+.chat-end-actions button:focus-visible { outline: 3px solid var(--chat-accent); outline-offset: 2px; }
 @media (max-width: 767px) {
   .chat-end-confirm { align-items: stretch; flex-direction: column; }
   .chat-end-actions { justify-content: flex-end; }
   .chat-panel .chat-end-button { right: 70px; padding-inline: 8px; font-size: 11px; }
+  .chat-panel .chat-memory-button { right: 162px; width: 34px; height: 34px; }
 }
 
 /* 欢迎消息 */
 .chat-panel .welcome-wrap { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
 .chat-panel .welcome-avatar { font-size: 26px; margin-top: 2px; }
 .chat-panel .welcome-bubble {
-  background: rgba(255,255,255,0.08);
+  background: var(--chat-surface);
   border-radius: 4px 16px 16px 16px;
   padding: 12px 16px; max-width: 75%;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--chat-line);
 }
-.chat-panel .welcome-bubble p { margin: 0; font-size: 14px; line-height: 1.6; color: #E0D8CE; }
+.chat-panel .welcome-bubble p { margin: 0; font-size: 14px; line-height: 1.65; color: var(--chat-ink); }
 .chat-panel .welcome-bubble p + p { margin-top: 6px; }
+.chat-ai-consent { display: flex; align-items: flex-start; gap: 10px; margin: -8px 42px 18px; padding: 11px 12px; border: 1px solid var(--chat-line); border-radius: 12px; color: var(--chat-muted); background: oklch(20% .02 62); }
+.chat-ai-consent strong,.chat-ai-consent small { display: block; }
+.chat-ai-consent strong { color: var(--chat-accent); font-size: 11px; }
+.chat-ai-consent small { margin-top: 3px; font-size: 9px; line-height: 1.5; }
 
 /* 消息行 */
 .chat-panel .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 16px; }
@@ -5699,40 +6367,68 @@ onUnmounted(() => {
 .chat-panel .emotion-tag {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; padding: 3px 10px; border-radius: 10px;
-  background: rgba(255,255,255,0.1); color: #B8B0A6;
+  background: var(--chat-raised); color: var(--chat-muted);
   margin-bottom: 4px;
 }
 
 /* 气泡 */
 .chat-panel .bubble {
   padding: 11px 15px; border-radius: 16px;
-  font-size: 14px; line-height: 1.65; word-break: break-all;
+  font-size: 14px; line-height: 1.7; word-break: break-word;
 }
 .chat-panel .msg-row.user .bubble {
-  background: #8EA89A; color: white;
+  background: var(--chat-user); color: oklch(23% .03 58);
   border-bottom-right-radius: 4px;
 }
 .chat-panel .msg-row.assistant .bubble {
-  background: rgba(255,255,255,0.08); color: #E0D8CE;
+  background: var(--chat-surface); color: var(--chat-ink);
   border-bottom-left-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--chat-line);
 }
 
 /* TTS 按钮 */
 .chat-panel .tts-btn {
   margin-top: 4px; align-self: flex-start;
   padding: 3px 8px; border-radius: 8px;
-  background: rgba(255,255,255,0.06); color: #8A847E;
+  background: var(--chat-surface); color: var(--chat-muted);
   font-size: 12px; display: flex; align-items: center; gap: 3px;
   transition: all 0.2s; border: none; cursor: pointer;
 }
-.chat-panel .tts-btn:hover, .chat-panel .tts-btn.playing { background: rgba(255,255,255,0.14); color: #C8C0B6; }
+.chat-panel .tts-btn:hover, .chat-panel .tts-btn.playing { background: var(--chat-raised); color: var(--chat-accent); }
+
+.chat-panel .chat-urgent-support {
+  flex-shrink: 0;
+  margin: 12px 16px max(14px, env(safe-area-inset-bottom));
+  padding: 16px;
+  border: 2px solid rgba(255, 196, 132, .72);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(75, 45, 39, .96), rgba(38, 34, 42, .96));
+  color: #fff6e8;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .3);
+}
+.chat-panel .chat-urgent-support strong { display: block; font-size: 16px; margin-bottom: 7px; }
+.chat-panel .chat-urgent-support p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; }
+.chat-panel .chat-urgent-support label { display: flex; gap: 9px; align-items: flex-start; margin: 9px 0; font-size: 13px; line-height: 1.5; }
+.chat-panel .chat-urgent-support input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: #a7d8bc; }
+.chat-panel .chat-urgent-calls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chat-panel .chat-urgent-calls a,
+.chat-panel .chat-safety-resolve {
+  min-height: 40px; padding: 9px 13px; border-radius: 12px; border: 1px solid rgba(255,255,255,.3);
+  background: rgba(255,255,255,.13); color: #fff; font-weight: 700; text-decoration: none;
+}
+.chat-panel .chat-safety-resolve { width: 100%; margin-top: 4px; cursor: pointer; }
+.chat-panel .chat-safety-resolve:disabled { opacity: .45; cursor: not-allowed; }
+.chat-panel .chat-resolve-hint { color: #ffd2c8; font-size: 12px; line-height: 1.55; margin-top: 2px; }
+.chat-panel .chat-urgent-calls a:focus-visible,
+.chat-panel .chat-safety-resolve:focus-visible,
+.chat-panel .chat-urgent-support input:focus-visible { outline: 3px solid #c8ead9; outline-offset: 3px; }
+.chat-panel .chat-safety-error { color: #ffd2c8; margin-top: 8px !important; }
 
 /* 加载气泡 */
 .chat-panel .typing-bubble { display: flex; gap: 5px; padding: 14px 18px; }
 .chat-panel .typing-bubble .dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: #8A847E; animation: bounce 1.2s infinite both;
+  background: var(--chat-accent); animation: bounce 1.2s infinite both;
 }
 .chat-panel .typing-bubble .dot:nth-child(2) { animation-delay: 0.15s; }
 .chat-panel .typing-bubble .dot:nth-child(3) { animation-delay: 0.3s; }
@@ -5741,15 +6437,15 @@ onUnmounted(() => {
 /* 快捷按钮 */
 .chat-panel .quick-wrap {
   flex-shrink: 0; padding: 8px 0 6px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  background: rgba(25,25,30,0.7);
+  border-top: 1px solid var(--chat-line);
+  background: oklch(18% .015 47 / .94);
   position: relative;
 }
 .chat-panel .quick-wrap::after {
   content: '';
   position: absolute; right: 0; top: 0; bottom: 0;
   width: 32px;
-  background: linear-gradient(to right, transparent, rgba(25,25,30,0.9));
+  background: linear-gradient(to right, transparent, oklch(18% .015 47));
   pointer-events: none;
 }
 .chat-panel .quick-scroll {
@@ -5763,46 +6459,47 @@ onUnmounted(() => {
 .chat-panel .quick-btn {
   white-space: nowrap; flex-shrink: 0;
   padding: 8px 16px; border-radius: 20px;
-  background: rgba(255,255,255,0.08); color: #B8B0A6; font-size: 13px;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--chat-surface); color: var(--chat-muted); font-size: 13px;
+  border: 1px solid var(--chat-line);
   transition: all 0.2s; display: flex; align-items: center; gap: 6px;
   cursor: pointer; user-select: none; -webkit-user-select: none;
 }
-.chat-panel .quick-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.14); }
+.chat-panel .quick-btn:hover { background: var(--chat-raised); border-color: oklch(55% .045 65); color: var(--chat-ink); }
 
 /* 输入栏 */
 .chat-panel .input-bar {
   flex-shrink: 0; display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom));
-  background: rgba(25,25,30,0.9);
-  border-top: 1px solid rgba(255,255,255,0.06);
-  backdrop-filter: blur(12px);
+  background: oklch(18% .015 47 / .96);
+  border-top: 1px solid var(--chat-line);
+  backdrop-filter: blur(18px);
 }
 .chat-panel .input-wrap {
-  flex: 1; background: rgba(255,255,255,0.08); border-radius: 22px;
-  border: 1.5px solid rgba(255,255,255,0.1);
+  flex: 1; background: var(--chat-surface); border-radius: 14px;
+  border: 1px solid var(--chat-line);
   transition: border-color 0.2s;
   overflow: hidden;
 }
-.chat-panel .input-wrap:focus-within { border-color: rgba(142,168,154,0.5); }
+.chat-panel .input-wrap:focus-within { border-color: var(--chat-accent); }
 .chat-panel .input-wrap input {
   width: 100%; padding: 10px 16px;
-  font-size: 14px; background: transparent; color: #E8E2D8;
+  font-size: 14px; background: transparent; color: var(--chat-ink);
   outline: none; border: none;
 }
-.chat-panel .input-wrap input::placeholder { color: #6A645E; }
+.chat-panel .input-wrap input::placeholder { color: var(--chat-subtle); }
 
 .chat-panel .voice-btn {
   width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55);
-  border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  background: var(--chat-surface); color: var(--chat-muted);
+  border: 1px solid var(--chat-line); transition: background .2s ease, color .2s ease, border-color .2s ease;
   cursor: pointer;
 }
-.chat-panel .voice-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); border-color: rgba(255,255,255,0.15); }
+.chat-panel .voice-btn:hover:not(:disabled) { background: var(--chat-raised); color: var(--chat-accent); border-color: var(--chat-accent); }
+.chat-panel .voice-btn:disabled { color: var(--chat-subtle); opacity: .55; cursor: not-allowed; }
 .chat-panel .voice-btn.recording {
-  background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.3);
-  animation: pulse-rec 1s infinite; box-shadow: 0 0 16px rgba(255,255,255,0.15);
+  background: var(--chat-raised); color: var(--chat-danger, oklch(72% .13 32)); border-color: oklch(72% .13 32);
+  animation: pulse-rec 1s infinite;
 }
 .chat-panel .rec-wave {
   display: block; width: 18px; height: 18px;
@@ -5815,12 +6512,12 @@ onUnmounted(() => {
 .chat-panel .send-btn {
   width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85);
-  border: 1px solid rgba(255,255,255,0.12); transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  background: var(--chat-accent); color: oklch(23% .03 58);
+  border: 1px solid var(--chat-accent); transition: background .2s ease, color .2s ease, transform .2s cubic-bezier(.22,1,.36,1);
   cursor: pointer;
 }
-.chat-panel .send-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); color: #FFFFFF; border-color: rgba(255,255,255,0.25); transform: scale(1.04); }
-.chat-panel .send-btn:disabled { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.2); border-color: transparent; }
+.chat-panel .send-btn:hover:not(:disabled) { background: oklch(84% .09 75); color: oklch(20% .03 58); transform: translateY(-1px); }
+.chat-panel .send-btn:disabled { background: var(--chat-surface); color: var(--chat-subtle); border-color: var(--chat-line); }
 
 /* 录音提示 */
 .chat-panel .recording-hint {
@@ -5886,6 +6583,14 @@ onUnmounted(() => {
   font-size: 12px;
   color: rgba(255,255,255,0.72);
   font-weight: 700;
+}
+.beian-version {
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 @media (max-width: 520px) {
@@ -6388,7 +7093,7 @@ onUnmounted(() => {
   transition: border-color 0.2s;
 }
 .pwd-modal-card input::placeholder { color: rgba(232,226,216,0.3); }
-.pwd-modal-card input:focus { border-color: #7FB3A6; }
+.pwd-modal-card input:focus { border-color: #8FCBA6; }
 .pwd-modal-btns { display: flex; gap: 10px; margin-top: 4px; }
 .pwd-modal-cancel {
   flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
@@ -6398,13 +7103,13 @@ onUnmounted(() => {
 .pwd-modal-cancel:hover { background: rgba(255,255,255,0.1); }
 .pwd-modal-confirm {
   flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
-  background: #7FB3A6; color: #1A1A1E; text-align: center;
+  background: #8FCBA6; color: #1A1A1E; text-align: center;
   border: none; cursor: pointer; font-weight: 600;
   transition: background 0.2s;
 }
 .pwd-modal-confirm:hover { background: #8EC4B6; }
 .pwd-modal-msg { text-align: center; margin: 12px 0 0; font-size: 13px; }
-.pwd-modal-msg.success { color: #7FB3A6; }
+.pwd-modal-msg.success { color: #8FCBA6; }
 .pwd-modal-msg.error { color: #D4776A; }
 
 /* ═══════════ 洛阳地铁转场动画 ═══════════ */
@@ -6422,7 +7127,7 @@ onUnmounted(() => {
   width: 100%; height: 100%; object-fit: cover;
 }
 
-/* 两侧窗外模糊 — 转场运动感 */
+/* 两侧窗外模糊 — 模拟运动感 */
 .metro-window {
   position: absolute; top: 0; bottom: 0; width: 22%;
   opacity: 0; transition: opacity 0.8s ease;
@@ -6500,7 +7205,7 @@ onUnmounted(() => {
   width: 140px; height: 3px; background: rgba(255,255,255,0.12); border-radius: 2px; overflow: hidden;
 }
 .ml-progress {
-  width: 0%; height: 100%; background: #7FB3A6; border-radius: 2px;
+  width: 0%; height: 100%; background: #8FCBA6; border-radius: 2px;
   animation: track-progress 3.5s ease-in-out forwards;
 }
 @keyframes track-progress {
@@ -6650,14 +7355,11 @@ onUnmounted(() => {
 .pet-body p { color: var(--room-muted); font-size: 11px; }
 .pet-actions { margin-top: 4px; }
 .pet-actions .pet-open-btn { min-width: 0; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; box-shadow: none; }
-.bottom-nav { bottom: calc(18px + env(safe-area-inset-bottom)); }
-.bottom-nav::before {
-  border: 0;
-  border-radius: 15px;
-  background: rgba(16, 22, 28, .78) !important;
-  box-shadow: 0 6px 8px rgba(5, 8, 12, .25) !important;
-  backdrop-filter: blur(20px) saturate(1.15) !important;
-}
+
+.profile-space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.profile-space-grid button { min-height: 62px; padding: 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; color: #fff; background: rgba(255,255,255,.06); cursor: pointer; text-align: left; font-weight: 700; }
+.profile-space-grid button small { display: block; margin-top: 4px; color: rgba(247,244,237,.65); font-size: 10px; font-weight: 500; }
+.profile-space-grid button:focus-visible { outline: 3px solid #f1d48c; outline-offset: 3px; }
 .nav-label { font-size: 10px; }
 .student-summary-orb { right: 20px; }
 .student-support-drawer {
@@ -6677,7 +7379,7 @@ onUnmounted(() => {
   backdrop-filter: blur(16px) saturate(1.14);
 }
 
-@media (max-width: 899px) {
+@media (max-width: 899px){
   .top-bar { left: 12px; min-width: 0; padding: 8px 11px; transform: none; align-items: flex-start; text-align: left; }
   .greeting-sub { display: none; }
   .guardian-workbench-entry { top: 12px; right: 12px; }
@@ -6687,6 +7389,7 @@ onUnmounted(() => {
   .pet-companion-card { display: none; }
   .student-summary-orb { right: 154px; bottom: calc(84px + env(safe-area-inset-bottom)); }
   .student-support-drawer { border-radius: 16px; }
+  
 }
 
 @media (max-width: 520px) {
@@ -6696,7 +7399,7 @@ onUnmounted(() => {
   .student-summary-orb { right: 150px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (prefers-reduced-motion: reduce){
   .room *,
   .room *::before,
   .room *::after {
@@ -6705,67 +7408,10 @@ onUnmounted(() => {
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
   }
-  .room-roaming-pet,
-  .room-roaming-pet img,
-  .splash-fade-leave-active { transition: none; animation: none; }
+  
 }
 
 /* v5.1.0-alpha.3：主界面减法系统。场景承担导航，控制层只保留一个状态条和按需操作条。 */
-.room-status-bar {
-  position: fixed;
-  top: 14px;
-  left: 14px;
-  right: 132px;
-  z-index: 224;
-  display: flex;
-  align-items: center;
-  width: max-content;
-  max-width: calc(100vw - 160px);
-  min-height: 46px;
-  padding: 5px;
-  border-radius: 14px;
-  color: #f7f4ed;
-  background: rgba(16, 22, 28, .84);
-  box-shadow: 0 5px 8px rgba(5, 8, 12, .25);
-  backdrop-filter: blur(18px) saturate(1.14);
-  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
-}
-.room-status-greeting {
-  display: grid;
-  min-width: 174px;
-  padding: 3px 12px;
-}
-.room-status-greeting time { color: rgba(247, 244, 237, .68); font-size: 10px; }
-.room-status-greeting strong { margin-top: 1px; font-size: 13px; line-height: 1.35; }
-.room-status-checkin,
-.room-status-utility {
-  min-height: 36px;
-  border: 0;
-  border-radius: 10px;
-  color: rgba(247, 244, 237, .9);
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-}
-.room-status-checkin {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 10px;
-  border-inline: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 0;
-}
-.room-status-checkin > span:first-child { font-size: 17px; }
-.room-status-checkin > span:last-child { display: grid; text-align: left; }
-.room-status-checkin small { color: rgba(247, 244, 237, .62); font-size: 9px; }
-.room-status-checkin strong { margin-top: 1px; font-size: 11px; }
-.room-status-utility { display: flex; align-items: center; gap: 4px; padding: 0 9px; font-size: 11px; }
-.room-status-checkin:hover,
-.room-status-utility:hover { background: rgba(255, 255, 255, .1); }
-.room-status-checkin:focus-visible,
-.room-status-utility:focus-visible,
-.hot-zone:focus-visible,
-.room-onboarding-cue button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
 
 .room-onboarding-cue {
   position: fixed;
@@ -6815,43 +7461,6 @@ onUnmounted(() => {
 }
 .room-onboarding-cue .room-onboarding-skip { width: 36px; padding: 0; color: #f7f4ed; background: rgba(255, 255, 255, .08); font-size: 18px; }
 
-.hot-zone {
-  appearance: none;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-.hot-zone::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  pointer-events: none;
-  transition: border-color .18s ease, background-color .18s ease;
-}
-.hot-zone:hover::after,
-.hot-zone:focus-visible::after,
-.hot-zone.is-selected::after { border-color: rgba(240, 213, 142, .82); background: rgba(240, 213, 142, .08); }
-.hot-zone:focus-visible .hover-tip,
-.hot-zone:focus-visible .bed-label,
-.hot-zone:focus-visible .window-label { opacity: 1; }
-.hot-zone .hover-tip,
-.hot-zone .bed-label,
-.hot-zone .window-label {
-  padding: 6px 9px;
-  border-radius: 8px;
-  color: #f7f4ed;
-  background: rgba(16, 22, 28, .88);
-  font-size: 10px;
-  white-space: nowrap;
-  box-shadow: none;
-}
-.zone-bed .bed-label,
-.zone-window .window-label { pointer-events: none; }
-.room-roaming-pet span { max-width: 164px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beian-footer {
   right: 14px;
   bottom: 14px;
@@ -6861,24 +7470,17 @@ onUnmounted(() => {
 }
 .beian-footer a { font-size: 11px; }
 
-@media (max-width: 760px) {
-  .room-status-bar {
-    top: 10px;
-    left: 10px;
-    right: 112px;
-    max-width: calc(100vw - 124px);
-    min-height: 42px;
-  }
-  .room-status-greeting { min-width: 0; padding-inline: 8px; }
-  .room-status-greeting time { display: none; }
-  .room-status-greeting strong { max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .room-status-checkin { border-inline-end: 0; }
-  .room-status-checkin > span:first-child,
-  .room-status-checkin small { display: none; }
-  .room-status-checkin strong { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .room-status-utility { display: none; }
-  .zone-speaker-left { top: 46%; left: 26%; width: 12%; height: 12%; }
-  .zone-speaker-right { display: none; }
+@media (max-width: 760px){
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   .room-onboarding-cue { top: 64px; left: 10px; width: calc(100vw - 20px); }
   .room-onboarding-cue small { display: none; }
   .beian-footer {
@@ -6892,6 +7494,1753 @@ onUnmounted(() => {
 }
 
 @media (max-width: 440px) {
-  .room-onboarding-cue { grid-template-columns: auto minmax(0, 1fr) auto; }
+  /* 小屏保持单行：步骤 / 标题 / 主按钮 / 关闭，收紧间距而不是把 × 挤到第二行 */
+  .room-onboarding-cue { gap: 6px; padding: 6px; }
+  .room-onboarding-step { min-width: 28px; height: 28px; padding-inline: 5px; font-size: 9px; }
+  .room-onboarding-cue strong { font-size: 11.5px; }
+  .room-onboarding-cue button { min-height: 32px; padding: 0 9px; font-size: 10.5px; }
+  .room-onboarding-cue .room-onboarding-skip { width: 28px; height: 32px; }
+}
+
+/* v5.1.0-alpha.7：原创宠物「咕团」与统一休闲探索工作区。 */
+
+.pet-panel-overlay {
+  background: rgba(7, 12, 18, .58);
+  backdrop-filter: blur(12px) saturate(.88);
+}
+.pet-panel-card.pet-playground-card {
+  width: min(820px, calc(100vw - 32px));
+  max-height: min(90vh, 820px);
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 18px;
+  color: #f8f6ef;
+  background: linear-gradient(145deg, rgba(24, 31, 38, .97), rgba(42, 39, 53, .96));
+  box-shadow: 0 24px 70px rgba(3, 7, 12, .5), inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(24px) saturate(1.08);
+  scrollbar-gutter: stable;
+}
+.pet-panel-head { grid-template-columns: 92px minmax(0, 1fr); gap: 18px; padding-right: 42px; }
+.pet-panel-head h2 { margin: 0 0 6px; font-size: 21px; line-height: 1.25; }
+.pet-panel-head p { margin: 0; max-width: 58ch; color: rgba(248,246,239,.72); font-size: 13px; line-height: 1.6; }
+.pet-panel-avatar {
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border: 1px solid rgba(221, 211, 255, .18);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 65%, rgba(236, 211, 135, .2), rgba(171, 214, 192, .09));
+}
+.pet-panel-frame { width: 96px; height: 96px; }
+.pet-panel-kicker { color: #bcdcc9; font-size: 11px; letter-spacing: .03em; }
+.pet-panel-close { border-radius: 10px; }
+.pet-panel-close:hover { background: rgba(255,255,255,.2); }
+.pet-panel-close:focus-visible,
+.pet-panel-actions button:focus-visible,
+.pet-chat-prompts button:focus-visible,
+.pet-chat-entry:focus-visible,
+.pet-chat-input-row input:focus-visible,
+.pet-chat-input-row button:focus-visible { outline: 3px solid #f0d58e; outline-offset: 3px; }
+
+.pet-growth-summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; margin: 18px 0 14px; }
+.pet-growth-summary > div:first-child { display: flex; align-items: baseline; gap: 8px; }
+.pet-growth-summary span { color: rgba(248,246,239,.68); font-size: 11px; }
+.pet-growth-summary strong { color: #f0d58e; font-size: 12px; }
+.pet-growth-track { height: 7px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.1); }
+.pet-growth-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #91cbb3, #ecd182); transition: width .22s ease; }
+.pet-growth-summary small { grid-column: 1 / -1; color: rgba(248,246,239,.58); font-size: 11px; }
+
+.pet-care-layout { display: grid; grid-template-columns: minmax(280px, 1.05fr) minmax(260px, .95fr); gap: 16px; }
+.pet-playground-stage {
+  min-height: 300px;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 50%, rgba(181, 218, 199, .16), transparent 54%), linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+}
+.pet-stage-frame { width: min(245px, 62vw); height: min(245px, 62vw); animation: guguan-breathe 2.4s steps(2, end) infinite; }
+.pet-stage-frame.is-happy { animation: guguan-hop .46s steps(3, end) 3; }
+.pet-stage-frame.is-eating { animation: guguan-nibble .32s steps(2, end) 5; }
+.pet-stage-frame.is-sleeping { transform: rotate(-4deg) translateY(8px); filter: saturate(.82) brightness(.9) drop-shadow(0 18px 24px rgba(0,0,0,.2)); animation: guguan-sleep 2.5s steps(2, end) infinite; }
+@keyframes guguan-breathe { 50% { transform: translateY(-5px); } }
+@keyframes guguan-hop { 50% { transform: translateY(-12px) scale(1.02); } }
+@keyframes guguan-nibble { 50% { transform: translateY(2px) scale(.985); } }
+@keyframes guguan-sleep { 50% { transform: rotate(-4deg) translateY(10px) scale(.985); } }
+.pet-stage-hint { top: 12px; left: 12px; border-radius: 8px; background: rgba(12,18,24,.68); color: rgba(248,246,239,.76); }
+.pet-stage-bubble { right: 12px; bottom: 12px; max-width: 78%; border-radius: 10px 10px 3px 10px; background: rgba(239,214,148,.94); }
+.pet-care-console { display: grid; align-content: start; gap: 16px; padding: 2px 0; }
+.pet-care-meters { display: grid; gap: 13px; }
+.pet-care-meter { display: grid; grid-template-columns: 38px minmax(80px, 1fr) 54px; gap: 9px; align-items: center; }
+.pet-care-meter > span { color: rgba(248,246,239,.76); font-size: 12px; font-weight: 700; }
+.pet-care-meter > div { height: 8px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.1); }
+.pet-care-meter i { display: block; height: 100%; border-radius: inherit; background: #a8d4c1; }
+.pet-care-meter strong { color: rgba(248,246,239,.62); font-size: 10px; text-align: right; }
+.pet-panel-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.pet-panel-actions button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.075);
+  font-size: 12px;
+  transition: background .18s ease, transform .18s ease;
+}
+.pet-panel-actions button:hover { background: rgba(255,255,255,.14); transform: translateY(-1px); }
+.pet-panel-actions button.is-primary { border-color: transparent; background: #bcdcc9; color: #14241e; }
+.pet-care-boundary { margin: 0; color: rgba(248,246,239,.54); font-size: 10px; line-height: 1.55; }
+
+.pet-memory-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.09); }
+.pet-section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pet-section-title span { font-size: 12px; font-weight: 800; }
+.pet-section-title small { color: rgba(248,246,239,.52); font-size: 10px; }
+.pet-memory-strip ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.pet-memory-strip li { min-height: 56px; padding: 9px 10px; border-left: 2px solid rgba(188,220,201,.7); background: rgba(255,255,255,.045); }
+.pet-memory-strip time { display: block; margin-bottom: 4px; color: #bcdcc9; font-size: 9px; }
+.pet-memory-strip li span { color: rgba(248,246,239,.7); font-size: 10px; line-height: 1.45; }
+
+.pet-companion-restored { margin-top: 12px; }
+.pet-chat-entry { width: 100%; min-height: 42px; border: 1px solid rgba(188,220,201,.25); border-radius: 10px; color: #dceee5; background: rgba(188,220,201,.08); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pet-companion-chat { display: grid; gap: 10px; padding-top: 4px; }
+.pet-chat-head { display: flex; align-items: center; gap: 10px; }
+.pet-chat-head img { width: 42px; height: 42px; object-fit: contain; }
+.pet-chat-head div { display: grid; }
+.pet-chat-head strong { font-size: 12px; }
+.pet-chat-head span { color: rgba(248,246,239,.55); font-size: 10px; }
+.pet-chat-safety-state { display: flex; align-items: center; gap: 7px; min-height: 28px; color: rgba(248,246,239,.7); font-size: 10px; }
+.pet-chat-safety-state > span { width: 7px; height: 7px; border-radius: 2px; background: #a8d4c1; }
+.pet-chat-safety-state.is-checking > span { background: #f0d58e; }
+.pet-chat-safety-state.is-urgent > span,
+.pet-chat-safety-state.is-unavailable > span { background: #f08b7f; }
+.pet-chat-identity { margin: -4px 0 0; color: rgba(248,246,239,.52); font-size: 10px; line-height: 1.5; }
+.pet-chat-workflow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pet-chat-workflow li { min-height: 42px; padding: 7px 8px; border-radius: 8px; color: rgba(248,246,239,.64); background: rgba(255,255,255,.045); font-size: 9px; line-height: 1.35; }
+.pet-chat-workflow li span { display: block; margin-bottom: 3px; color: #bcdcc9; font-weight: 800; }
+.pet-chat-workflow li.is-attention span,
+.pet-chat-workflow li.is-blocked span { color: #f2a59b; }
+.pet-chat-prompts { display: flex; flex-wrap: wrap; gap: 7px; }
+.pet-chat-prompts button { min-height: 32px; padding: 6px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; color: rgba(248,246,239,.76); background: rgba(255,255,255,.055); font: inherit; font-size: 10px; cursor: pointer; }
+.pet-chat-messages { display: grid; gap: 7px; max-height: 170px; overflow-y: auto; padding: 10px; border-radius: 10px; background: rgba(5,10,15,.22); }
+.pet-chat-msg { width: fit-content; max-width: 82%; padding: 8px 10px; border-radius: 9px 9px 9px 3px; color: rgba(248,246,239,.82); background: rgba(255,255,255,.08); font-size: 11px; line-height: 1.5; }
+.pet-chat-msg.user { justify-self: end; border-radius: 9px 9px 3px 9px; background: rgba(188,220,201,.16); }
+.pet-chat-input-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.pet-chat-input-row input { min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; color: #f8f6ef; background: rgba(255,255,255,.06); font: inherit; font-size: 11px; }
+.pet-chat-input-row button { min-width: 64px; border: 0; border-radius: 9px; color: #16251f; background: #bcdcc9; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.pet-chat-input-row button:disabled { opacity: .48; cursor: not-allowed; }
+.pet-urgent-handoff { display: grid; gap: 9px; padding: 12px; border: 1px solid rgba(240,139,127,.34); border-radius: 10px; background: rgba(115,34,34,.22); }
+.pet-urgent-handoff strong { color: #ffd7d1; font-size: 13px; }
+.pet-urgent-handoff p { margin: 0; color: rgba(255,241,237,.82); font-size: 11px; line-height: 1.55; }
+.pet-urgent-handoff div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.pet-urgent-handoff a,
+.pet-urgent-handoff button { display: grid; min-height: 44px; place-items: center; border: 0; border-radius: 9px; color: #291511; background: #ffd0c9; font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.pet-urgent-handoff button { width: 100%; background: rgba(255,255,255,.12); color: #fff4f1; }
+
+/* v5.1.0-alpha.18：场景化咕团小屋，桌面优先。 */
+.pet-panel-card.pet-playground-card {
+  width: min(1120px, calc(100vw - 48px));
+  max-height: min(92vh, 900px);
+  padding: 18px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(27, 24, 30, .97);
+  box-shadow: 0 18px 56px rgba(3, 6, 10, .46);
+}
+.pet-home-header { display: flex; min-height: 68px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 54px 14px 2px; }
+.pet-home-title { display: flex; min-width: 0; align-items: center; gap: 13px; }
+.pet-home-title .pet-panel-avatar { width: 58px; height: 58px; flex: 0 0 auto; border: 0; background: rgba(243, 204, 130, .12); }
+.pet-home-title .pet-panel-frame { width: 62px; height: 62px; }
+.pet-home-title > div:last-child { min-width: 0; }
+.pet-home-title > div:last-child > span { color: #f1cb83; font-size: 12px; font-weight: 800; }
+.pet-home-title h2 { margin: 1px 0 2px; font-size: 19px; letter-spacing: -.02em; }
+.pet-home-title p { max-width: 66ch; margin: 0; overflow: hidden; color: rgba(255, 247, 235, .72); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pet-bond-chip { display: grid; min-width: 118px; gap: 2px; padding: 9px 12px; border-radius: 10px; color: #302419; background: #edcc8b; }
+.pet-bond-chip span { font-size: 11px; opacity: .72; }
+.pet-bond-chip strong { font-size: 12px; }
+.pet-home-layout { display: grid; grid-template-columns: minmax(0, 1fr) 286px; gap: 14px; }
+.pet-home-layout.is-urgent { grid-template-columns: 1fr; }
+.pet-home-scene {
+  position: relative;
+  min-height: 548px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: #655035;
+  background-position: center;
+  background-size: cover;
+  box-shadow: inset 0 -72px 70px rgba(31, 19, 13, .18);
+  isolation: isolate;
+}
+.pet-home-scene::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, rgba(28,18,13,.1), transparent 28%, transparent 70%, rgba(28,18,13,.08)); content: ''; pointer-events: none; }
+.pet-scene-message { position: absolute; z-index: 4; top: 16px; left: 16px; display: grid; max-width: 310px; gap: 3px; padding: 10px 12px; border-radius: 10px; color: #fff9ed; background: rgba(37, 28, 24, .76); backdrop-filter: blur(12px); }
+.pet-scene-message small { color: #f2d18b; font-size: 11px; }
+.pet-scene-message strong { font-size: 12px; line-height: 1.45; }
+.pet-scene-character { position: absolute; z-index: 3; left: 51%; bottom: 86px; width: 205px; height: 205px; padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateX(-50%); transition: filter .18s ease, transform .18s ease, opacity .18s ease; }
+.pet-scene-character:hover { filter: brightness(1.08); transform: translateX(-50%) translateY(-4px); }
+.pet-scene-character:focus-visible { outline: 4px solid #fff2b9; outline-offset: 5px; border-radius: 12px; }
+.pet-scene-character.is-hiding { opacity: 0; pointer-events: none; transform: translateX(-50%) scale(.72); }
+.pet-scene-character .pet-stage-frame { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 8px rgba(50, 28, 18, .26)); }
+.pet-scene-character-label { position: absolute; right: 50%; bottom: 0; padding: 5px 8px; border-radius: 7px; color: #342719; background: #f2d58e; font-size: 11px; font-weight: 800; opacity: 0; transform: translateX(50%) translateY(4px); transition: opacity .16s ease, transform .16s ease; white-space: nowrap; }
+.pet-scene-character:hover .pet-scene-character-label,
+.pet-scene-character:focus-visible .pet-scene-character-label { opacity: 1; transform: translateX(50%); }
+.pet-star-accessory { position: absolute; z-index: 4; top: 17px; right: 37px; color: #ffd260; font-size: 30px; filter: drop-shadow(0 2px 0 #8f6633); transform: rotate(9deg); }
+.pet-scene-hotspot { position: absolute; z-index: 2; min-width: 54px; min-height: 42px; padding: 0; border: 0; color: #fff8e8; background: transparent; font: inherit; cursor: pointer; }
+.pet-scene-hotspot::before { position: absolute; inset: 50% auto auto 50%; width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 231, 160, .28); box-shadow: 0 0 0 7px rgba(255, 231, 160, .1); content: ''; transform: translate(-50%, -50%); transition: transform .18s ease, background .18s ease; }
+.pet-scene-hotspot span { position: absolute; top: calc(100% + 2px); left: 50%; padding: 4px 7px; border-radius: 6px; background: rgba(38,27,22,.76); font-size: 11px; font-weight: 700; opacity: 0; transform: translateX(-50%); white-space: nowrap; }
+.pet-scene-hotspot:hover::before,
+.pet-scene-hotspot:focus-visible::before { background: rgba(255, 235, 174, .54); transform: translate(-50%, -50%) scale(1.12); }
+.pet-scene-hotspot:hover span,
+.pet-scene-hotspot:focus-visible span { opacity: 1; }
+.pet-scene-hotspot:focus-visible { outline: 3px solid #fff1b9; outline-offset: 4px; border-radius: 9px; }
+.pet-scene-hotspot.is-nest { top: 43%; left: 21%; }
+.pet-scene-hotspot.is-brush { right: 15%; bottom: 31%; }
+.pet-scene-hotspot.is-snack { right: 7%; bottom: 18%; }
+.pet-scene-hotspot.is-ball { left: 34%; bottom: 23%; }
+.pet-hide-game { position: absolute; z-index: 6; top: 50%; left: 50%; display: grid; width: min(360px, calc(100% - 36px)); gap: 10px; padding: 16px; border-radius: 12px; color: #fff8e8; background: rgba(43, 31, 27, .92); transform: translate(-50%, -50%); backdrop-filter: blur(14px); }
+.pet-hide-game strong { text-align: center; font-size: 12px; }
+.pet-hide-game div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.pet-hide-game button { min-height: 38px; border: 0; border-radius: 8px; color: #3b2a1c; background: #f0d393; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.pet-hide-game .pet-hide-cancel { color: #fff3df; background: rgba(255,255,255,.1); }
+.pet-scene-urgent { position: absolute; z-index: 7; top: 50%; left: 50%; width: min(620px, calc(100% - 64px)); padding: 24px; border-width: 2px; background: rgba(70, 29, 27, .94); transform: translate(-50%, -50%); backdrop-filter: blur(16px); }
+.pet-scene-urgent > span { color: #ffd0c9; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.pet-scene-urgent strong { font-size: 19px; }
+.pet-scene-urgent p { font-size: 12px; }
+.pet-scene-dock { position: absolute; z-index: 5; right: 12px; bottom: 12px; left: 12px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 7px; border-radius: 12px; background: rgba(39, 29, 25, .8); backdrop-filter: blur(14px); }
+.pet-scene-dock button { display: grid; min-width: 0; min-height: 52px; place-items: center; align-content: center; gap: 2px; border: 0; border-radius: 8px; color: rgba(255,248,235,.86); background: transparent; font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, color .16s ease; }
+.pet-scene-dock button span { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 7px; color: #3c2b1e; background: #eed49a; font-size: 11px; font-weight: 900; }
+.pet-scene-dock button:hover { color: #fff; background: rgba(255,255,255,.1); }
+.pet-scene-dock button:disabled { color: rgba(255,248,235,.5); cursor: not-allowed; }
+.pet-scene-hotspot:disabled { cursor: not-allowed; opacity: .55; }
+.pet-scene-dock button.is-primary { color: #203329; background: #b8d7c4; font-weight: 800; }
+.pet-scene-dock button:focus-visible,
+.pet-home-journey button:focus-visible { outline: 3px solid #fff1b9; outline-offset: 2px; }
+.pet-home-sidebar { display: flex; min-height: 548px; flex-direction: column; gap: 15px; padding: 14px; border-radius: 14px; color: #3d3026; background: #efe0c2; }
+.pet-home-today > div:first-child { display: grid; gap: 3px; }
+.pet-home-today > div:first-child span { color: #796555; font-size: 11px; }
+.pet-home-today > div:first-child strong { color: #3a2a1e; font-size: 15px; }
+.pet-home-today > p { margin: 10px 0 0; color: #6d5948; font-size: 11px; line-height: 1.55; }
+.pet-need-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 13px; }
+.pet-need-row > span { display: grid; min-width: 0; gap: 3px; padding: 8px 6px; border-radius: 9px; background: rgba(88, 66, 47, .08); }
+.pet-need-row i { display: block; width: var(--pet-need); max-width: 100%; height: 4px; border-radius: 3px; background: #79a98e; }
+.pet-need-row small { color: #7a6655; font-size: 10px; }
+.pet-need-row strong { overflow: hidden; color: #46382c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.pet-home-moments { padding-top: 13px; border-top: 1px solid rgba(79, 58, 42, .18); }
+.pet-home-moments .pet-section-title span { color: #3d3026; }
+.pet-home-moments .pet-section-title small { color: #7c6959; }
+.pet-home-moments ul { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; }
+.pet-home-moments li { display: grid; grid-template-columns: 34px 1fr; gap: 7px; padding: 8px 0; border-bottom: 1px solid rgba(79,58,42,.12); }
+.pet-home-moments time { color: #8a725e; font-size: 10px; }
+.pet-home-moments li span { color: #564536; font-size: 11px; line-height: 1.45; }
+.pet-home-journey { margin-top: auto; }
+.pet-home-journey button { display: grid; width: 100%; gap: 2px; padding: 11px 12px; border: 0; border-radius: 10px; color: #fdf5e8; background: #735a43; font: inherit; text-align: left; cursor: pointer; }
+.pet-home-journey button span { font-size: 12px; font-weight: 800; }
+.pet-home-journey button small { color: rgba(255,248,236,.72); font-size: 10px; }
+.pet-companion-restored { margin-top: 12px; }
+.pet-companion-chat { max-height: 310px; overflow-y: auto; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.045); }
+.pet-care-boundary { margin: 10px 2px 0; color: rgba(248,246,239,.64); font-size: 11px; line-height: 1.5; text-align: center; }
+
+@media (max-width: 680px) {
+  .pet-panel-overlay { align-items: flex-end; padding: 0; }
+  .pet-panel-card.pet-playground-card { width: 100%; max-height: min(91dvh, 860px); padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 16px 16px 0 0; }
+  .pet-panel-head { grid-template-columns: 66px minmax(0, 1fr); gap: 12px; }
+  .pet-panel-avatar { width: 66px; height: 66px; }
+  .pet-panel-frame { width: 70px; height: 70px; }
+  .pet-growth-summary { grid-template-columns: 1fr; }
+  .pet-growth-summary > div:first-child { justify-content: space-between; }
+  .pet-growth-track { grid-row: 2; }
+  .pet-care-layout { grid-template-columns: 1fr; }
+  .pet-playground-stage { min-height: 230px; }
+  .pet-memory-strip ul { grid-template-columns: 1fr; }
+  .pet-memory-strip li:nth-child(n + 3) { display: none; }
+  .pet-panel-close { width: 44px; height: 44px; top: 10px; right: 10px; }
+  .pet-chat-prompts button { min-height: 44px; }
+  .pet-chat-workflow { grid-template-columns: 1fr; }
+  /* 场景化咕团小屋：窄屏单列，避免双栏把场景压成竖条、标题逐字换行。 */
+  .pet-home-header { flex-wrap: wrap; min-height: 0; align-items: flex-start; gap: 10px; padding: 0 44px 12px 0; }
+  .pet-home-title { flex: 1 1 100%; gap: 10px; }
+  .pet-home-title .pet-panel-avatar { width: 46px; height: 46px; }
+  .pet-home-title .pet-panel-frame { width: 50px; height: 50px; }
+  .pet-home-title h2 { font-size: 17px; }
+  .pet-home-title p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+  .pet-bond-chip { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; }
+  .pet-home-layout { grid-template-columns: 1fr; }
+  .pet-home-scene { min-height: 380px; }
+  .pet-scene-character { bottom: 150px; width: 140px; height: 140px; }
+  .pet-scene-hotspot.is-nest { top: 34%; left: 8%; }
+  .pet-scene-hotspot.is-brush { right: 4%; bottom: 46%; }
+  .pet-scene-hotspot.is-snack { right: 2%; bottom: 38%; }
+  .pet-scene-hotspot.is-ball { left: 4%; bottom: 40%; }
+  .pet-scene-dock { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pet-scene-dock button { min-height: 46px; }
+  .pet-home-sidebar { min-height: 0; gap: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-stage-frame,
+  .pet-stage-frame.is-happy,
+  .pet-stage-frame.is-eating,
+  .pet-stage-frame.is-sleeping { animation: none; }
+  .pet-growth-track span,
+  .pet-panel-actions button,
+  .pet-scene-character,
+  .pet-scene-character-label,
+  .pet-scene-hotspot::before,
+  .pet-scene-dock button { transition: none; }
+}
+
+/* v5.1.0-alpha.30 desktop-only taste pass.
+   The room remains the primary canvas; controls recede until requested. */
+@media (min-width: 900px){
+  .room {
+    --room-control: rgba(35, 27, 24, .78);
+    --room-control-strong: rgba(35, 27, 24, .9);
+    --room-control-ink: #fffaf0;
+    --room-control-muted: #d7cec1;
+    --room-control-gold: var(--ui-gold-300, #efd79c);
+    --room-control-mint: var(--ui-mint-200, #bedbce);
+  }
+
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  .beian-footer { background: rgba(35, 27, 24, .64); backdrop-filter: blur(14px); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   首页减法 2.0：场景退后一层，主操作只保留一个金色按钮。
+   背景压暗 + 边缘渐隐负责降噪；控件统一暖可可玻璃，避免与
+   像素画的高饱和色混在一起。
+   ══════════════════════════════════════════════════════════ */
+
+/* 顶部状态条：更重的一块玻璃，边界清楚，不再和书架融在一起 */
+
+/* 首次引导：收成一条居中的窄提示，不再压住场景左上角 */
+.room-onboarding-cue {
+  top: 76px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 28px));
+  padding: 7px 8px;
+  border: 1px solid rgba(239, 215, 156, .26);
+  background: rgba(25, 18, 14, .9);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .34);
+  z-index: 226;
+}
+.room-onboarding-step {
+  min-width: 34px;
+  height: 30px;
+  color: #f0d29a;
+  background: rgba(240, 216, 170, .12);
+  border: 1px solid rgba(240, 216, 170, .28);
+}
+.room-onboarding-cue button {
+  min-height: 34px;
+  color: #2b2015;
+  background: linear-gradient(180deg, #f4dba6, #dcb876);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .26);
+  white-space: nowrap;
+}
+.room-onboarding-cue button:hover { filter: brightness(1.04); }
+.room-onboarding-cue .room-onboarding-skip {
+  width: 32px;
+  height: 34px;
+  color: rgba(247, 244, 237, .62);
+  background: transparent;
+  box-shadow: none;
+}
+.room-onboarding-cue .room-onboarding-skip:hover { background: rgba(255, 255, 255, .08); color: #f7f4ed; }
+
+/* 引导徽标：金色小胶囊 + 指向标注，替代原来的高声量红点 */
+/* 引导标注不再用实心金块，避免和主按钮抢注意力 */
+.guide-target-badge {
+  top: -32px;
+  padding: 5px 10px;
+  border: 1px solid rgba(240, 213, 142, .5);
+  border-radius: 999px;
+  color: #f5dda9;
+  background: rgba(28, 20, 15, .94);
+  font-size: 10.5px;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .34);
+}
+.guide-target-badge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: rgba(28, 20, 15, .94);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* 底部导航：唯一的深色锚点；倾诉是唯一的主按钮 */
+
+/* 金色主按钮：倾诉 */
+
+/* 心岛入口：收成一个小门，不再和 Agent 抢右侧视线 */
+
+/* 页脚与宠物气泡：降一级，不参与主视觉 */
+.beian-footer { opacity: .68; padding: 5px 8px; }
+.beian-footer:hover,
+.beian-footer:focus-within { opacity: 1; }
+.beian-footer a { font-size: 10px; }
+
+@media (max-width: 760px){
+  
+  
+  
+  .room-onboarding-cue {
+    top: 62px;
+    width: calc(100vw - 20px);
+    gap: 8px;
+    padding: 7px;
+  }
+  
+  
+  
+  
+  
+  
+  .beian-footer { bottom: calc(82px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 420px){
+  /* 小屏只保留问候与 Agent，签到收进「我的」与场景操作条 */
+  
+}
+
+/* ══════════════════════════════════════════════════════════
+   主题大厅 3.1：像素心岛背景铺底，保留光场、发丝线与低对比卡片。
+   首屏只留一个实心金铜主按钮，其余入口全部降为低对比卡片。
+   ══════════════════════════════════════════════════════════ */
+.room.lobby-home {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  background: var(--lobby-bg);
+  color: var(--lobby-ink);
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --lobby-pixel-font: 'Fusion Pixel Lobby', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.lobby-home.day {
+  --lobby-bg: #f7f1e7;
+  --lobby-ink: #2c2119;
+  --lobby-muted: #7a6a58;
+  --lobby-gold: #b07a45;
+  --lobby-card: rgba(255, 252, 246, .92);
+  --lobby-line: rgba(90, 62, 38, .14);
+  --lobby-grid-line: rgba(90, 62, 38, .07);
+  --lobby-glow: rgba(214, 162, 96, .32);
+  --lobby-veil: rgba(255, 255, 255, .34);
+  --lobby-cta-hi: #dfb578;
+  --lobby-cta-lo: #b3813f;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(160, 108, 48, .38);
+  --lobby-shadow: 0 22px 54px rgba(96, 66, 38, .13);
+  --lobby-pixel-line: rgba(59, 42, 27, .52);
+  --lobby-pixel-shadow: rgba(59, 42, 27, .2);
+  --lobby-ambient-cloud: rgba(178, 138, 92, .3);
+  --lobby-ambient-star: rgba(255, 250, 238, 0);
+  --lobby-ambient-firefly: rgba(196, 140, 74, .55);
+  --lobby-ambient-firefly-halo: rgba(196, 140, 74, .16);
+  --lobby-ambient-shooting: rgba(255, 250, 238, 0);
+  --lobby-ambient-glow: rgba(244, 206, 146, .38);
+  --lobby-scene: url('/images/lobby/lobby-scene-day.svg');
+}
+.lobby-home.evening {
+  --lobby-bg: #211713;
+  --lobby-ink: #f4e8d6;
+  --lobby-muted: #c9b49a;
+  --lobby-gold: #e2c084;
+  --lobby-card: rgba(48, 34, 27, .88);
+  --lobby-line: rgba(226, 192, 132, .18);
+  --lobby-grid-line: rgba(226, 192, 132, .08);
+  --lobby-glow: rgba(226, 184, 116, .22);
+  --lobby-veil: rgba(255, 240, 214, .05);
+  --lobby-cta-hi: #f0d49a;
+  --lobby-cta-lo: #cfa460;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(0, 0, 0, .5);
+  --lobby-shadow: 0 24px 62px rgba(0, 0, 0, .32);
+  --lobby-pixel-line: rgba(232, 207, 160, .46);
+  --lobby-pixel-shadow: rgba(0, 0, 0, .5);
+  --lobby-ambient-cloud: rgba(244, 212, 164, .16);
+  --lobby-ambient-star: rgba(255, 244, 219, .75);
+  --lobby-ambient-firefly: rgba(244, 206, 132, .95);
+  --lobby-ambient-firefly-halo: rgba(244, 206, 132, .22);
+  --lobby-ambient-shooting: rgba(255, 240, 210, .28);
+  --lobby-ambient-glow: rgba(240, 190, 120, .34);
+  --lobby-scene: url('/images/lobby/lobby-scene-evening.svg');
+}
+.lobby-home.night {
+  --lobby-bg: #130f0d;
+  --lobby-ink: #f1e6d2;
+  --lobby-muted: #bda98f;
+  --lobby-gold: #e3c27d;
+  --lobby-card: rgba(38, 28, 23, .9);
+  --lobby-line: rgba(227, 194, 125, .16);
+  --lobby-grid-line: rgba(227, 194, 125, .075);
+  --lobby-glow: rgba(227, 184, 105, .18);
+  --lobby-veil: rgba(255, 240, 214, .035);
+  --lobby-cta-hi: #eccd90;
+  --lobby-cta-lo: #c39a58;
+  --lobby-cta-ink: #2a1b0f;
+  --lobby-cta-shadow: rgba(0, 0, 0, .55);
+  --lobby-shadow: 0 26px 68px rgba(0, 0, 0, .4);
+  --lobby-pixel-line: rgba(231, 203, 148, .42);
+  --lobby-pixel-shadow: rgba(0, 0, 0, .58);
+  --lobby-ambient-cloud: rgba(226, 208, 178, .11);
+  --lobby-ambient-star: rgba(255, 248, 230, .95);
+  --lobby-ambient-firefly: rgba(246, 214, 146, 1);
+  --lobby-ambient-firefly-halo: rgba(246, 214, 146, .26);
+  --lobby-ambient-shooting: rgba(255, 248, 232, .75);
+  --lobby-ambient-glow: rgba(238, 198, 126, .26);
+  --lobby-scene: url('/images/lobby/lobby-scene-night.svg');
+}
+.lobby-home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--lobby-bg);
+  background-image:
+    radial-gradient(52% 40% at 50% 22%, var(--lobby-glow), transparent 72%),
+    radial-gradient(90% 60% at 50% 108%, rgba(0, 0, 0, .16), transparent 62%),
+    linear-gradient(180deg, var(--lobby-veil), transparent 34%),
+    var(--lobby-scene);
+  background-repeat: no-repeat;
+  background-size: auto, auto, auto, cover;
+  background-position: center, center, center, center bottom;
+}
+.lobby-home::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--lobby-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lobby-grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(74% 62% at 50% 36%, #000 12%, transparent 82%);
+  mask-image: radial-gradient(74% 62% at 50% 36%, #000 12%, transparent 82%);
+}
+
+/* 动态天象层：与背景 cover / center bottom 对齐，只画日月。 */
+.lobby-celestial {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lobby-celestial rect { shape-rendering: crispEdges; }
+
+/* 动态环境层：像素云、星点、萤火与呼吸光。只动 transform/opacity。 */
+.lobby-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lobby-ambient > span {
+  position: absolute;
+  display: block;
+}
+.ambient-glow {
+  left: 50%;
+  top: 18%;
+  width: min(78vw, 1040px);
+  height: min(58vw, 720px);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(50% 50% at 50% 50%, var(--lobby-ambient-glow), transparent 72%);
+  opacity: .6;
+  animation: lobby-ambient-breathe 12s steps(12, end) infinite alternate;
+}
+.ambient-clouds {
+  inset: 0;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 30%, transparent 40% 60%, #000 70% 100%);
+  mask-image: linear-gradient(90deg, #000 0 30%, transparent 40% 60%, #000 70% 100%);
+}
+.ambient-cloud {
+  position: absolute;
+  left: 0;
+  width: 12px;
+  height: 8px;
+  color: var(--lobby-ambient-cloud);
+  background: currentColor;
+  box-shadow:
+    12px 0 0 currentColor,
+    -12px 0 0 currentColor,
+    24px 0 0 currentColor,
+    0 -8px 0 currentColor,
+    12px -8px 0 currentColor,
+    0 8px 0 currentColor,
+    12px 8px 0 currentColor,
+    24px 8px 0 currentColor,
+    -12px 8px 0 currentColor;
+  animation: lobby-cloud-drift 56s linear infinite;
+}
+.ambient-cloud-a {
+  top: 11%;
+  animation-delay: -6s;
+  scale: 1.15;
+}
+.ambient-cloud-b {
+  top: 21%;
+  animation-duration: 78s;
+  animation-delay: -28s;
+  scale: 1.6;
+}
+.ambient-cloud-c {
+  top: 31%;
+  animation-duration: 100s;
+  animation-delay: -52s;
+  scale: 1.35;
+}
+.ambient-stars,
+.ambient-fireflies {
+  inset: 0;
+}
+.ambient-stars b,
+.ambient-fireflies b {
+  position: absolute;
+  display: block;
+}
+.ambient-stars b {
+  --star-size: 3px;
+  width: var(--star-size);
+  height: var(--star-size);
+  color: var(--lobby-ambient-star);
+  background: currentColor;
+  box-shadow:
+    var(--star-size) 0 0 currentColor,
+    calc(var(--star-size) * -1) 0 0 currentColor,
+    0 var(--star-size) 0 currentColor,
+    0 calc(var(--star-size) * -1) 0 currentColor;
+  opacity: .7;
+  animation: lobby-star-twinkle calc(3.2s + var(--n) * .18s) steps(2, end) infinite;
+  animation-delay: calc(var(--n) * -.53s);
+}
+.ambient-stars b:nth-child(3n) {
+  --star-size: 4px;
+}
+.ambient-stars b:nth-child(1) { left: 4%; top: 9%; }
+.ambient-stars b:nth-child(2) { left: 9%; top: 18%; }
+.ambient-stars b:nth-child(3) { left: 14%; top: 6%; }
+.ambient-stars b:nth-child(4) { left: 20%; top: 14%; }
+.ambient-stars b:nth-child(5) { left: 26%; top: 7%; }
+.ambient-stars b:nth-child(6) { left: 32%; top: 20%; }
+.ambient-stars b:nth-child(7) { left: 38%; top: 10%; }
+.ambient-stars b:nth-child(8) { left: 44%; top: 5%; }
+.ambient-stars b:nth-child(9) { left: 50%; top: 16%; }
+.ambient-stars b:nth-child(10) { left: 57%; top: 8%; }
+.ambient-stars b:nth-child(11) { left: 63%; top: 19%; }
+.ambient-stars b:nth-child(12) { left: 69%; top: 12%; }
+.ambient-stars b:nth-child(13) { left: 7%; top: 28%; }
+.ambient-stars b:nth-child(14) { left: 58%; top: 28%; }
+.ambient-fireflies b {
+  width: 5px;
+  height: 5px;
+  color: var(--lobby-ambient-firefly);
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--lobby-ambient-firefly-halo);
+  animation:
+    lobby-firefly-drift calc(8s + var(--n) * 1.1s) steps(12, end) infinite alternate,
+    lobby-firefly-blink calc(3.2s + var(--n) * .35s) steps(2, end) infinite;
+  animation-delay: calc(var(--n) * -1.9s), calc(var(--n) * -.7s);
+}
+.ambient-fireflies b:nth-child(1) { left: 7%; top: 56%; }
+.ambient-fireflies b:nth-child(2) { left: 89%; top: 62%; }
+.ambient-fireflies b:nth-child(3) { left: 13%; top: 78%; }
+.ambient-fireflies b:nth-child(4) { left: 82%; top: 81%; }
+.ambient-fireflies b:nth-child(5) { left: 68%; top: 48%; }
+.ambient-fireflies b:nth-child(6) { left: 30%; top: 68%; }
+.ambient-shooting-star {
+  left: 14%;
+  top: 10%;
+  width: 3px;
+  height: 3px;
+  color: var(--lobby-ambient-shooting);
+  background: currentColor;
+  box-shadow:
+    5px 5px 0 currentColor,
+    10px 10px 0 currentColor,
+    15px 15px 0 currentColor,
+    20px 20px 0 currentColor;
+  opacity: 0;
+  animation: lobby-shooting-star 19s steps(24, end) infinite;
+  animation-delay: -6s;
+}
+@keyframes lobby-cloud-drift {
+  from { transform: translate3d(-24vw, 0, 0); }
+  to   { transform: translate3d(124vw, 0, 0); }
+}
+@keyframes lobby-star-twinkle {
+  0%, 100% { opacity: .18; }
+  50%      { opacity: 1; }
+}
+@keyframes lobby-firefly-drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  30%  { transform: translate3d(16px, -26px, 0); }
+  60%  { transform: translate3d(-12px, -44px, 0); }
+  100% { transform: translate3d(22px, -14px, 0); }
+}
+@keyframes lobby-firefly-blink {
+  0%, 100% { opacity: .25; }
+  50%      { opacity: 1; }
+}
+@keyframes lobby-shooting-star {
+  0%, 88%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  90%       { opacity: .9; }
+  95%       { opacity: .55; }
+  98%, 100% { opacity: 0; transform: translate3d(44vw, 27vh, 0); }
+}
+@keyframes lobby-ambient-breathe {
+  from { opacity: .35; }
+  to   { opacity: .72; }
+}
+@media (max-width: 760px) {
+  .ambient-cloud-b,
+  .ambient-stars b:nth-child(n + 11) {
+    display: none;
+  }
+  .ambient-glow {
+    top: 22%;
+    width: 118vw;
+    height: 86vw;
+  }
+}
+.lobby {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 920px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(18px, env(safe-area-inset-top)) 24px max(20px, env(safe-area-inset-bottom));
+}
+.lobby-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 12px;
+}
+.lobby-hello {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.lobby-hello time {
+  color: var(--lobby-muted);
+  font-size: 10.5px;
+  letter-spacing: .22em;
+}
+.lobby-hello strong {
+  overflow: hidden;
+  color: var(--lobby-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lobby-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-utility {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-size: 11.5px;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .2s ease, color .2s ease, background .2s ease, transform .16s ease, box-shadow .16s ease;
+}
+.lobby-utility:hover {
+  border-color: var(--lobby-gold);
+  color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-utility:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-profile {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 24px;
+  font-weight: 400;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .2s ease, transform .16s ease, box-shadow .16s ease;
+}
+.lobby-profile:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-profile:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(14px, 2.2vh, 36px);
+  text-align: center;
+}
+.lobby-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 clamp(12px, 2.2vh, 20px);
+  color: var(--lobby-muted);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .18em;
+  -webkit-font-smoothing: none;
+}
+.lobby-eyebrow::before,
+.lobby-eyebrow::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+}
+.lobby-pet-halo {
+  position: absolute;
+  top: 2%;
+  left: 50%;
+  width: clamp(180px, 26vw, 300px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--lobby-glow) 0%, transparent 66%);
+  box-shadow: inset 0 0 0 1px var(--lobby-line);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.lobby-pet-stage img {
+  position: relative;
+  z-index: 1;
+  width: clamp(126px, 14vw, 162px);
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(4px 4px 0 var(--lobby-pixel-shadow));
+  transition: transform .5s cubic-bezier(.22, 1, .36, 1);
+}
+.lobby-pet-stage:hover img {
+  transform: translateY(-6px) scale(1.02);
+}
+.lobby-pet-caption {
+  position: relative;
+  z-index: 1;
+  display: -webkit-box;
+  max-width: 300px;
+  overflow: hidden;
+  padding: 7px 14px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 3px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.lobby-title {
+  margin: clamp(16px, 2.2vh, 24px) 0 0;
+  color: var(--lobby-ink);
+  font-family: var(--lobby-pixel-font);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1.16;
+  letter-spacing: .01em;
+  text-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  -webkit-font-smoothing: none;
+}
+.lobby-sub {
+  max-width: 500px;
+  margin: 10px 0 0;
+  color: var(--lobby-muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lobby-primary-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: min(520px, 100%);
+  min-height: 72px;
+  margin-top: clamp(16px, 2.2vh, 24px);
+  padding: 0 28px;
+  border: 2px solid var(--lobby-cta-ink);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--lobby-cta-hi), var(--lobby-cta-lo));
+  color: var(--lobby-cta-ink);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  box-shadow:
+    0 6px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+  transition: transform .16s steps(2, end), filter .16s ease, box-shadow .16s steps(2, end);
+}
+.lobby-primary-cta::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px dashed rgba(255, 247, 225, .45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.lobby-primary-cta:hover {
+  filter: brightness(1.04);
+  transform: translate(-1px, -2px);
+  box-shadow:
+    0 8px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+}
+.lobby-primary-cta:active {
+  transform: translate(2px, 4px);
+  box-shadow:
+    0 2px 0 var(--lobby-cta-shadow),
+    inset 0 2px 0 rgba(255, 255, 255, .4),
+    inset 0 -2px 0 rgba(90, 52, 16, .28);
+}
+.lobby-cta-label {
+  position: relative;
+  z-index: 1;
+  font-family: var(--lobby-pixel-font);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: .1em;
+  -webkit-font-smoothing: none;
+}
+.lobby-cta-arrow {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(42, 26, 12, .45);
+  border-radius: 2px;
+  background: rgba(42, 26, 12, .12);
+  font-size: 15px;
+}
+.lobby-hero.is-guide .lobby-primary-cta {
+  margin-top: 48px;
+}
+.lobby-primary-cta .guide-target-badge {
+  z-index: 2;
+}
+.lobby-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 760px;
+  margin: clamp(18px, 2.6vh, 30px) auto 0;
+}
+.lobby-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 132px;
+  padding: 22px 22px 20px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-ink);
+  text-align: left;
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+  transition: border-color .16s ease, transform .16s steps(2, end), box-shadow .16s steps(2, end);
+}
+.lobby-card::after {
+  content: '→';
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--lobby-muted);
+  font-size: 13px;
+  opacity: .5;
+  transition: color .2s ease, transform .16s steps(2, end), opacity .2s ease;
+}
+.lobby-card:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card:hover::after {
+  color: var(--lobby-gold);
+  opacity: 1;
+  transform: translateX(2px);
+}
+.lobby-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .14em;
+  -webkit-font-smoothing: none;
+}
+.lobby-card-kicker::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+.lobby-card strong {
+  color: var(--lobby-ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.lobby-card-hint {
+  color: var(--lobby-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.lobby-card.room-status-checkin {
+  display: grid;
+  align-content: start;
+  align-items: start;
+  gap: 6px;
+  min-height: 132px;
+  padding: 22px 22px 20px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: var(--lobby-card);
+  color: var(--lobby-ink);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin:hover {
+  border-color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-card.room-status-checkin[aria-pressed="true"] {
+  border-color: var(--lobby-gold);
+}
+.lobby-card.room-status-checkin > .lobby-card-kicker {
+  display: inline-flex;
+  font-size: 12px;
+}
+.lobby-card.room-status-checkin > strong {
+  max-width: none;
+  overflow: visible;
+  font-size: 18px;
+  text-overflow: clip;
+  white-space: normal;
+}
+.lobby-card.room-status-checkin > .lobby-card-hint {
+  display: block;
+  margin: 0;
+  font-size: 12px;
+}
+.lobby-tertiary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.lobby-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 3px;
+  background: var(--lobby-card);
+  color: var(--lobby-muted);
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  letter-spacing: .08em;
+  box-shadow: 3px 3px 0 var(--lobby-pixel-shadow);
+  transition: border-color .16s ease, color .16s ease, background .16s ease, transform .16s steps(2, end), box-shadow .16s steps(2, end);
+  -webkit-font-smoothing: none;
+}
+.lobby-pill:hover {
+  border-color: var(--lobby-gold);
+  background: var(--lobby-card);
+  color: var(--lobby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pill:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--lobby-pixel-shadow);
+}
+.lobby-primary-cta:focus-visible,
+.lobby-card:focus-visible,
+.lobby-pill:focus-visible,
+.lobby-profile:focus-visible,
+.lobby-utility:focus-visible,
+.lobby-pet-stage:focus-visible {
+  outline: 3px dashed var(--lobby-gold);
+  outline-offset: 4px;
+}
+.lobby-home .beian-footer {
+  position: static;
+  align-self: stretch;
+  justify-content: center;
+  width: 100%;
+  margin: auto 0 0;
+  padding: 28px 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: none;
+  transform: none;
+}
+.lobby-home .beian-footer a {
+  color: var(--lobby-muted);
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+.lobby-home .beian-footer a:hover {
+  color: var(--lobby-gold);
+  opacity: 1;
+}
+.lobby-home .beian-footer a:focus-visible {
+  outline: 2px solid var(--lobby-gold);
+}
+.lobby-home .beian-divider {
+  color: var(--lobby-line);
+}
+.lobby-home .beian-version {
+  color: var(--lobby-muted);
+  font-weight: 500;
+  letter-spacing: .04em;
+}
+.lobby-home .room-onboarding-cue {
+  left: 50%;
+  top: 84px;
+  width: min(520px, calc(100vw - 28px));
+  padding: 8px 9px;
+  border: 2px solid var(--lobby-pixel-line);
+  border-radius: 4px;
+  background: rgba(24, 17, 13, .94);
+  box-shadow: 4px 4px 0 var(--lobby-pixel-shadow), 0 18px 42px rgba(0, 0, 0, .32);
+  transform: translateX(-50%);
+  z-index: 240;
+}
+.lobby-home .guide-target-badge {
+  top: -40px;
+  padding: 6px 10px;
+  border: 2px dashed rgba(245, 221, 169, .7);
+  border-radius: 3px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .45);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .guide-target-badge::after {
+  width: 6px;
+  height: 6px;
+  bottom: -5px;
+}
+
+/* 像素点缀 2.0：把同一套像素语言延伸到时间、引导条、卡片四角与标题周围。 */
+.lobby-hello time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  letter-spacing: .16em;
+  -webkit-font-smoothing: none;
+}
+.lobby-hello time::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-caption::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--lobby-pixel-line);
+  border-left: 2px solid var(--lobby-pixel-line);
+  background: var(--lobby-card);
+  transform: translateX(-50%) rotate(45deg);
+}
+.lobby-home .room-onboarding-step {
+  border-radius: 2px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, .35);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .room-onboarding-cue button {
+  border: 2px solid rgba(53, 36, 20, .48);
+  border-radius: 3px;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: transform .16s steps(2, end), box-shadow .16s steps(2, end), filter .16s ease;
+  -webkit-font-smoothing: none;
+}
+.lobby-home .room-onboarding-cue button:hover {
+  filter: brightness(1.05);
+  transform: translate(-1px, -1px);
+}
+.lobby-home .room-onboarding-cue button:active {
+  transform: translate(1px, 3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.lobby-home .room-onboarding-cue .room-onboarding-skip {
+  border: 0;
+  box-shadow: none;
+}
+.lobby-home .splash {
+  background:
+    radial-gradient(58% 42% at 50% 38%, rgba(226, 192, 132, .16), transparent 70%),
+    rgba(18, 15, 12, .95);
+}
+.lobby-home .splash::before {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  z-index: -1;
+  pointer-events: none;
+  border: 2px solid rgba(240, 216, 170, .22);
+  border-radius: 4px;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, .32);
+  background:
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left top / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right top / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left bottom / 6px 6px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right bottom / 6px 6px no-repeat;
+  opacity: .6;
+}
+.lobby-home .splash-logo > span:first-child {
+  font-family: var(--lobby-pixel-font);
+  font-size: 48px;
+  font-weight: 400;
+  letter-spacing: .16em;
+  text-shadow: 4px 4px 0 rgba(0, 0, 0, .5);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .splash-version {
+  padding: 5px 10px;
+  border: 2px solid rgba(255, 255, 255, .34);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f4dba6, #d9b273);
+  color: #2b2015;
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .42);
+  -webkit-font-smoothing: none;
+}
+.lobby-home .splash-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-home .splash-sub::before,
+.lobby-home .splash-sub::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, .4);
+  opacity: .7;
+}
+.lobby-home .splash-hint {
+  animation: hint-blink 1.8s steps(2, end) infinite;
+}
+.lobby-card::before {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left top / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right top / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) left bottom / 5px 5px no-repeat,
+    linear-gradient(var(--lobby-gold), var(--lobby-gold)) right bottom / 5px 5px no-repeat;
+  opacity: .4;
+  transition: opacity .2s ease;
+}
+.lobby-card:hover::before {
+  opacity: .95;
+}
+.lobby-card::after {
+  font-family: var(--lobby-pixel-font);
+  font-size: 12px;
+}
+.lobby-hero {
+  position: relative;
+}
+.lobby-hero::before,
+.lobby-hero::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow:
+    5px 0 0 var(--lobby-gold),
+    -5px 0 0 var(--lobby-gold),
+    0 5px 0 var(--lobby-gold),
+    0 -5px 0 var(--lobby-gold),
+    5px 5px 0 var(--lobby-pixel-shadow);
+  opacity: .55;
+  pointer-events: none;
+  animation: lobby-pixel-twinkle 2.8s steps(2, end) infinite;
+}
+.lobby-hero::before {
+  left: 12%;
+  top: 60%;
+}
+.lobby-hero::after {
+  right: 11%;
+  top: 36%;
+  animation-delay: 1.2s;
+}
+@keyframes lobby-pixel-twinkle {
+  0%, 100% { opacity: .3; }
+  50%      { opacity: .8; }
+}
+.lobby-pill {
+  gap: 8px;
+}
+.lobby-pill::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--lobby-gold);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+.lobby-pet-stage img {
+  transition: transform .36s steps(3, end);
+}
+.lobby-pet-reaction {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.lobby-pet-reaction i {
+  position: absolute;
+  color: var(--lobby-gold);
+  font-family: var(--lobby-pixel-font);
+  font-size: 20px;
+  font-style: normal;
+  line-height: 1;
+  text-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+  animation: lobby-pet-heart 1.4s steps(6, end) forwards;
+}
+.lobby-pet-reaction i:nth-child(even) { color: #e8a08e; }
+.lobby-pet-reaction i:nth-child(1) { left: -68px; --pet-drift: -16px; animation-delay: .02s; }
+.lobby-pet-reaction i:nth-child(2) { left: -38px; --pet-drift: -4px; animation-delay: .1s; font-size: 13px; }
+.lobby-pet-reaction i:nth-child(3) { left: -8px; --pet-drift: 4px; animation-delay: .04s; font-size: 18px; }
+.lobby-pet-reaction i:nth-child(4) { left: 24px; --pet-drift: 12px; animation-delay: .14s; font-size: 13px; }
+.lobby-pet-reaction i:nth-child(5) { left: 52px; --pet-drift: 18px; animation-delay: .08s; }
+.lobby-pet-reaction i:nth-child(6) { left: 76px; --pet-drift: 24px; animation-delay: .16s; font-size: 12px; }
+.lobby-pet-stage.is-reacting .lobby-pet-caption {
+  animation: lobby-pet-caption-pop .5s steps(2, end);
+}
+@keyframes lobby-pet-caption-pop {
+  0%   { transform: translateY(4px); border-color: var(--lobby-gold); }
+  100% { transform: translateY(0); border-color: var(--lobby-pixel-line); }
+}
+@keyframes lobby-pet-heart {
+  0%   { opacity: 0; transform: translate(0, 10px) scale(.6); }
+  18%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--pet-drift, 0), -76px) scale(1.1); }
+}
+.lobby-pet-stage.is-reacting .lobby-pet-halo {
+  animation: lobby-pet-halo-pop .7s steps(3, end);
+}
+@keyframes lobby-pet-halo-pop {
+  0%   { transform: translateX(-50%) scale(1); opacity: .9; }
+  45%  { transform: translateX(-50%) scale(1.08); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: .9; }
+}
+.lobby-home .beian-divider {
+  width: 4px;
+  height: 4px;
+  overflow: hidden;
+  color: transparent;
+  background: var(--lobby-line);
+  box-shadow: 2px 2px 0 var(--lobby-pixel-shadow);
+}
+
+@media (min-width: 900px) and (max-width: 1360px) {
+  .lobby-top { padding-right: 214px; }
+}
+@media (max-width: 899px) {
+  .lobby-top { padding-right: 124px; }
+}
+@media (max-width: 760px) {
+  .lobby {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+  .lobby-utility-weather { display: none; }
+  .lobby-hero { margin-top: 20px; }
+  .lobby-hero::before,
+  .lobby-hero::after { display: none; }
+  .lobby-title { font-size: 36px; }
+  .lobby-sub { font-size: 13.5px; }
+  .lobby-primary-cta {
+    width: 100%;
+    min-height: 62px;
+    font-size: 17.5px;
+  }
+  .lobby-grid {
+    gap: 12px;
+    margin-top: 26px;
+  }
+  .lobby-card,
+  .lobby-card.room-status-checkin {
+    min-height: 116px;
+    padding: 18px 16px 16px;
+    border-radius: 4px;
+  }
+  .lobby-card::after {
+    top: 16px;
+    right: 16px;
+  }
+  .lobby-card strong { font-size: 16.5px; }
+  .lobby-card.room-status-checkin > strong { font-size: 16.5px; }
+  .lobby-card-hint { font-size: 11.5px; }
+  .lobby-home .room-onboarding-cue {
+    top: 72px;
+    width: calc(100vw - 20px);
+  }
+  .lobby-home .beian-footer {
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    padding: 24px 0 2px;
+    transform: none;
+  }
+  .lobby-home .beian-footer a { font-size: 11px; }
+  .lobby-home .beian-version { font-size: 10.5px; }
+}
+@media (max-width: 440px) {
+  .lobby {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .lobby-hello strong { max-width: 132px; }
+  .lobby-pet-caption { max-width: 250px; }
+  .lobby-home .room-onboarding-cue {
+    top: 66px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lobby-home *,
+  .lobby-home *::before,
+  .lobby-home *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lobby-ambient {
+    display: none;
+  }
+}
+:global(body.lobby-modal-open) {
+  overflow: hidden;
+}
+
+/* 像素皮肤 3.0 · 房间浮层 */
+.profile-panel,
+.pet-panel-card,
+.student-support-drawer,
+.student-summary-orb,
+.chat-panel {
+  --px-line: rgba(240, 216, 170, .3);
+  --px-gold: #f0d29a;
+  --px-shadow: rgba(0, 0, 0, .52);
+}
+.profile-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px 6px 0 0;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.panel-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.panel-close:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.profile-panel .trend-header h2 { font-family: var(--px-font); }
+.pet-panel-card.pet-playground-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-panel-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.pet-panel-close:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.pet-home-title > div:last-child > span { font-family: var(--px-font); letter-spacing: .08em; }
+.pet-home-title h2 { font-family: var(--px-font); }
+.pet-bond-chip {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-home-scene { border-radius: 4px; }
+.pet-scene-message {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.pet-scene-message small,
+.pet-scene-message strong { font-family: var(--px-font); }
+.pet-scene-dock {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.pet-scene-dock button {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.pet-scene-dock button:hover:not(:disabled) { border-color: var(--px-line); }
+.pet-scene-dock button.is-primary { border-color: var(--px-gold); }
+.pet-scene-dock button span { border-radius: 2px; }
+.pet-hide-game {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-hide-game button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  font-family: var(--px-font);
+}
+.pet-home-sidebar {
+  --px-line: rgba(79, 58, 42, .32);
+  --px-gold: #735a43;
+  --px-shadow: rgba(61, 40, 26, .26);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.pet-home-today > div:first-child strong,
+.pet-section-title span { font-family: var(--px-font); }
+.pet-home-journey button {
+  border: 2px solid var(--px-gold);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-chat-entry,
+.pet-chat-input-row button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  font-family: var(--px-font);
+}
+.pet-chat-workflow li,
+.pet-chat-msg,
+.pet-chat-messages,
+.pet-chat-prompts button,
+.pet-chat-input-row input {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+}
+.pet-chat-msg { box-shadow: none; }
+.pet-panel-card button:focus-visible,
+.pet-panel-card input:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+@media (max-width: 680px) {
+  .pet-panel-card.pet-playground-card {
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 6px 6px 0 0;
+  }
+}
+.student-summary-orb {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.student-summary-orb:hover { box-shadow: 4px 4px 0 var(--px-shadow); }
+.student-summary-orb:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 4px; }
+.summary-orb-pixel { border-radius: 3px; }
+.summary-orb-copy strong { font-family: var(--px-font); font-size: 13px; }
+.student-support-drawer {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.support-close {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--px-shadow);
+}
+.support-eyebrow { font-family: var(--px-font); letter-spacing: .1em; }
+.student-support-drawer h2 { font-family: var(--px-font); font-size: 24px; }
+.support-emotion-state,
+.support-need-block,
+.support-professional-note,
+.support-next-step,
+.support-card-preview { border-radius: 4px; }
+.student-support-drawer textarea { border-width: 2px; border-radius: 4px; }
+.support-needs button,
+.support-decision-row button,
+.support-person-grid button,
+.support-summary-controls button { border-width: 2px; border-radius: 4px; }
+.support-card-preview { border-width: 2px; }
+.student-support-drawer .support-primary { box-shadow: 3px 3px 0 var(--px-shadow); }
+.student-support-drawer button:focus-visible,
+.student-support-drawer textarea:focus-visible,
+.student-support-drawer input:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+.chat-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+}
+.chat-panel .chat-header { border-bottom: 2px solid var(--px-line); }
+.chat-panel .chat-end-button,
+.chat-panel .chat-memory-button { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .welcome-bubble,
+.chat-panel .bubble,
+.chat-panel .chat-ai-consent,
+.chat-panel .chat-end-confirm {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.chat-panel .msg-row.user .bubble,
+.chat-panel .msg-row.assistant .bubble { border-radius: 4px; }
+.chat-panel .emotion-tag { border-radius: 4px; }
+.chat-panel .quick-btn { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .input-bar { border-top: 2px solid var(--px-line); }
+.chat-panel .input-wrap { border: 2px solid var(--px-line); border-radius: 4px; }
+.chat-panel .voice-btn,
+.chat-panel .send-btn { border-width: 2px; border-radius: 4px; }
+.chat-panel .send-btn { box-shadow: 3px 3px 0 var(--px-shadow); }
+.chat-panel .chat-end-actions button { border-radius: 4px; }
+.chat-panel .chat-urgent-support { border-radius: 4px; }
+.chat-panel .chat-urgent-calls a,
+.chat-panel .chat-safety-resolve { border-radius: 4px; }
+.chat-panel .chat-end-button:focus-visible,
+.chat-panel .chat-memory-button:focus-visible,
+.chat-panel .quick-btn:focus-visible,
+.chat-panel .voice-btn:focus-visible,
+.chat-panel .send-btn:focus-visible,
+.chat-panel .tts-btn:focus-visible,
+.chat-panel .chat-end-actions button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 2px; }
+.trend-panel .tab-bar button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.trend-panel .stat-card,
+.trend-panel .card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
 }
 </style>

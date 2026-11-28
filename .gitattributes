@@ -1,15 +1,2 @@
-* text=auto
-*.py text eol=lf
-*.js text eol=lf
-*.mjs text eol=lf
-*.vue text eol=lf
-*.md text eol=lf
-*.json text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.ps1 text eol=crlf
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.mp3 binary
-*.mp4 binary
+# Deployment scripts execute on Linux, including archives created on Windows.
+deploy/*.sh text eol=lf

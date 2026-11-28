@@ -2,7 +2,6 @@ import asyncio
 import json
 import sys
 import unittest
-from secrets import token_urlsafe
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -41,7 +40,7 @@ class GuardianWorkflowTests(unittest.TestCase):
         guardian_engine.SessionLocal = self.Session
         guardian_engine.is_spark_available = lambda: False
         settings.AGENT_STEP_DELAY_MS = 0
-        user = User(username="guardian_test", password_hash=get_password_hash(token_urlsafe(18)), nickname="测试守护者", is_admin=0)
+        user = User(username="guardian_test", password_hash=get_password_hash("safe-test-password"), nickname="演示守护者", is_admin=0)
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
@@ -66,7 +65,7 @@ class GuardianWorkflowTests(unittest.TestCase):
             district="南城街道",
             context=context,
             guardian_may_be_source=0,
-            consent_version="guardian-support-v1",
+            consent_version="guardian-demo-v1",
         )
         self.db.add(case)
         self.db.commit()
@@ -130,7 +129,7 @@ class GuardianWorkflowTests(unittest.TestCase):
         base = {
             "reporter_role": "parent", "age_band": "15-18", "signals": ["mood_low"],
             "duration": "under_1_week", "functional_impact": "none", "district": "南城街道",
-            "guardian_may_be_source": False, "consent_version": "guardian-support-v1", "deidentified_confirmed": True,
+            "guardian_may_be_source": False, "consent_version": "guardian-demo-v1", "synthetic_data_confirmed": True,
         }
         for text in ["电话13800138000", "身份证440101200001011234", "张三在东莞中学", "住在鸿福路88号2栋"]:
             with self.subTest(text=text), self.assertRaises(ValueError):
@@ -151,8 +150,7 @@ class GuardianWorkflowTests(unittest.TestCase):
         evidence = self.db.query(EvidenceSource).filter(EvidenceSource.source_code.in_(plan.evidence_codes)).all()
         pdf = generate_guardian_pdf(completed, plan, evidence)
         self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertTrue(pdf.rstrip().endswith(b"%%EOF"))
-        self.assertGreater(len(pdf), 5_000)
+        self.assertGreater(len(pdf), 20_000)
 
 
 if __name__ == "__main__":

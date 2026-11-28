@@ -152,7 +152,6 @@ async def create_case(
         context=payload.context,
         guardian_may_be_source=int(payload.guardian_may_be_source),
         consent_version=payload.consent_version,
-        external_ai_consent=int(payload.external_ai_consent),
         status="queued",
     )
     db.add(case)
@@ -347,3 +346,19 @@ async def submit_followup(
     db.commit()
     _audit(db, current_user, "submit_followup", "follow_up", str(task.id))
     return {"status": "completed", "next_action": next_action, "risk_level": case.risk_level, "urgent_override": False}
+
+
+@router.post("/follow-ups/{followup_id}/simulate-due")
+async def simulate_followup_due(
+    followup_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not settings.DEMO_MODE:
+        raise HTTPException(status_code=404, detail="该接口当前不可用")
+    task, _ = _owned_followup(db, followup_id, current_user)
+    if task.status != "completed":
+        task.due_at = datetime.now()
+        task.status = "due"
+        db.commit()
+    return {"id": task.id, "status": task.status, "due_at": task.due_at.isoformat()}

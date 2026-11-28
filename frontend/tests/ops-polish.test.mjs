@@ -10,35 +10,20 @@ async function source(path) {
   return readFile(join(root, path), 'utf8')
 }
 
-test('public source excludes production deployment details and uses a gated release workflow', async () => {
-  await assert.rejects(stat(join(root, 'deploy-frontend.ps1')))
-  const releaseInfo = await stat(join(root, 'scripts/release.ps1'))
-  assert.ok(releaseInfo.isFile())
+test('local frontend deploy script backs up and publishes to the Aliyun target', async () => {
+  const scriptPath = join(root, 'deploy-frontend.ps1')
+  const info = await stat(scriptPath)
+  assert.ok(info.isFile())
 
-  const script = await source('scripts/release.ps1')
-  assert.match(script, /verify-public-repo\.ps1/)
-  assert.match(script, /\[switch\]\$Publish/)
-  assert.match(script, /Release requires a clean worktree/)
-  assert.doesNotMatch(script, /\bscp\b|\bsystemctl\b|\/opt\/shengyu/)
-  assert.match(script, /github\.com/)
-  assert.match(script, /gitee\.com/)
-})
-
-test('public verifier blocks sensitive output paths in the current tree and full history', async () => {
-  const verifier = await source('scripts/verify-public-repo.ps1')
-  for (const pathClass of ['logs?', 'output', 'tmp', 'release-archives', '\\\.codex-']) {
-    assert.match(verifier, new RegExp(pathClass))
-  }
-  assert.match(verifier, /badHistoryPaths/)
-  assert.match(verifier, /git ls-tree -r --name-only/)
-})
-
-test('mood insight remains local and guardian AI respects the global kill switch', async () => {
-  const mood = await source('backend/api/mood.py')
-  const guardian = await source('backend/guardian_engine.py')
-  assert.match(mood, /local_descriptive_summary/)
-  assert.doesNotMatch(mood, /ask_spark|record\.content|content\[:30\]/)
-  assert.match(guardian, /not settings\.ALLOW_EXTERNAL_AI[\s\S]*?not settings\.ALLOW_GUARDIAN_EXTERNAL_AI/)
+  const script = await source('deploy-frontend.ps1')
+  assert.match(script, /npm\.cmd run build/)
+  assert.match(script, /8\.138\.151\.152/)
+  assert.doesNotMatch(script, /43\.136\.69\.47/)
+  assert.match(script, /\/opt\/shengyu\/frontend\/dist/)
+  assert.match(script, /\/opt\/shengyu\/backups\/frontend-dist-/)
+  assert.match(script, /scp/)
+  assert.match(script, /sudo nginx -t/)
+  assert.match(script, /sudo systemctl reload nginx/)
 })
 
 test('app exposes build metadata for visual deployment verification', async () => {

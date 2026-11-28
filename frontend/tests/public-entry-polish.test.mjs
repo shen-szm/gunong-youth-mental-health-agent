@@ -34,15 +34,17 @@ test('handheld game mini app is removed from the room UI', async () => {
   assert.doesNotMatch(room, /\.ikk-bottom-mask/)
 })
 
-test('public footer is readable and excludes production registration details', async () => {
+test('beian footer is readable over the room background', async () => {
   const room = await source('frontend/src/views/RoomHomeView.vue')
   const home = await source('frontend/src/views/HomeView.vue')
 
   for (const page of [room, home]) {
-    assert.match(page, /心理健康教育与支持 · 不替代专业服务/)
-    assert.doesNotMatch(page, /公安备案|ICP备|beian\.miit\.gov\.cn/)
+    assert.match(page, /href="https:\/\/beian\.miit\.gov\.cn\/"/)
+    assert.match(page, />粤ICP备2026048986号-2<\/a>/)
   }
   assert.match(room, /\.beian-footer\s*\{[\s\S]*background:\s*rgba\(18,\s*24,\s*32,\s*0\.72\)/)
   assert.match(room, /\.beian-footer\s*\{[\s\S]*backdrop-filter:\s*blur\(10px\)/)
   assert.match(room, /\.beian-footer\s*\{[\s\S]*text-shadow:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*0\.65\)/)
+  assert.match(room, /\.beian-footer a\s*\{[\s\S]*color:\s*#fff/)
+  assert.match(room, /\.beian-footer a\s*\{[\s\S]*font-weight:\s*700/)
 })

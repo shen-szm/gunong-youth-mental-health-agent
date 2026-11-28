@@ -7,7 +7,7 @@
       aria-labelledby="room-action-title"
       @keydown.esc="$emit('close')"
     >
-      <span class="room-action-symbol" aria-hidden="true">{{ feature.symbol }}</span>
+      <span class="room-action-symbol" aria-hidden="true"><UiIcon class="action-desktop-icon" :name="feature.id" :size="24" /><span class="action-legacy-icon">{{ feature.symbol }}</span></span>
       <div class="room-action-copy">
         <p>{{ feature.location }}</p>
         <h2 id="room-action-title">{{ feature.title }}</h2>
@@ -32,7 +32,7 @@
         <button ref="primaryButton" class="room-action-primary" type="button" :disabled="feature.actionDisabled" @click="$emit('primary')">
           {{ feature.actionLabel }}
         </button>
-        <button class="room-action-close" type="button" aria-label="关闭场景操作条" @click="$emit('close')">×</button>
+        <button class="room-action-close" type="button" aria-label="关闭场景操作条" @click="$emit('close')"><UiIcon class="action-desktop-icon" name="close" /><span class="action-legacy-icon" aria-hidden="true">×</span></button>
       </div>
     </section>
   </Transition>
@@ -40,6 +40,7 @@
 
 <script setup>
 import { nextTick, ref, watch } from 'vue'
+import UiIcon from './UiIcon.vue'
 
 const props = defineProps({
   feature: { type: Object, default: null },
@@ -63,6 +64,8 @@ watch(() => props.feature?.id, async value => {
 </script>
 
 <style scoped>
+.action-desktop-icon{display:none}
+@media(min-width:900px){.action-desktop-icon{display:inline-block}.action-legacy-icon{display:none}}
 .room-action-bar {
   position: fixed;
   left: 50%;
@@ -164,8 +167,101 @@ watch(() => props.feature?.id, async value => {
   .room-action-moods { grid-column: 1 / -1; }
 }
 
+/* Desktop-only room command surface. Mobile keeps the established layout. */
+@media (min-width: 900px) {
+  .room-action-bar {
+    bottom: 104px;
+    width: min(700px, calc(100vw - 40px));
+    min-height: 76px;
+    padding: 13px 14px;
+    border: 0;
+    border-radius: 14px;
+    color: #fffaf0;
+    background: rgba(35, 27, 24, .86);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 8px rgba(8,6,5,.28);
+    -webkit-backdrop-filter: blur(26px) saturate(1.16);
+    backdrop-filter: blur(26px) saturate(1.16);
+  }
+  .room-action-symbol {
+    color: #21453a;
+    background: #bedbce;
+  }
+  .room-action-copy p { color: #efd79c; }
+  .room-action-copy span { color: #d8d0c4; }
+  .room-action-primary { color: #302613; background: #edd59a; }
+  .room-action-primary:hover { background: #f4dda0; }
+  .room-action-close,
+  .room-action-moods button { background: rgba(255, 250, 240, .08); }
+  .room-action-moods button.active { color: #21453a; background: #bedbce; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .room-action-enter-active,
   .room-action-leave-active { transition: none; }
+}
+
+/* 像素皮肤 3.0 · 场景操作条 */
+.room-action-bar {
+  --px-line: rgba(240, 216, 170, .28);
+  --px-gold: #f0d29a;
+  --px-shadow: rgba(0, 0, 0, .5);
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-symbol { border-radius: 4px; }
+.room-action-copy p { font-family: var(--px-font); font-size: 11px; letter-spacing: .04em; }
+.room-action-copy h2 { font-family: var(--px-font); font-size: 16px; }
+.room-action-controls { gap: 8px; }
+.room-action-primary,
+.room-action-close,
+.room-action-moods button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.room-action-primary {
+  color: #1d1710;
+  background: var(--px-gold);
+  font-family: var(--px-font);
+  font-size: 13px;
+}
+.room-action-primary:hover {
+  background: #f7dda6;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.room-action-close:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.room-action-close:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--px-shadow);
+}
+.room-action-moods legend { font-family: var(--px-font); font-size: 11px; }
+.room-action-moods button { font-family: var(--px-font); font-size: 12px; }
+.room-action-moods button.active { color: #1d1710; background: var(--px-gold); border-color: var(--px-gold); }
+.room-action-moods button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.room-action-moods button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.room-action-primary:focus-visible,
+.room-action-close:focus-visible,
+.room-action-moods button:focus-visible { outline: 3px dashed var(--px-gold); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .room-action-primary,
+  .room-action-close,
+  .room-action-moods button { transition: none; }
+  .room-action-primary:hover,
+  .room-action-primary:active,
+  .room-action-close:hover,
+  .room-action-close:active,
+  .room-action-moods button:hover,
+  .room-action-moods button:active { transform: none; }
 }
 </style>

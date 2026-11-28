@@ -217,7 +217,7 @@ def generate_guardian_pdf(case: GuardianCase, plan: SupportPlanOutput, evidence:
             _paragraph(plan.ai_disclosure, body),
             _paragraph(plan.boundary_notice, body),
             _paragraph(
-                "隐私提示：只处理去标识化观察，不收集姓名、学校、电话或精确地址；本方案未经过持证心理专家签署。",
+                "隐私提示：本比赛预览只允许合成数据，不收集姓名、学校、电话或精确地址；本方案未经过持证心理专家签署。",
                 small,
             ),
         ]

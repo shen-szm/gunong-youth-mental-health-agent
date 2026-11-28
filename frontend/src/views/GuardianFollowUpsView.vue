@@ -22,6 +22,7 @@
             <div><h2>{{ item.case_code }}</h2><p>{{ formatDate(item.due_at) }} · {{ statusLabel(item.status) }}</p></div>
             <div class="guardian-actions">
               <RouterLink class="guardian-quiet-action" :to="`/guardian/cases/${item.case_code}`">查看方案</RouterLink>
+              <button v-if="item.status === 'scheduled'" class="guardian-secondary-action" type="button" @click="simulate(item)">模拟到期</button>
               <button v-if="!['completed', 'superseded_for_safety'].includes(item.status)" class="guardian-primary-action" type="button" @click="toggleForm(item)">{{ openId === item.id ? '收起' : '填写回访' }}</button>
             </div>
 
@@ -67,7 +68,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { getGuardianFollowUps, submitGuardianFollowUp } from '../api/guardian'
+import { getGuardianFollowUps, simulateGuardianFollowUp, submitGuardianFollowUp } from '../api/guardian'
 
 const items = ref([])
 const loading = ref(true)
@@ -97,6 +98,10 @@ async function load() {
   try { items.value = (await getGuardianFollowUps()).data.items || [] }
   catch (err) { error.value = err.response?.data?.detail || '回访任务加载失败。' }
   finally { loading.value = false }
+}
+async function simulate(item) {
+  try { await simulateGuardianFollowUp(item.id); await load() }
+  catch (err) { error.value = err.response?.data?.detail || '模拟到期失败，请重试。' }
 }
 async function submit(item) {
   formError.value = ''

@@ -1,4 +1,4 @@
-"""用户与隔离访客会话 API。"""
+"""用户与本地演示会话 API。"""
 
 import secrets
 
@@ -20,6 +20,9 @@ class RegisterReq(BaseModel):
     username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
     password: str = Field(min_length=10, max_length=128)
     nickname: str = Field(default="", max_length=50)
+    real_name: str = Field(min_length=1, max_length=50)
+    class_name: str = Field(min_length=1, max_length=50)
+    student_no: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9-]+$")
 
 
 class LoginReq(BaseModel):
@@ -46,6 +49,9 @@ class UserResp(BaseModel):
     id: int
     username: str
     nickname: str = ""
+    real_name: str = ""
+    class_name: str = ""
+    student_no: str = ""
     avatar: str = ""
 
 
@@ -57,22 +63,26 @@ def _payload(user: User) -> dict:
         "is_admin": level >= 1,
         "is_super_admin": level >= 2,
         "role": "admin_teacher" if level >= 2 else "teacher" if level == 1 else "student",
+        "is_guest": (user.username or "").startswith("guest_"),
+        "real_name": user.real_name or "",
+        "class_name": user.class_name or "",
+        "student_no": user.student_no or "",
     }
 
 
 def _get_demo_user(db: Session) -> User:
-    """获取固定测试访客，不授予教师权限。"""
+    """获取固定合成演示用户，不授予教师权限。"""
     user = db.query(User).filter(User.username == "demo_guest").first()
     if not user:
         user = User(
             username="demo_guest",
             password_hash=get_password_hash(secrets.token_urlsafe(32)),
-            nickname="访客",
+            nickname="演示访客",
             is_admin=0,
         )
         db.add(user)
     else:
-        user.nickname = "访客"
+        user.nickname = "演示访客"
         user.is_admin = 0
     db.commit()
     db.refresh(user)
@@ -84,7 +94,21 @@ def _create_isolated_demo_user(db: Session) -> User:
     user = User(
         username=username,
         password_hash=get_password_hash(secrets.token_urlsafe(32)),
-        nickname="访客",
+        nickname="演示访客",
+        is_admin=0,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _create_isolated_guest_user(db: Session) -> User:
+    """创建正式匿名访客身份；每个浏览器会话隔离，绝不授予教师权限。"""
+    user = User(
+        username=f"guest_{secrets.token_hex(12)}",
+        password_hash=get_password_hash(secrets.token_urlsafe(32)),
+        nickname="新朋友",
         is_admin=0,
     )
     db.add(user)
@@ -96,26 +120,42 @@ def _create_isolated_demo_user(db: Session) -> User:
 def get_demo_session(db: Session) -> dict:
     """保留现有测试和调用方使用的无状态返回形状。"""
     user = _get_demo_user(db)
-    return {"msg": "访客会话已就绪", **_payload(user)}
+    return {"msg": "合成数据演示会话已就绪", **_payload(user)}
 
 
 @router.post("/demo-session")
 async def demo_session(response: Response, db: Session = Depends(get_db)):
     if not settings.DEMO_MODE:
-        raise HTTPException(status_code=404, detail="访客会话未启用")
+        raise HTTPException(status_code=404, detail="演示会话未启用")
     user = _create_isolated_demo_user(db)
     establish_session(response, db, user)
-    return {"msg": "访客会话已就绪", **_payload(user)}
+    return {"msg": "合成数据演示会话已就绪", **_payload(user)}
+
+
+@router.post("/guest-session")
+async def guest_session(response: Response, db: Session = Depends(get_db)):
+    if not settings.ALLOW_GUEST_SESSION:
+        raise HTTPException(status_code=404, detail="访客入口未启用")
+    user = _create_isolated_guest_user(db)
+    establish_session(response, db, user)
+    return {"msg": "匿名会话已就绪", **_payload(user)}
 
 
 @router.post("/register")
 async def register(req: RegisterReq, response: Response, db: Session = Depends(get_db)):
+    if req.username.startswith("guest_"):
+        raise HTTPException(status_code=400, detail="该用户名前缀已被保留")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
+    if db.query(User).filter(User.student_no == req.student_no).first():
+        raise HTTPException(status_code=400, detail="该学号已被注册")
     user = User(
         username=req.username,
         password_hash=get_password_hash(req.password),
-        nickname=req.nickname or req.username,
+        nickname=req.nickname or req.real_name,
+        real_name=req.real_name,
+        class_name=req.class_name,
+        student_no=req.student_no,
         is_admin=0,
     )
     db.add(user)
@@ -157,10 +197,12 @@ async def reset_password(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_teacher),
 ):
+    from api.companion import clear_companion_context_for_user
     user = db.query(User).filter(User.id == target_user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     user.password_hash = get_password_hash(req.new_password)
+    clear_companion_context_for_user(target_user_id, db)
     db.query(UserSession).filter(UserSession.user_id == target_user_id).delete()
     db.commit()
     return {"msg": f"已重置 {user.username} 的密码，并注销其已有会话"}
@@ -172,11 +214,13 @@ async def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from api.companion import clear_companion_context_for_user
     if not verify_password(req.old_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="旧密码错误")
     if req.new_password1 != req.new_password2:
         raise HTTPException(status_code=400, detail="两次输入的新密码不一致")
     current_user.password_hash = get_password_hash(req.new_password1)
+    clear_companion_context_for_user(current_user.id, db)
     db.query(UserSession).filter(UserSession.user_id == current_user.id).delete()
     db.commit()
     return {"msg": "密码修改成功，请重新登录"}

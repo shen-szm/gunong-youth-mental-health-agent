@@ -1,0 +1,1577 @@
+{
+  "created_utc": "2026-10-08T15:23:52.154294+00:00",
+  "git_base": "249a89a24836afced89a6461046d6041c593845a",
+  "snapshot": "current_worktree_including_uncommitted_files",
+  "excluded": [
+    "credentials",
+    "databases",
+    "runtime data",
+    "dependencies",
+    "builds",
+    "logs",
+    "old archives",
+    "document attachments"
+  ],
+  "files": [
+    {
+      "path": ".env.example",
+      "bytes": 531,
+      "sha256": "91ae7b6ce5d4449d2e031661af92dcb7bd46278206daf5731df09e39eefbcaa5"
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 102,
+      "sha256": "771c3782aa8b70b4b17fdfdeed07b5a184d032c116c31181f63f553eaa28fb9c"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 355,
+      "sha256": "878b662e1b281ad9cec2dfb204cbca3a04e6859dde30bbbaeaafbf5527226b10"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 55569,
+      "sha256": "36eaf74e1a4d2666ee9aadcbc45e4df6ed70c7f1b83c31f1e8b6c3923787747b"
+    },
+    {
+      "path": "PRODUCT.md",
+      "bytes": 1503,
+      "sha256": "aa8a243e5ec6b9a4626a531d94586bdb4173c4a0b890e64573c9c7e75b20a683"
+    },
+    {
+      "path": "SOURCE_DELIVERY.md",
+      "bytes": 4009,
+      "sha256": "5a46fd39f78e36344119dd80f7fb89672b075376a3ad54388e83174630098141"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 3589,
+      "sha256": "3110cfe0aadf4c76ef724cfd9d32e4fb1af46277cb835aff9f4c2e9b38b3afd5"
+    },
+    {
+      "path": "backend/.env.example",
+      "bytes": 449,
+      "sha256": "2464205886cd36a5203614bc40c86230c22cf2997a1a926504c52bad2c7d1ef2"
+    },
+    {
+      "path": "backend/agents/__init__.py",
+      "bytes": 725,
+      "sha256": "e4059f3196e1b66d569d4606b4e6b47ed563868b79a0204dc17714bdefe6ca5c"
+    },
+    {
+      "path": "backend/agents/base.py",
+      "bytes": 4969,
+      "sha256": "0d9d24d624df898ab1200a98b5d3b36d618b59a7c2e04d1f43c81a34ddb23fc6"
+    },
+    {
+      "path": "backend/agents/companion_agent.py",
+      "bytes": 9074,
+      "sha256": "961e43682eef814cfa8ffca66065ee92647e7995cd9a5708c997fc820b2efc8b"
+    },
+    {
+      "path": "backend/agents/orchestrator.py",
+      "bytes": 12296,
+      "sha256": "dc6496281a012b390907bd70fb2a3509836a4b23c77687579e3a1aab32d088da"
+    },
+    {
+      "path": "backend/agents/perception.py",
+      "bytes": 6706,
+      "sha256": "5a1cc01f212ef62830ac3369e14e702bbdb878198800aa6b892376a246b5f0ad"
+    },
+    {
+      "path": "backend/agents/planner.py",
+      "bytes": 11234,
+      "sha256": "53c8fad10d25dd2c9d1b5c14e564899b7af5f4e7bfc2c12f2c39cdb4e8aeb5bc"
+    },
+    {
+      "path": "backend/agents/reporter.py",
+      "bytes": 11143,
+      "sha256": "390f868f936114be3008fbe9983fe598c7552511615508a90fffc262f1cd19ee"
+    },
+    {
+      "path": "backend/agents/safety.py",
+      "bytes": 2688,
+      "sha256": "119916058e648a16d1873c2ce9484b414af18be7ef3a1cf82c1a64a71c798a24"
+    },
+    {
+      "path": "backend/agents/tools.py",
+      "bytes": 13472,
+      "sha256": "e3fe50cc148dcbffda7ff3e864569e1195ef13c16a74c6e79d9ea294d69d7fa3"
+    },
+    {
+      "path": "backend/agents/wellbeing_assessment.py",
+      "bytes": 17468,
+      "sha256": "629b0d4774e79070606aefd26c80b03af6bec1ed3ec99e82e53eb0dbd94f90e5"
+    },
+    {
+      "path": "backend/api/__init__.py",
+      "bytes": 39,
+      "sha256": "ecdde760e9a437787e21238777db0d2a9006394cc4c90484920b727162658184"
+    },
+    {
+      "path": "backend/api/admin.py",
+      "bytes": 11804,
+      "sha256": "b172273fa9442a848ec1e19f7de5c1035ffe5e2aad9b11da1390202ba5709379"
+    },
+    {
+      "path": "backend/api/assessment.py",
+      "bytes": 11052,
+      "sha256": "72d7e0ad37dd23e750b441eac158b673039d322801ed03c5a50f9129fa522a89"
+    },
+    {
+      "path": "backend/api/chat.py",
+      "bytes": 78400,
+      "sha256": "31592839dd4137bf7b6f9620024b544be0c8af8e89826f7188d3eead4664c662"
+    },
+    {
+      "path": "backend/api/companion.py",
+      "bytes": 13603,
+      "sha256": "05021ebdf6cbb1d6e6e068e47d65e446696c93543c6708b02e04a62cebf1255a"
+    },
+    {
+      "path": "backend/api/guardian.py",
+      "bytes": 14021,
+      "sha256": "626299651f394673504f7839e04c70466ce9ee77939bf703db85a8f2ec031c7a"
+    },
+    {
+      "path": "backend/api/island.py",
+      "bytes": 15701,
+      "sha256": "0ec05c5c498e4b1dc2e077d7fa94c6cf9852a1ee7290327bd267bce0a80d2d41"
+    },
+    {
+      "path": "backend/api/mood.py",
+      "bytes": 9975,
+      "sha256": "e19f8dfcb6d57da4fd9b74ca84fb25b8dc2fe498d58ac7577d9fddfa68031b41"
+    },
+    {
+      "path": "backend/api/music.py",
+      "bytes": 4036,
+      "sha256": "d5c0b88d8edbb191efab8db9db9b0fc5c36cb0653dc55b732211b1ac68a7072c"
+    },
+    {
+      "path": "backend/api/student_agent.py",
+      "bytes": 7718,
+      "sha256": "1046424ae9f02a0130cc8936832ccf21b8908c390a0b3f8a2b9df0491dfbbdec"
+    },
+    {
+      "path": "backend/api/teacher.py",
+      "bytes": 76911,
+      "sha256": "3074d60497756cf9d40f9f48be0879710e0f535eacfecce42bdba85d9a6b552d"
+    },
+    {
+      "path": "backend/api/teacher_tasks.py",
+      "bytes": 10009,
+      "sha256": "1b32948ff831a0b2f82536da2fa73f5557cf7985474eba7363dbc9e7783c9272"
+    },
+    {
+      "path": "backend/api/user.py",
+      "bytes": 8198,
+      "sha256": "db5a8e2c13259f7784696b3cc9ccb2d9980ecca4415586c060f1023a31df232c"
+    },
+    {
+      "path": "backend/app_time.py",
+      "bytes": 772,
+      "sha256": "08dca93c92e79bed4e60d0ddf0876ae81d5613f6df2add99c8167ccad0817120"
+    },
+    {
+      "path": "backend/auth.py",
+      "bytes": 3303,
+      "sha256": "f42d03468aa5f0a54e6e1818d7279c7514131220e8220dbd60642f9790bd22a8"
+    },
+    {
+      "path": "backend/config.py",
+      "bytes": 3002,
+      "sha256": "a1339c9c0877e1dce4a12cc56b9ede0ca028d5bfca5e536fef40c96774cce108"
+    },
+    {
+      "path": "backend/data/guardian_evidence.json",
+      "bytes": 3160,
+      "sha256": "ce649208e5ca654fabecaa9f4ede9124ab2fd431cb10635f5ede224737e10a00"
+    },
+    {
+      "path": "backend/data/guardian_resources.json",
+      "bytes": 2374,
+      "sha256": "9445bf43cfa5235317912fe79e0e7e09238f6e517683911dad50ea18f947c920"
+    },
+    {
+      "path": "backend/database.py",
+      "bytes": 8223,
+      "sha256": "5c74f7494ac8a8d6f069b27523efc946e5db856576f0ec8bea74ac4fa090701f"
+    },
+    {
+      "path": "backend/guardian_engine.py",
+      "bytes": 27754,
+      "sha256": "291a4409b3bd69243ec9781c99ff9fe309598bc3585a57f2072105bf25905173"
+    },
+    {
+      "path": "backend/guardian_pdf.py",
+      "bytes": 8283,
+      "sha256": "57e6332f5c5ea75a622d392f0e63fbb5db0675890c136b001cfbc51b8fff996f"
+    },
+    {
+      "path": "backend/guardian_schemas.py",
+      "bytes": 4516,
+      "sha256": "9adc3240db2806dca4c695c0d2e6554ba7c2cc5b128cd968e62c2f9de5705c4d"
+    },
+    {
+      "path": "backend/init_admin.py",
+      "bytes": 1449,
+      "sha256": "fc2eea7f0941a1de93c25a61d782a6662346a75223e3790c2e577a446331829d"
+    },
+    {
+      "path": "backend/main.py",
+      "bytes": 3913,
+      "sha256": "9bc5bd25ff90de097bf1b8241f93f012e9958c9f14488c43dbec1d5d20c06414"
+    },
+    {
+      "path": "backend/models.py",
+      "bytes": 27372,
+      "sha256": "75de6c5515e39ccbda02fb9966d31ffa04e1aa1034597f2c5a20deb2a4321f66"
+    },
+    {
+      "path": "backend/requirements-agent.txt",
+      "bytes": 157,
+      "sha256": "13726a296fa02f0f57011c5374dfb29712fa1b769de902e6ce581d40c2ad8cc9"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "bytes": 267,
+      "sha256": "2fe1ae924f97e94f28a46fd69507bef286f8f0c5e3992af010b2413555692c96"
+    },
+    {
+      "path": "backend/scripts/cleanup_teacher_tasks.py",
+      "bytes": 1037,
+      "sha256": "5d1d85bb04caa97f5a29f3f56ac0d2e985e62ae959015462eea8878ba2ecef87"
+    },
+    {
+      "path": "backend/scripts/evaluate_teacher_intent.py",
+      "bytes": 3400,
+      "sha256": "92f36d23e7087391d90fb63e3790bd7a3b3e22e86015c3454fd64d3408a0dc55"
+    },
+    {
+      "path": "backend/scripts/export_guardian_preview.py",
+      "bytes": 2003,
+      "sha256": "4ca46acca56c32ace90500f5c85f67596a63185cb03ae471051f1a0d69e80c6b"
+    },
+    {
+      "path": "backend/scripts/serve_teacher_task_preview.py",
+      "bytes": 2328,
+      "sha256": "f1cae42b1818423d72f1fbc55717a15e59ece1f9f04e6875f2d022dd67efd450"
+    },
+    {
+      "path": "backend/scripts/verify_teacher_cases.py",
+      "bytes": 7163,
+      "sha256": "9fa1a2cdb98559742319d989ee63b9ae5a165556fedbf2beb91c09c25e2c29f2"
+    },
+    {
+      "path": "backend/scripts/verify_teacher_planner.py",
+      "bytes": 2200,
+      "sha256": "cef0fb8ec98eb0039837ac400925b5e263e9603c67c169d12d57f4b3aab6f8f6"
+    },
+    {
+      "path": "backend/security.py",
+      "bytes": 1195,
+      "sha256": "97a9f3dc2449220eb567238fc8aa18162b16baa202552f82af4aa054a269d0de"
+    },
+    {
+      "path": "backend/student_ai_authorization.py",
+      "bytes": 3457,
+      "sha256": "f28ab0262181c62dfc3928e40b6030730de184330f8924fdf20ccc750f63b733"
+    },
+    {
+      "path": "backend/student_support_engine.py",
+      "bytes": 24119,
+      "sha256": "dbb4edaebf5b99b2e6478c6058245517fd4fa7f81da85ab1ce4a1133f13a53a6"
+    },
+    {
+      "path": "backend/student_support_resources.py",
+      "bytes": 1415,
+      "sha256": "e7f69b345fe0bbc7e33609698e4eb2b4b5c267affbd1cf8378f53c378b009455"
+    },
+    {
+      "path": "backend/teacher_case_workflow.py",
+      "bytes": 10824,
+      "sha256": "8840ee1c3f610b3bbe15c35ab83815bafb16807899796ea5da20565edf43153c"
+    },
+    {
+      "path": "backend/teacher_clarification.py",
+      "bytes": 4691,
+      "sha256": "f71d973e974f0a5f9d34983c76279014379cf00e113f8ff00f9c66ac220fa8c9"
+    },
+    {
+      "path": "backend/teacher_intent_benchmark.py",
+      "bytes": 8720,
+      "sha256": "080a47b43798670523654666428fcaf3fe82bc10bcc29ae2270c7f584d11c4b0"
+    },
+    {
+      "path": "backend/teacher_intent_guard.py",
+      "bytes": 1552,
+      "sha256": "790512d4a550b3ecbefe2743380ab068c7bc3f45e8d784b0a4d164ea2a1d3007"
+    },
+    {
+      "path": "backend/teacher_intent_validation_set.py",
+      "bytes": 2487,
+      "sha256": "e3a79ecb5725abde025ddc10e059d6b76c8400d1e0a3d2a55f71b2c679e03901"
+    },
+    {
+      "path": "backend/teacher_review_engine.py",
+      "bytes": 26411,
+      "sha256": "e82f20279519fd88e331188d5ef35eba2fd958815ce906386940a5acb9ffb1dd"
+    },
+    {
+      "path": "backend/teacher_review_pdf.py",
+      "bytes": 10912,
+      "sha256": "6b669e0b26b06ff8a4c31125e115bc56c3073d369bceed6bf503e37265fdf7bb"
+    },
+    {
+      "path": "backend/teacher_revision_check.py",
+      "bytes": 3825,
+      "sha256": "d82bc15c8afeb6b0941ff9eac53d49a83bff82a96a64e5150930623e01df83e7"
+    },
+    {
+      "path": "backend/teacher_task_cleanup.py",
+      "bytes": 5499,
+      "sha256": "80e96e24e2d4d4c207ca83379f228a3ce4afda897479735e9c0c129c4faa6384"
+    },
+    {
+      "path": "backend/teacher_task_intent.py",
+      "bytes": 7014,
+      "sha256": "eb20ce7c31912cf298fc7664b1ac900feadc113eb4dce9d4f7a6e1bbd20edf9d"
+    },
+    {
+      "path": "backend/teacher_task_planner.py",
+      "bytes": 5586,
+      "sha256": "016ab41915003320f8cdbf398e87bc010e005682585c40940ef256762cefde5b"
+    },
+    {
+      "path": "backend/teacher_task_runtime.py",
+      "bytes": 10881,
+      "sha256": "9e2e09ee302781abe0975a189f54715f302840c28c23aa403fa9437f21edd5d8"
+    },
+    {
+      "path": "backend/tests/__init__.py",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "backend/tests/test_conversation_depth.py",
+      "bytes": 1805,
+      "sha256": "8ea8854d29870abf014b43f95123262f72b0c338c1671cbffbb8c1d8ffdad98a"
+    },
+    {
+      "path": "backend/tests/test_database_migrations.py",
+      "bytes": 3496,
+      "sha256": "e5770f2ce872d236872b901913bc61159a2c43e2db459b4f9e6ed4bde5df562e"
+    },
+    {
+      "path": "backend/tests/test_demo_session.py",
+      "bytes": 1700,
+      "sha256": "fcba87630a75fff82df0e0a43628c047dfb1dba6f008b0972de1eae900642c4e"
+    },
+    {
+      "path": "backend/tests/test_guardian_api.py",
+      "bytes": 6888,
+      "sha256": "aa77964c82aed9abd9837b79f8b742778b0eb548334e92a7f654bea110becc2c"
+    },
+    {
+      "path": "backend/tests/test_guardian_workflow.py",
+      "bytes": 8133,
+      "sha256": "1f9c95fa7622eef5fdc95fc9eb3f576fbd132a5181d81237fe0e2cea5ac6b7be"
+    },
+    {
+      "path": "backend/tests/test_island_agent_consent.py",
+      "bytes": 7442,
+      "sha256": "cc5caea763f7477c7d19ef92ca9d7bc0001d74ebd4285afa1209bde653a8794b"
+    },
+    {
+      "path": "backend/tests/test_island_agent_safety.py",
+      "bytes": 3851,
+      "sha256": "53e7a2a643b4931555591dc78ce54eed6403abc01acfa7f949d8fee15d7491da"
+    },
+    {
+      "path": "backend/tests/test_pet_companion.py",
+      "bytes": 11099,
+      "sha256": "76946cfb184cf7cb40a1c08020ed116da30b1bdf1372ad020479669248ab47f2"
+    },
+    {
+      "path": "backend/tests/test_release_health.py",
+      "bytes": 640,
+      "sha256": "03cabd958e6f662c881a46ded7199c3c2aa58529cddcfff487fa1e3c1029356e"
+    },
+    {
+      "path": "backend/tests/test_release_script.py",
+      "bytes": 2377,
+      "sha256": "18ef982dd01fc0722d19096c879e86fc07df6e6759cb7d39fff5e036e977c292"
+    },
+    {
+      "path": "backend/tests/test_student_conversation_summary.py",
+      "bytes": 40443,
+      "sha256": "5b4c2720fc56a6f9593b503c5c37cac7cde36c319e49d612081561bf835bc006"
+    },
+    {
+      "path": "backend/tests/test_student_support_agent.py",
+      "bytes": 18290,
+      "sha256": "3f49c2b2524f967e2e65f9d82de415aa0411cecfc7f6e448e826e8275ad0e839"
+    },
+    {
+      "path": "backend/tests/test_student_wellbeing_assessment.py",
+      "bytes": 11867,
+      "sha256": "91c1baf90c6efe1c785d829d8915b1a7479a88ee3409acdf8bddaae5098fc3f7"
+    },
+    {
+      "path": "backend/tests/test_teacher_case_access.py",
+      "bytes": 62884,
+      "sha256": "f19e670ca02c3bb517f4bcd9c88d2a9d3e0b20ac71e2519879f6070834c62ef2"
+    },
+    {
+      "path": "backend/tests/test_teacher_case_workflow.py",
+      "bytes": 4426,
+      "sha256": "5478d39b670cd80e495f1fc95410a27e6d6132af8ad357fd01e1c4e98e4c18d3"
+    },
+    {
+      "path": "backend/tests/test_teacher_case_workflow_api.py",
+      "bytes": 19575,
+      "sha256": "de9404537a59780e6a9ff21b98ef1e5bf6c9d0b70d58ce88a2b788d406070385"
+    },
+    {
+      "path": "backend/tests/test_teacher_clarification.py",
+      "bytes": 3627,
+      "sha256": "2f52f743ae1dc35171793b8c193f5e586c903ae8f82ba1d9cbec912864aee1df"
+    },
+    {
+      "path": "backend/tests/test_teacher_intent_benchmark.py",
+      "bytes": 3521,
+      "sha256": "f58e1ec1a43a45c3605d60d3bf848375c55f799da04673a129fcdf4dc5609289"
+    },
+    {
+      "path": "backend/tests/test_teacher_intent_guard.py",
+      "bytes": 3355,
+      "sha256": "d86eeec50adc5098f06f6cf173bbc5a43b69f388c528801f98053d6cf78be935"
+    },
+    {
+      "path": "backend/tests/test_teacher_task_cleanup.py",
+      "bytes": 5566,
+      "sha256": "b748e750f83aaaece8cbf7ae5da8159831adbae823fb1e56bf6a6728f4376172"
+    },
+    {
+      "path": "backend/tests/test_teacher_task_intent.py",
+      "bytes": 5814,
+      "sha256": "370b8d69c25a44d89e7f289894a055277869be534f183bf615e298a5fc9d1c5e"
+    },
+    {
+      "path": "backend/tests/test_teacher_task_planner.py",
+      "bytes": 8304,
+      "sha256": "1586722131b6ef35850687d954457a7e122b7e944b08b9957deb3c56f76d9b3c"
+    },
+    {
+      "path": "backend/tests/test_teacher_task_runtime.py",
+      "bytes": 7532,
+      "sha256": "6137c10e0b5472cd7339597dbca879653a65d93c832582f5f009802e82179634"
+    },
+    {
+      "path": "backend/third-party-langgraph.txt",
+      "bytes": 1245,
+      "sha256": "7896e01324469615f6dd788907d10108e94e52a515a9f911436b9cd3b7dc5780"
+    },
+    {
+      "path": "backend/validation.py",
+      "bytes": 684,
+      "sha256": "5f33e6b333f4935c048e49ee5f3ae486abd3bc9a05f6c2098aa75cb4a1a539c2"
+    },
+    {
+      "path": "backend/xunfei/__init__.py",
+      "bytes": 43,
+      "sha256": "a33f9a2f22bef88e6ff7d3d78ebb04ca03f09eada6f5e89f53485e02983d80d8"
+    },
+    {
+      "path": "backend/xunfei/asr_api.py",
+      "bytes": 4417,
+      "sha256": "1e455c34bedb1b96d4898a5ad8a3e028064490c2ea24add4712e47c4ced1dcaa"
+    },
+    {
+      "path": "backend/xunfei/spark_api.py",
+      "bytes": 1664,
+      "sha256": "3c774b2a76a74282cd9c8771ef89677825d6fda87306b2683ccb05c68a841713"
+    },
+    {
+      "path": "backend/xunfei/tts_api.py",
+      "bytes": 4282,
+      "sha256": "d4c13e44a12cc6c04c423164027d261cf2845368077a22f11d6efc40880204b3"
+    },
+    {
+      "path": "deploy/nginx-shengyu-performance.conf",
+      "bytes": 799,
+      "sha256": "10fa94fe1201eaff586d4b86b98e7fea122d0864e65aa9ff4ce3432d95ee41ff"
+    },
+    {
+      "path": "deploy/release-alpha34.sh",
+      "bytes": 4882,
+      "sha256": "1bac42a4fd35d6e4e70dc17f3f44f9a8cf02d31f9f64eb922a0b771a1f078d4e"
+    },
+    {
+      "path": "deploy/release-alpha35.sh",
+      "bytes": 4619,
+      "sha256": "2d43c8d4648906008ffcf0056e018fbe6cba4aec8235c27ece23e8d600e24e78"
+    },
+    {
+      "path": "deploy/release-alpha36.sh",
+      "bytes": 4637,
+      "sha256": "20472d15bfee7db41df83b04fb57feb071ca48af541188bbdcfcd1f99f2c5baa"
+    },
+    {
+      "path": "deploy/release-alpha37.py",
+      "bytes": 6641,
+      "sha256": "216a0059bf3ad79b2cf60e7736401b83810cb51f238dce324a504d55344e8d93"
+    },
+    {
+      "path": "deploy/test_release_alpha37.py",
+      "bytes": 3721,
+      "sha256": "be7ea02394620ec2fb4beac6055a768d66e2df7a09e3c4da754e2dfa7a3ec462"
+    },
+    {
+      "path": "docs/PROJECT_CONTEXT_ALPHA13.md",
+      "bytes": 6348,
+      "sha256": "0b7e70e0136c7205cc17a3a2d8d49b6b75d34c603039004cff966f0c02c86ec4"
+    },
+    {
+      "path": "docs/PROJECT_CONTEXT_ALPHA14.md",
+      "bytes": 3752,
+      "sha256": "66813fc52c056b8e7422240206478ac57223653009f2ee87814b9257141e217b"
+    },
+    {
+      "path": "docs/PROJECT_CONTEXT_ALPHA28_PAUSED.md",
+      "bytes": 5621,
+      "sha256": "56de5ce1b609a635b9aba5aa4ef6bfb75c19505307ebc412a7cd3d659ed63c31"
+    },
+    {
+      "path": "docs/ops/2026-07-06-restored-teacher-portal-baseline.md",
+      "bytes": 2934,
+      "sha256": "f95617757b292e007cf2a7ac0ea2c32b658cf08c50be7f2c2ae0789e10353a32"
+    },
+    {
+      "path": "docs/ops/2026-08-16-aliyun-cutover.md",
+      "bytes": 1101,
+      "sha256": "025d023acf8bbe37103a12646f6fdaca7b89185c8bc33740081c33de216835e5"
+    },
+    {
+      "path": "docs/ops/2026-09-10-alpha37-release.md",
+      "bytes": 3117,
+      "sha256": "c13b73421d61341616dda675e402150b2c35e101af2bebb5c4c893c409e24b9a"
+    },
+    {
+      "path": "docs/research/2026-08-24-student-leisure-agent-open-source-review.md",
+      "bytes": 5288,
+      "sha256": "9fe8187f454bf5267a786e7ab421e72e16ca2375831e911527d7e5ffd765bf4b"
+    },
+    {
+      "path": "docs/research/2026-08-26-heart-island-open-source-games-alpha12.md",
+      "bytes": 3256,
+      "sha256": "082ea3b21387d13156aecb1f0c3c7f79116f10837fcbecef5714373b81e358d4"
+    },
+    {
+      "path": "docs/research/2026-08-27-heart-island-emotion-alpha13.md",
+      "bytes": 3437,
+      "sha256": "d4c24c7aab6d27957e18c857e7adfda1a99f3977df655130137eb24a7fbebf60"
+    },
+    {
+      "path": "docs/research/2026-09-08-durable-teacher-plans.md",
+      "bytes": 3710,
+      "sha256": "010999707c3bfeebb377718ffba436387fb738aa83a0752caeddd1977b891a1c"
+    },
+    {
+      "path": "docs/research/2026-09-08-pc-review-workspace.md",
+      "bytes": 1757,
+      "sha256": "dd8308d1c35146126d67cb324500d1c7f3ccf61f37135bec76e62316057f0fa3"
+    },
+    {
+      "path": "docs/research/2026-09-08-revision-readiness.md",
+      "bytes": 1820,
+      "sha256": "14135f3e25e0e47d84b10a3d70f8d5425cb1624da443ebd43d59e791f7a2ac55"
+    },
+    {
+      "path": "docs/research/2026-09-08-revision-task-delivery.md",
+      "bytes": 3145,
+      "sha256": "46af459df056f2c2514a6924af754052d0c292ce42232f08acd77d1ce5b9087e"
+    },
+    {
+      "path": "docs/research/2026-09-08-teacher-case-execution.md",
+      "bytes": 3938,
+      "sha256": "59f91297be70a55dda027237d014e256b4cf8d75529f3e32defd91f263d38ecf"
+    },
+    {
+      "path": "docs/research/2026-09-08-teacher-planner-baseline.md",
+      "bytes": 4026,
+      "sha256": "4f6313d4e4ea5551ae4596d16d6b679f8155559d91a10b425770cb074f95c12b"
+    },
+    {
+      "path": "docs/research/2026-09-08-teacher-task-retention.md",
+      "bytes": 2591,
+      "sha256": "5c12fcf1672eedcb9d880063460bb09e4b1c2910c930e68a2a8641d344e3b694"
+    },
+    {
+      "path": "docs/research/2026-09-08-teacher-task-termination.md",
+      "bytes": 2837,
+      "sha256": "fdc851610e3222d1e4706aae4291537a5c4ccb0db860be5758f75b237f7f155e"
+    },
+    {
+      "path": "docs/research/2026-09-08-teacher-task-ui.md",
+      "bytes": 4816,
+      "sha256": "82d2dc1700bfdb229b339431c4485b4d6433335dc1dc35389a19c4a0c88de606"
+    },
+    {
+      "path": "docs/research/2026-09-09-intent-benchmark.md",
+      "bytes": 3084,
+      "sha256": "d39a8614a9a05fb0182d6e17c92ae9e2ed53704f98706c3091699d3de7fd3397"
+    },
+    {
+      "path": "docs/research/2026-09-09-intent-explicit-v2.md",
+      "bytes": 3119,
+      "sha256": "61c6194d1e8dbf356dc0710231e22e3c4ba647f282d9de5381dedfd863473c03"
+    },
+    {
+      "path": "docs/research/2026-09-09-intent-format-retry-v3.md",
+      "bytes": 2772,
+      "sha256": "a86fb364e8c99268fc2de3957dd4740865d941454e4ce6651b797c37fe200858"
+    },
+    {
+      "path": "docs/research/2026-09-09-intent-live-baseline.md",
+      "bytes": 3012,
+      "sha256": "f54f739b43192e34448c58b08692745469ab7f7e1d966bf47d120f23d805e243"
+    },
+    {
+      "path": "docs/research/2026-09-09-teacher-acceptance-desk.md",
+      "bytes": 1768,
+      "sha256": "8a0f683680202620d67ee2ac367f12435a5215c8a28518b8d6ad369075d78a3d"
+    },
+    {
+      "path": "docs/research/2026-09-09-teacher-intent-preview.md",
+      "bytes": 2568,
+      "sha256": "9b9600a91285cb559372943e87e7d44ff26cbadfa45304e437e5c9a341a52451"
+    },
+    {
+      "path": "docs/research/2026-09-09-teacher-task-history.md",
+      "bytes": 2604,
+      "sha256": "8f673908c7eb2adccaef9d7e0fc825ace8bcde46a62c6f170ecc1db6f4dd266e"
+    },
+    {
+      "path": "docs/research/2026-09-10-clarification-receipts.md",
+      "bytes": 2490,
+      "sha256": "996aabc45031dd0e0ebfacb5ef50f5f7c459e31209f093b1455677b8aa2fff3b"
+    },
+    {
+      "path": "docs/research/2026-09-10-intent-clarification-pc.md",
+      "bytes": 1961,
+      "sha256": "46b22f8bf73c08a580c9e38e208b3e78617189f58f53275c8ada29bf8f138180"
+    },
+    {
+      "path": "docs/research/2026-09-10-teacher-intent-guard-v4.md",
+      "bytes": 2724,
+      "sha256": "de80aba37c77f00adc717f24e307987dffeb03a56f8b08a1006c3ada534a6ca2"
+    },
+    {
+      "path": "docs/research/teacher-review-report-benchmark.md",
+      "bytes": 3891,
+      "sha256": "e4b318b38713f8783d4336128c4a97e2ac78fb12d05cd95e79841b2119d1b8e9"
+    },
+    {
+      "path": "docs/research/teacher-workbench-alpha3.md",
+      "bytes": 3043,
+      "sha256": "daff83bdf432abe7f3ae7a87cc3766c26bb92ac0683b8a9950017961998fc9e5"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-19-teacher-portal-labels.md",
+      "bytes": 4197,
+      "sha256": "a56a83e36cd36f4e929923b9c46199b296dd41d5f7fe853c5831ea454197b77b"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-20-demo-user-auto-entry.md",
+      "bytes": 4397,
+      "sha256": "48a33402dbd0b130df86afabbc521274e9efe78bbd1e2f076d24527d5cede67a"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-20-public-entry-polish.md",
+      "bytes": 1974,
+      "sha256": "b39efd70b52aed86931167d2ee9d6870d7579d456c0191da5d9a40c6aa1c8f42"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-06-v4-3-engagement-loop.md",
+      "bytes": 23681,
+      "sha256": "6c149b07acca39534c79a097df4bf35c50da115ef14d712a1a144da58db2edd1"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-07-v4-5-pet-companion.md",
+      "bytes": 11277,
+      "sha256": "df74d9f1c48a19de74000c68709bebdfdad2f4b10ab01ee3032659776ad8121c"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-04-verifiable-agent-delivery.md",
+      "bytes": 4364,
+      "sha256": "6fa2f54b3d5b6f1bc8090f06d800b9792ece2aefb843b5fb5bdd25afa576c4bd"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-05-agent-execution-visualization.md",
+      "bytes": 3566,
+      "sha256": "58e15852e99dcd3ee48c4767f0ac9733f63a42848f0359d276e5fe5a0b4ad0c0"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-06-student-experience.md",
+      "bytes": 1919,
+      "sha256": "97bf34156155b08a2e829d25d189ea6f96d7369ae2fdc23096a10371efb6ff5d"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-06-teacher-agent-verification.md",
+      "bytes": 3694,
+      "sha256": "fa16d7d2eabed1b783cfcf082667fa6769247b4a35a574cb8a9792325e87be0e"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-07-super-agent-competition-roadmap.md",
+      "bytes": 9911,
+      "sha256": "c25a75904dd465a2ec218de9d8b1a34260be71f5497e65e0194f5ce872c514aa"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-08-teacher-review-agent-delivery.md",
+      "bytes": 4875,
+      "sha256": "13acf1560f34d08dc24d137302cdb607cf7d48bf661d8efa4c536c2e05f095ff"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-19-teacher-portal-labels-design.md",
+      "bytes": 1876,
+      "sha256": "17cb656fd53a2c8e85e608021ab9382c45966a442c63ea37d96b095492bdc960"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-20-demo-user-auto-entry-design.md",
+      "bytes": 2774,
+      "sha256": "5b97d96342e8e99c6b0e34e7fa87b589490ba55600b446fd7d69c781b52ad3d5"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-20-public-entry-polish-design.md",
+      "bytes": 1343,
+      "sha256": "348ed29dc03db83c718dae2f459e9ee42a7cd55ebbe7f2cca3a7afe14fea2f16"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-06-v4-3-engagement-loop-design.md",
+      "bytes": 6378,
+      "sha256": "085bbee50334dd61e7f3b1dfbac4f96a1144f3e01907e348b05e57ff10daab77"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-07-v4-5-pet-companion-design.md",
+      "bytes": 2500,
+      "sha256": "fe05177670bf6259687b5ea1af453b9bb52f993b48f4fb188f74fda3eed6e9ef"
+    },
+    {
+      "path": "docs/咕哝心岛_项目开发日志.md",
+      "bytes": 53398,
+      "sha256": "e2da0a57a7aeb8748be526666182cc469db8bffdadda55d483b77866a3fac1e3"
+    },
+    {
+      "path": "frontend/.gitignore",
+      "bytes": 29,
+      "sha256": "f3c275e427d62a51f7565a5094c10fe5899b10ed78acec5ea099d665280c9ac6"
+    },
+    {
+      "path": "frontend/design-qa-fishing-alpha12.png",
+      "bytes": 308851,
+      "sha256": "d2cff30e831385e9f9b822f8bb5e0cd4bf325c3304b84df87ace3d388793cf99"
+    },
+    {
+      "path": "frontend/design-qa-garden-alpha12.png",
+      "bytes": 317545,
+      "sha256": "15c8dbfd838f5cddc8525caf1f5c5cb1855fd0289d0fb3b2e6f513520b1c1648"
+    },
+    {
+      "path": "frontend/design-qa-happiness-alpha12.png",
+      "bytes": 338570,
+      "sha256": "50682e1b01f996af4d5306a25c3de8e324fbde61c0315b3ee77e4a62af0e3571"
+    },
+    {
+      "path": "frontend/design-qa-mobile.png",
+      "bytes": 89636,
+      "sha256": "b5dded1a67e930844ca3e83ac8c1b0357ee9357a744764ee08f27cca66efe204"
+    },
+    {
+      "path": "frontend/design-qa-prototype-final.jpg",
+      "bytes": 371558,
+      "sha256": "2f0029e5004799255eda328fa3849883ee6e312bc53d8054968936de5d62827a"
+    },
+    {
+      "path": "frontend/index.html",
+      "bytes": 499,
+      "sha256": "872e15a57b6aa7db939b2c72fe9ed807871a32463cb2f058df18eeb8947dfdb5"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "bytes": 62095,
+      "sha256": "8a56c0342939e3406c9c60c5a2c6fd0a942a478327c3068d1911cab7dae4ce0f"
+    },
+    {
+      "path": "frontend/package.json",
+      "bytes": 846,
+      "sha256": "c3929b91cf569cffc9e43390a324d0de851bb5cbb0136509b47fe93e97d53ea4"
+    },
+    {
+      "path": "frontend/public/audio/bgm-song2.mp3",
+      "bytes": 5420409,
+      "sha256": "1113e9729f3a2d02c480814e557d264c0ea74d31d2365f37cce31a6c400c8dc9"
+    },
+    {
+      "path": "frontend/public/audio/bgm-song3.mp3",
+      "bytes": 2973409,
+      "sha256": "ced327011119d7aeac7ae3d8ad907098021679824e17156f1bee682be5fda4af"
+    },
+    {
+      "path": "frontend/public/audio/bgm.mp3",
+      "bytes": 2299629,
+      "sha256": "0384f8c19394bb64b733e99ea6f1cbcab822d359a209aa0b0d05c2b200183cb3"
+    },
+    {
+      "path": "frontend/public/audio/luoyang-metro.mp3",
+      "bytes": 33058,
+      "sha256": "6631ea8b058ca3a1cd09cf5e7501b5c6bc39149a8902ce9ba7682a7bf160e6b6"
+    },
+    {
+      "path": "frontend/public/audio/luoyang-song1.mp3",
+      "bytes": 2970825,
+      "sha256": "2d6a976248c797340c100ebed35ba31f4bc15f1ec5453895e6e7d70cb691f685"
+    },
+    {
+      "path": "frontend/public/audio/luoyang-song2.mp3",
+      "bytes": 2415803,
+      "sha256": "7dbd760f8939d3997c88fe8622f73cf9d4b9e8483cb04afa65f5888fef26090b"
+    },
+    {
+      "path": "frontend/public/audio/luoyang-song3.mp3",
+      "bytes": 2246207,
+      "sha256": "71e101f6829fba1dd42e89524912def4f0bd6ea21d417fe89a1c84f6436546da"
+    },
+    {
+      "path": "frontend/public/audio/xian-metro.mp3",
+      "bytes": 21197,
+      "sha256": "3298578cbdc366622586acf9529fe31a00a7541d111fea6932228c0a822c5dca"
+    },
+    {
+      "path": "frontend/public/audio/xian-song1.mp3",
+      "bytes": 2416564,
+      "sha256": "8b1756a69d553993c6123d17da8b09bf4c753c6a6fa05fc5ed38c05556595b7f"
+    },
+    {
+      "path": "frontend/public/audio/xian-song2.mp3",
+      "bytes": 2407026,
+      "sha256": "e91d3801e5df0f3a1be9f41d8425eb8547054d3ea842bf7bddf6cfcc16d6a2f1"
+    },
+    {
+      "path": "frontend/public/audio/xian-song3.mp3",
+      "bytes": 2793595,
+      "sha256": "b89697827ac0775052aea773934db3e5f9b1feac5c945723115cda6204f31315"
+    },
+    {
+      "path": "frontend/public/images/beian-icon.png",
+      "bytes": 1403,
+      "sha256": "8dfecad0dfcb3dc584f2c2447943eefb1fd65a058856eb0611e2c56ddc4c1fe1"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-eating.png",
+      "bytes": 733002,
+      "sha256": "cdf0ac26de87d6d498db55db310c9b232a00d30f78b0140a792bc952c5323045"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-eating.webp",
+      "bytes": 22552,
+      "sha256": "ac6adfb9d4aa30b73a740a5e9f1e993dfca358b2e595a47c6d87de96669299b9"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-happy.png",
+      "bytes": 723344,
+      "sha256": "a9a14cfd93ce6d674442e0d8a07257840df999a889406b76276baa83621cc0bb"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-happy.webp",
+      "bytes": 23098,
+      "sha256": "9dbb6cd15d70dff972eb79a618a08018ec4f12db29be093ac70a5c69da74bdc8"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-idle.png",
+      "bytes": 680439,
+      "sha256": "3b1af5dacf371e86d2ff2b37eb970b3246dee5995da9217f7805aa490114f36d"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-idle.webp",
+      "bytes": 20758,
+      "sha256": "f4e72adc90fc1b202054ad613da0bd09fed7aba6da5fe20e7aaef20923ee15ed"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-sleeping.png",
+      "bytes": 680439,
+      "sha256": "3b1af5dacf371e86d2ff2b37eb970b3246dee5995da9217f7805aa490114f36d"
+    },
+    {
+      "path": "frontend/public/images/guguan/guguan-sleeping.webp",
+      "bytes": 20758,
+      "sha256": "f4e72adc90fc1b202054ad613da0bd09fed7aba6da5fe20e7aaef20923ee15ed"
+    },
+    {
+      "path": "frontend/public/images/gunong-cover.png",
+      "bytes": 1858310,
+      "sha256": "8137751aa2ece5f385a581d537078017c6789658efb9eebd741fc9ee2b868ae6"
+    },
+    {
+      "path": "frontend/public/images/island/heart-island-base.png",
+      "bytes": 2923863,
+      "sha256": "4d57da8f2f91bc4f44e36e7b0caba7a04fc880dcd5dbc0f2fbcd052bad3e46f2"
+    },
+    {
+      "path": "frontend/public/images/island/heart-island-base.webp",
+      "bytes": 182072,
+      "sha256": "b88016a1395a2c982055a78dfbcf91bbacbe7eb9e1b68673ec94dc62e4029d00"
+    },
+    {
+      "path": "frontend/public/images/island/student-back.png",
+      "bytes": 462126,
+      "sha256": "a93dacf43f302013398f90441cb7d9009fd5e66dd396913950959244634e21af"
+    },
+    {
+      "path": "frontend/public/images/island/student-back.webp",
+      "bytes": 5674,
+      "sha256": "63b9bc7ef72facb77c26a211faea5e71587e703bce7683177bd1f6d4f1252355"
+    },
+    {
+      "path": "frontend/public/images/logo.jpg",
+      "bytes": 68138,
+      "sha256": "cefdcb9fa968edda3380c29197a4f28b62869fddfb3b09915a425d6860ec1ff3"
+    },
+    {
+      "path": "frontend/public/images/luoyang-metro.jpg",
+      "bytes": 509798,
+      "sha256": "b0cb395b620b1eec48e7ebac68eeba5e47dec7260905e4d0d227d1a07f09230d"
+    },
+    {
+      "path": "frontend/public/images/luoyang.png",
+      "bytes": 355713,
+      "sha256": "bb32f7c3b07375fcd6abe2dcaaf7b5391e2017f2ad3511a7d7c607e2e4199a12"
+    },
+    {
+      "path": "frontend/public/images/xian-metro.jpg",
+      "bytes": 499588,
+      "sha256": "469173c30e45b69347cab06fafb2248a7ec880d39c9b88a12ac83c3258a3c7a4"
+    },
+    {
+      "path": "frontend/public/images/xian.png",
+      "bytes": 534514,
+      "sha256": "2133402fd9bc75d49560c80a259dbefa2704d8e0001d9d4145bbe40a3ed1bd32"
+    },
+    {
+      "path": "frontend/public/images/洛阳.png",
+      "bytes": 355713,
+      "sha256": "bb32f7c3b07375fcd6abe2dcaaf7b5391e2017f2ad3511a7d7c607e2e4199a12"
+    },
+    {
+      "path": "frontend/public/images/西安.png",
+      "bytes": 534514,
+      "sha256": "2133402fd9bc75d49560c80a259dbefa2704d8e0001d9d4145bbe40a3ed1bd32"
+    },
+    {
+      "path": "frontend/public/third-party-agent.txt",
+      "bytes": 14927,
+      "sha256": "7e64266e97dbf215fba3fa5c9e1a07612360affbda8521afc6c24ba3fe7ceb01"
+    },
+    {
+      "path": "frontend/public/third-party-audio.txt",
+      "bytes": 1144,
+      "sha256": "1c7ba8d0a7e2ff13796806480728f78046b326b2486b3bd56915ef60f41f9383"
+    },
+    {
+      "path": "frontend/public/third-party-icons.txt",
+      "bytes": 3274,
+      "sha256": "481d738140817fafdeb1abf509dc534e95b9fbc0271289fa1145b031bc88e591"
+    },
+    {
+      "path": "frontend/src/App.vue",
+      "bytes": 4996,
+      "sha256": "24f8ac2c33f22582e406ba9db49e0dc9000019e0daa13565fe857a6fd74bc717"
+    },
+    {
+      "path": "frontend/src/api/assessment.js",
+      "bytes": 437,
+      "sha256": "87457f3c68cf5407464faa31767ddccbeb2fa82c80c5f1298890859062f74580"
+    },
+    {
+      "path": "frontend/src/api/chat.js",
+      "bytes": 1441,
+      "sha256": "144bee445d55dacbea1302aa860fb9885ea6ae407a2decb0398fae3257a5c08d"
+    },
+    {
+      "path": "frontend/src/api/companion.js",
+      "bytes": 376,
+      "sha256": "b2c05c400a14f2a5ed832e0f639d22557c580956e16eb28ddcc1b257f862e7da"
+    },
+    {
+      "path": "frontend/src/api/guardian.js",
+      "bytes": 839,
+      "sha256": "63fc0a97d18670a67a41d80a4f740e80ad4593d972f66f7279f781dd89fbc969"
+    },
+    {
+      "path": "frontend/src/api/healing.js",
+      "bytes": 558,
+      "sha256": "57127faebef10c97bd5ca4717d58ab7773640904f27aadf42c230c36606207e6"
+    },
+    {
+      "path": "frontend/src/api/island.js",
+      "bytes": 1652,
+      "sha256": "d6558dc91bca716869065de978f36cfed395609ff845656386a55f525609a9a9"
+    },
+    {
+      "path": "frontend/src/api/mood.js",
+      "bytes": 891,
+      "sha256": "00eb8a35eddb302aa8a53a61df7243f40c99b5ce6f240f9530bb6edac6be4fd8"
+    },
+    {
+      "path": "frontend/src/api/studentAgent.js",
+      "bytes": 540,
+      "sha256": "0246cd7a4bcdeef91c399deb865a822fe7f3d1d8ccc4d7208a51c4f84a270b18"
+    },
+    {
+      "path": "frontend/src/api/teacher.js",
+      "bytes": 6671,
+      "sha256": "8835329551c9c1566cdff8e822dbe5521a5da364abbdd3aaf0b0aa55ec3cf723"
+    },
+    {
+      "path": "frontend/src/api/treehole.js",
+      "bytes": 580,
+      "sha256": "024b7035ad44348c14f7f1719f31f49a3df2d3675131bb86419925aa909bbf4b"
+    },
+    {
+      "path": "frontend/src/api/user.js",
+      "bytes": 1269,
+      "sha256": "b556d04bcefab5b19ad3590dcca88a136093a7604454d6ac43bce8814056dc87"
+    },
+    {
+      "path": "frontend/src/assets/island/beach-day.png",
+      "bytes": 691178,
+      "sha256": "264f9e639f2163bfb94b481241ff85494496cdc18b771af89c84174c1e25443f"
+    },
+    {
+      "path": "frontend/src/assets/island/beach-dusk.png",
+      "bytes": 756420,
+      "sha256": "1469a4768136dfd749a7d16e2b66ebcf5e62df862be039710febca04fa1279ec"
+    },
+    {
+      "path": "frontend/src/assets/island/beach-night.png",
+      "bytes": 613870,
+      "sha256": "410aa0cf1c8c722cb1a5f6639abdb242d65fd5393ae50b0f5ad740138e6498e3"
+    },
+    {
+      "path": "frontend/src/assets/island/breathing-day.png",
+      "bytes": 773154,
+      "sha256": "59030032349c8d89ad0eec6c8b6dde6407a337fe8e7cc21618b28c7109343fea"
+    },
+    {
+      "path": "frontend/src/assets/island/breathing-dusk.png",
+      "bytes": 494371,
+      "sha256": "eb18fa729b1551c060519432777a61785b9ef5ffae686532b81283626f02e1c7"
+    },
+    {
+      "path": "frontend/src/assets/island/breathing-night.png",
+      "bytes": 432109,
+      "sha256": "6b01a54b346e741ee6e5e2cccf5824729767b18f59d6b1d0659a5efcff005cf8"
+    },
+    {
+      "path": "frontend/src/assets/island/home-day.png",
+      "bytes": 873574,
+      "sha256": "3cb2379ebdb6e9f118713ecdda22547e005d8f8e64591d476c6d84668feeb2f7"
+    },
+    {
+      "path": "frontend/src/assets/island/home-dusk.png",
+      "bytes": 794845,
+      "sha256": "eb3ee11099afd933faa74642101a7ac2a4116b3347765f833c233b1395d6d51a"
+    },
+    {
+      "path": "frontend/src/assets/island/home-night.png",
+      "bytes": 758271,
+      "sha256": "0ed3e32cf9113e03d529a54a2e591e3b962c6a87ff3707dd5baa3df906064a68"
+    },
+    {
+      "path": "frontend/src/components/AgentExecutionGraph.vue",
+      "bytes": 9411,
+      "sha256": "47d145e69442d23fe4017cb9dd016f955683efc4667ebe7564e4482ca5d06c8a"
+    },
+    {
+      "path": "frontend/src/components/MusicListeningShelf.vue",
+      "bytes": 6460,
+      "sha256": "212b1ae3d786c3440e222811aa19e3fdb2eae3b3701f1f122efcff02a333248e"
+    },
+    {
+      "path": "frontend/src/components/RoomActionBar.vue",
+      "bytes": 6886,
+      "sha256": "8c5f5ccbef96c5cc32c626dee9d849616e7be9ce0095961732683721fbe9b3fb"
+    },
+    {
+      "path": "frontend/src/components/StudentAgentRail.vue",
+      "bytes": 34635,
+      "sha256": "16c4092a43e6957d5b97e6c2b99a9f1a015dad964021de5f598dc63d87932ec6"
+    },
+    {
+      "path": "frontend/src/components/StudentLeisureHub.vue",
+      "bytes": 39238,
+      "sha256": "78aa67fdb5fa699d0c00cba1ad5102b4996b038f5a5fe909e99ab4d0802d9605"
+    },
+    {
+      "path": "frontend/src/components/StudentWellbeingAssessment.vue",
+      "bytes": 20331,
+      "sha256": "6d47c21f97ba85934d6cc25b20b0a1d3cc1abb82e0132347060b0af06e619885"
+    },
+    {
+      "path": "frontend/src/components/TeacherAcceptanceDesk.vue",
+      "bytes": 5839,
+      "sha256": "3ae314a4b53409d6c1ac8e7c1c04913a39bcb0d6ae1e14b3286f40599974040d"
+    },
+    {
+      "path": "frontend/src/components/TeacherAgentExecution.vue",
+      "bytes": 6968,
+      "sha256": "d34fb91854d599aaade82d3b3ad5b8e8764b69cd0c110c75961dc52efea59eec"
+    },
+    {
+      "path": "frontend/src/components/TeacherCaseTaskPanel.vue",
+      "bytes": 30236,
+      "sha256": "e4f1f8a25304671a271fb5b061cae95381357180503370334a88458406b97b03"
+    },
+    {
+      "path": "frontend/src/components/TeacherIntentPreview.vue",
+      "bytes": 8503,
+      "sha256": "1c270a4d4c538520d149963ab8a1de50fdc8c3391b0df5cdf8556d3995bc86fa"
+    },
+    {
+      "path": "frontend/src/components/TeacherReviewReport.vue",
+      "bytes": 28469,
+      "sha256": "b32b1dbb0d5f57498288598e27d0b42b81fecb96b11ce269457f316d45d78d42"
+    },
+    {
+      "path": "frontend/src/components/TeacherTodayDashboard.vue",
+      "bytes": 15543,
+      "sha256": "5e59af95b5f733d9148f030f7b54c33caace09d6f85e1ce70e2e23240073d400"
+    },
+    {
+      "path": "frontend/src/components/TeacherVerification.vue",
+      "bytes": 6779,
+      "sha256": "24ccee081ffdc13107f57b5ac62190c72bd546f3449b3f5f5f86b855ea9ea414"
+    },
+    {
+      "path": "frontend/src/components/UiIcon.vue",
+      "bytes": 1049,
+      "sha256": "b1353a7e1046495fd30fe70ac11d1f163be26fa9dfdbee417ad600d3f93e441a"
+    },
+    {
+      "path": "frontend/src/components/island/IslandBreathingRoom.vue",
+      "bytes": 17469,
+      "sha256": "27f90a55829e2d9ac02ecfa35580620bca3c7e7709834f030a37e3172ed518f6"
+    },
+    {
+      "path": "frontend/src/components/island/IslandFishingGame.vue",
+      "bytes": 11611,
+      "sha256": "21707ed7cb8b30d80159c0f1f92a61f49fa4e217c8fadabf73a48fa0f036fa70"
+    },
+    {
+      "path": "frontend/src/components/island/IslandGardenGame.vue",
+      "bytes": 6360,
+      "sha256": "d8b198b941fb7627728da7836bc04855a9cf054fe0be6fde6ec96d815a1d6c5d"
+    },
+    {
+      "path": "frontend/src/components/island/IslandHappinessExchange.vue",
+      "bytes": 14712,
+      "sha256": "aa62e8133096327004c2ef73c7ee409c88c4c489f53bbfd13eed0cfbb365168e"
+    },
+    {
+      "path": "frontend/src/components/island/IslandPetHome.vue",
+      "bytes": 18053,
+      "sha256": "c78a27ea32f587eddadef094029ce3687d783a388392e35f484f0e99e64a3d22"
+    },
+    {
+      "path": "frontend/src/components/island/IslandTidalBeach.vue",
+      "bytes": 16986,
+      "sha256": "9461447ed628717409ef22b4118ed9345f39c6fc05d8be98471d9b855953b5ed"
+    },
+    {
+      "path": "frontend/src/components/island/StudentIslandWorkspace.vue",
+      "bytes": 59528,
+      "sha256": "5a8047a39a3402c7ce3d9a24107a3fa9ba82f10e63e22004fdc533fec169d706"
+    },
+    {
+      "path": "frontend/src/data/teacher-verification.json",
+      "bytes": 441824,
+      "sha256": "3b67eb18c58e41679417f4803acdd66baf0c7993e0a8a61d47ca326740746c62"
+    },
+    {
+      "path": "frontend/src/game/island/createFishingGame.js",
+      "bytes": 8982,
+      "sha256": "f6cb5c57122a0dde0b43d10c4b32ae9d81a66aa6c6f5303341fb35b7c7b83677"
+    },
+    {
+      "path": "frontend/src/game/island/createIslandGame.js",
+      "bytes": 10049,
+      "sha256": "d7f3aab46d54fd33451a923ea427fe1ca842f921d420c0fa920abc1fafdd1673"
+    },
+    {
+      "path": "frontend/src/game/island/gardenLifeEngine.js",
+      "bytes": 7854,
+      "sha256": "64e2062c409bf5dade4683ee920f3aa83bbb7e653bfc362d2ca5fc7118d56a6a"
+    },
+    {
+      "path": "frontend/src/game/island/gardenMergeEngine.js",
+      "bytes": 4741,
+      "sha256": "636697c6925d4cf333bb6bcb6c1aff82c8852d6d425ac4e916eab263a9cf0fab"
+    },
+    {
+      "path": "frontend/src/game/island/islandActivityState.js",
+      "bytes": 4121,
+      "sha256": "1f9d0817e9781732da2755e2ed9b67e26a3225811b2fe5b89045675ac67b9512"
+    },
+    {
+      "path": "frontend/src/game/island/islandBridge.js",
+      "bytes": 433,
+      "sha256": "700bba0de25fefc14d0a03c07c9fecd5c71609be6f569dff1e72756a6176af5f"
+    },
+    {
+      "path": "frontend/src/game/island/islandNavigation.js",
+      "bytes": 4755,
+      "sha256": "cafcb13227163a1f26ef42336a6d24cb66e408589e9adae2bb4aae518bf0753a"
+    },
+    {
+      "path": "frontend/src/game/island/islandState.js",
+      "bytes": 3854,
+      "sha256": "ebc19994ff8f9f577fdd5c54ff588ce59708ec65d54558861dfc3ba5e4d0271c"
+    },
+    {
+      "path": "frontend/src/guardian.css",
+      "bytes": 19338,
+      "sha256": "68a2b5d51c3f6fa5b564fcbc20ec51c71dd618cc01889b4f8451da84aa13a309"
+    },
+    {
+      "path": "frontend/src/main.js",
+      "bytes": 341,
+      "sha256": "e488e0c6ffa706eafb74238f9b21166099aed6556143da6c75616a606da394f8"
+    },
+    {
+      "path": "frontend/src/router.js",
+      "bytes": 2323,
+      "sha256": "5c1dbc9039c92cae08fe706bdc784b9c34045464356a822a435cc1edd223b1d7"
+    },
+    {
+      "path": "frontend/src/stores/user.js",
+      "bytes": 2737,
+      "sha256": "201e200a1dc8f2a35e3772818504dec489f6954091f8d3027d6d29fada01f7b2"
+    },
+    {
+      "path": "frontend/src/style.css",
+      "bytes": 1486,
+      "sha256": "767ead6d7fbc60c8b2a2c1c36be372a386d442a62c811e6df90616e0dd50bd03"
+    },
+    {
+      "path": "frontend/src/utils/agentExecution.js",
+      "bytes": 1898,
+      "sha256": "a52abfb768bd627836597308fc0c154a56018d5e26574c26b1a7e9b4b2eefb30"
+    },
+    {
+      "path": "frontend/src/utils/companionSafety.js",
+      "bytes": 3065,
+      "sha256": "5c12ca85e7ad59f48382eea5acd896c738495adeb0ba79194c349dc4e41e8ca9"
+    },
+    {
+      "path": "frontend/src/utils/teacherAcceptance.js",
+      "bytes": 1352,
+      "sha256": "cdae9df775f446a5a876268b1865e2e2e847d7f91165c55f2e328ea41e3cd74f"
+    },
+    {
+      "path": "frontend/src/utils/teacherCaseTask.js",
+      "bytes": 2848,
+      "sha256": "e900184afb4f7cf06d3e6a8663148f461f8324a38cdb482d96ea044d5713baf0"
+    },
+    {
+      "path": "frontend/src/utils/teacherIntentReview.js",
+      "bytes": 691,
+      "sha256": "2385bfa8ce644cbc93c370101546148253b4c2db84dfd375497190fa8280609a"
+    },
+    {
+      "path": "frontend/src/utils/useDesktopViewport.js",
+      "bytes": 628,
+      "sha256": "22ce3fbd0d7974871eef3632a6c9bd17de947c7c289dcf8754ca35428d8b84e4"
+    },
+    {
+      "path": "frontend/src/views/AdminView.vue",
+      "bytes": 98470,
+      "sha256": "d3038ea189ab995229d2867a74a9d19806c44aa0c3289f308482e61cc5a3a06a"
+    },
+    {
+      "path": "frontend/src/views/ChatView.vue",
+      "bytes": 17043,
+      "sha256": "0b75b7a111ad720e93c7dc6fde30dc96c549988a6249e5ef3f40632439ddc31d"
+    },
+    {
+      "path": "frontend/src/views/GuardianCaseView.vue",
+      "bytes": 11922,
+      "sha256": "f61ff463252b19d95bcaacf23290e8b86748377e65bca3b8250461b481f1f50a"
+    },
+    {
+      "path": "frontend/src/views/GuardianFollowUpsView.vue",
+      "bytes": 10363,
+      "sha256": "3663bf8b816e6e86739b8f7391d43077043fd63a4f59f982efed01bc93b93b08"
+    },
+    {
+      "path": "frontend/src/views/GuardianHomeView.vue",
+      "bytes": 7613,
+      "sha256": "42c63718f8c3bf4278aeaedc27dd5e986dacf247a7d6fbb569bcc0d1c966a9bc"
+    },
+    {
+      "path": "frontend/src/views/GuardianIntakeView.vue",
+      "bytes": 12207,
+      "sha256": "ba6633b76f46865aa5fd128cb8dacd8295d568ca09602a27980656bf60d08a6d"
+    },
+    {
+      "path": "frontend/src/views/HealingView.vue",
+      "bytes": 15054,
+      "sha256": "b0fbb1484631fb8982c14af0c0f889417d31192ec92cdd06af80365cfcfd604a"
+    },
+    {
+      "path": "frontend/src/views/HomeView.vue",
+      "bytes": 10969,
+      "sha256": "982d2641d8d1b407bf6a89abf672fca1b192718a4e3d65a8ebbbf3edb7029377"
+    },
+    {
+      "path": "frontend/src/views/LoginView.vue",
+      "bytes": 20564,
+      "sha256": "fdd0c62030eea0b518149a8c70ec2f1d1e5910ac1d8ce880bc8d815ef603ffdc"
+    },
+    {
+      "path": "frontend/src/views/ProfileView.vue",
+      "bytes": 14357,
+      "sha256": "f3931bc9bc17706a8f12695fa7a20c844c2b96c8a53dd09a73d7a8f836575fc7"
+    },
+    {
+      "path": "frontend/src/views/RoomHomeView.vue",
+      "bytes": 355549,
+      "sha256": "09c60994f199eb05ff0ee7ffe3d6b1eeb5384b21378492bcc2237a7d5ccb4628"
+    },
+    {
+      "path": "frontend/src/views/TreeHoleView.vue",
+      "bytes": 46184,
+      "sha256": "fedba958dbf24c5b9cef792fcf8e1c014c543ab9d50b935c0488f4cb4074a934"
+    },
+    {
+      "path": "frontend/src/views/TrendView.vue",
+      "bytes": 12076,
+      "sha256": "605d4e81de7f51ccf4f910ddff1007615bc93100a465e738b9ce01a7716e09ad"
+    },
+    {
+      "path": "frontend/tests/agent-execution.e2e.mjs",
+      "bytes": 5528,
+      "sha256": "08cf82acd18f524abb238beda0b2725a95522cb45a4e31f9d652dded1ea86b3b"
+    },
+    {
+      "path": "frontend/tests/agent-execution.test.mjs",
+      "bytes": 2739,
+      "sha256": "efea35368e7d404a9eba8b0fbdda33bf9f6dd78e2df4a8b29c9e0a1e40b44b5b"
+    },
+    {
+      "path": "frontend/tests/agent-source-consent.test.mjs",
+      "bytes": 3282,
+      "sha256": "57a959bbc73d04719807e560d17aaee9b31e853042af8c330615a170dd81ecff"
+    },
+    {
+      "path": "frontend/tests/demo-auto-entry.test.mjs",
+      "bytes": 2839,
+      "sha256": "32720a892a999e3c9065596e29a60eb5f1f693d371d122d49a08cf1d06fb3f01"
+    },
+    {
+      "path": "frontend/tests/desktop-agent-lifecycle.test.mjs",
+      "bytes": 2631,
+      "sha256": "f127563ec39fdce1e3aa406c625bd1b30a21fa24ac3fb67ba17f1c8895263ac2"
+    },
+    {
+      "path": "frontend/tests/engagement-entry.test.mjs",
+      "bytes": 12962,
+      "sha256": "5db7885376688fff457671e693d365bedc4153fa41e8080b8aef3de89fde50da"
+    },
+    {
+      "path": "frontend/tests/guardian-workbench.test.mjs",
+      "bytes": 4866,
+      "sha256": "59a7f0e1952336d294d55977111c9bdef120bb373000b9764e1457dca905219b"
+    },
+    {
+      "path": "frontend/tests/island-integration.test.mjs",
+      "bytes": 7005,
+      "sha256": "3f69d8abcd2283a2ed720aec042a617645ab3db2239e6ce2ee831245a3c37990"
+    },
+    {
+      "path": "frontend/tests/island-navigation.test.mjs",
+      "bytes": 1598,
+      "sha256": "83854931184b37cdd33875cc826de2270d3f0576498ae06d86e679fa535b8ef6"
+    },
+    {
+      "path": "frontend/tests/island-open-source-games.test.mjs",
+      "bytes": 5320,
+      "sha256": "0e60e317173957a729ff0e084f87182addcd14ad30d654e2130fcd5f2072e7af"
+    },
+    {
+      "path": "frontend/tests/island-state.test.mjs",
+      "bytes": 2596,
+      "sha256": "a63fc986355b004e1a5db95642e5a63954da045235a92850a0a81a4f5012c8bb"
+    },
+    {
+      "path": "frontend/tests/onboarding-versioning.test.mjs",
+      "bytes": 3538,
+      "sha256": "16d058d1af390086316d7e1d9d6f3dd0e3617a461d4934be3d7409a1dc9c4495"
+    },
+    {
+      "path": "frontend/tests/ops-polish.test.mjs",
+      "bytes": 1789,
+      "sha256": "c3157c10eb9356ddd1da14bce3899bc6c3940c536ea3cd806d0c0f2ab6d197e1"
+    },
+    {
+      "path": "frontend/tests/public-entry-polish.test.mjs",
+      "bytes": 2266,
+      "sha256": "5fc21a9a739a5b3f312dce27c5ccd20d593341432c9b8209dd5b9e3a04aec801"
+    },
+    {
+      "path": "frontend/tests/room-interface-system.test.mjs",
+      "bytes": 4626,
+      "sha256": "188c9f7a0aaf123321ae44fe59a93e65c46ba7473ab13f40d4b3b5285dbd9447"
+    },
+    {
+      "path": "frontend/tests/student-agent-rail.test.mjs",
+      "bytes": 2466,
+      "sha256": "c5c621a43b6bae3783219e56a1c56ece92014ac13b1c168d44a5f851be76f3d8"
+    },
+    {
+      "path": "frontend/tests/student-conversation-summary.e2e.mjs",
+      "bytes": 11409,
+      "sha256": "ff018de17b421ba9d70a2501831cfd812fc71c5cb74cb854e987d12f7080b56f"
+    },
+    {
+      "path": "frontend/tests/student-conversation-summary.test.mjs",
+      "bytes": 3026,
+      "sha256": "5581d5e6171f80d17a78ad6135229e53dabb67936e4385384924a32677a6a23b"
+    },
+    {
+      "path": "frontend/tests/student-experience.e2e.mjs",
+      "bytes": 5243,
+      "sha256": "6acd8e3904246150258a47cffe672621955f1b8d5c971676877820851d843cfa"
+    },
+    {
+      "path": "frontend/tests/student-leisure-agent.test.mjs",
+      "bytes": 5026,
+      "sha256": "14ca9a8eda4c7bc06aab0bc1af2337e14b0f04daccaa126da948108a7947d3f1"
+    },
+    {
+      "path": "frontend/tests/student-leisure.e2e.mjs",
+      "bytes": 7390,
+      "sha256": "a6a4244c3461f59d12cfd1ff685857abc0f2f339d83a32145ad5921fc3ffc414"
+    },
+    {
+      "path": "frontend/tests/student-support-drawer.test.mjs",
+      "bytes": 1668,
+      "sha256": "08927fceca934c8f8c90a4d41164f8d105293f059c36679d53dc36dc3542eca4"
+    },
+    {
+      "path": "frontend/tests/student-support-orchestrator.test.mjs",
+      "bytes": 2276,
+      "sha256": "27b48ff5e06987840ff2d9119ccad5c592e7958c6c7efc75b64b9b627c048f20"
+    },
+    {
+      "path": "frontend/tests/student-wellbeing-assessment.test.mjs",
+      "bytes": 1520,
+      "sha256": "96c333c3cc3e2150268afd9b2bd04781e43e13976c13788d28243a7bb86bf30e"
+    },
+    {
+      "path": "frontend/tests/taste-skill-interface.test.mjs",
+      "bytes": 2416,
+      "sha256": "122525931c6d7da20bcfdf8edac8b76c03b23a5598fd01c90bddc6919d474841"
+    },
+    {
+      "path": "frontend/tests/teacher-acceptance.test.mjs",
+      "bytes": 1523,
+      "sha256": "9dd005c7307c9102d22ebe836d5fbf6958e6f9187f271583dcc19394d5c1f606"
+    },
+    {
+      "path": "frontend/tests/teacher-case-access.test.mjs",
+      "bytes": 1632,
+      "sha256": "1a50a844e093e5a6dfa2a60397cd227b85219d66e35c54605ec8ee8c82c9c9a9"
+    },
+    {
+      "path": "frontend/tests/teacher-case-task.e2e.mjs",
+      "bytes": 24515,
+      "sha256": "05942096ae42344f2fe1cdf2656fdc9e4573015be1f0fbfa5ed6e6e40af47cce"
+    },
+    {
+      "path": "frontend/tests/teacher-case-task.test.mjs",
+      "bytes": 3242,
+      "sha256": "a36fb4c5cdf967fc366b6215a9c043ed22371572d4e4802c05afe07207b83aad"
+    },
+    {
+      "path": "frontend/tests/teacher-intent-review.test.mjs",
+      "bytes": 796,
+      "sha256": "1f97b2fe9374cb431201328e0a4174f2b61ba366a63b5901fc2bfa44beed55bc"
+    },
+    {
+      "path": "frontend/tests/teacher-portal-labels.test.mjs",
+      "bytes": 4568,
+      "sha256": "016367041f0eab9789f60d5858739dbb4388806333cc4121bb94fa6a8b2b8369"
+    },
+    {
+      "path": "frontend/tests/teacher-review-report.test.mjs",
+      "bytes": 3285,
+      "sha256": "21662ef3e87dbbf07ff02283252fc9615cc04a73742df9d938bf952ac6cfd312"
+    },
+    {
+      "path": "frontend/tests/teacher-verification.test.mjs",
+      "bytes": 1613,
+      "sha256": "db36abd246da98c743afa5b03785f94e665970379597838252bfefccdc5daf82"
+    },
+    {
+      "path": "frontend/tests/teacher-workbench-interface.test.mjs",
+      "bytes": 2778,
+      "sha256": "5d437e3cc164d9f0b241ac827faefdc4ae2e8a8fb47e4487a132e6e6fb24d98b"
+    },
+    {
+      "path": "frontend/tests/teacher-workbench.e2e.mjs",
+      "bytes": 7403,
+      "sha256": "8f6146eb1b3efde8c74894c374ad1da2b9e4ffcb7b97403c497afc9149c1afcc"
+    },
+    {
+      "path": "frontend/tests/verifiable-agent-delivery.test.mjs",
+      "bytes": 2513,
+      "sha256": "192094e97fc0cf587c3cbd09333a9e3c7aafa0ebe0eae304cf9aba7d974dfe46"
+    },
+    {
+      "path": "frontend/vite.config.js",
+      "bytes": 707,
+      "sha256": "add2f3aef63408483ff2bc634fa3b10c26eb73d4c1a43059cc7971e9ed9186cb"
+    },
+    {
+      "path": "licenses/2048-LICENSE.txt",
+      "bytes": 1083,
+      "sha256": "57e12c39a6ad9d98b2e451065bfdfbd15fc9e0c2ed3bf4dc1d09acab41ff02fc"
+    },
+    {
+      "path": "licenses/swiper-LICENSE.txt",
+      "bytes": 1087,
+      "sha256": "99f08e3e3ee0799fe1488fcbcb41dc933b14873e9556693209daf9e1007601d6"
+    },
+    {
+      "path": "scripts/optimize_web_assets.py",
+      "bytes": 1546,
+      "sha256": "b5e2a5ab3aa97aa6ba067dfa57d865505c5239b25629783fe462d97925ec293f"
+    },
+    {
+      "path": "scripts/package_live_snapshot.py",
+      "bytes": 3633,
+      "sha256": "e7dc9ffb2d1f7bd8687d79f78c6c3ac18d2ee1b3146ac7135a04e1db1cf93be3"
+    },
+    {
+      "path": "scripts/package_source.py",
+      "bytes": 4061,
+      "sha256": "b39eab277c30f0adbe13ad52e9a521507ccc2caa1e9b93794f8a394570d2314e"
+    },
+    {
+      "path": "scripts/verify_live_snapshot.py",
+      "bytes": 1158,
+      "sha256": "56da80749c30a2a6048d7d3e18fcc49659da9b08f2f9b2ea7a76ef99781cab65"
+    }
+  ]
+}

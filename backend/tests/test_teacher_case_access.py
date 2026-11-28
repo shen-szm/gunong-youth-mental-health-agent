@@ -1,13 +1,14 @@
 import sys
 import unittest
-from secrets import token_urlsafe
-from datetime import datetime, timedelta
+import json
+from unittest.mock import AsyncMock, patch
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import sleep
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -20,32 +21,36 @@ from api.user import router as user_router
 from api.admin import router as admin_router
 from api.chat import router as chat_router
 from api.mood import router as mood_router
+from config import settings
+from app_time import china_day_start_naive, china_now_naive
 from database import Base, get_db
-from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
+from models import ChatMessage, MoodRecord, SensitiveAccessLog, StudentCaseAccessRequest, StudentExternalAiAuthorization, StudentSupportRun, StudentWellbeingAssessment, TeacherReviewReport, TeacherReviewReportDecision, TeacherStudentAssignment, TeacherWorkProductSnapshot, User
 from security import get_password_hash
+from teacher_review_engine import NarrativeOutput, _safe_model_narrative
 
 
 class TeacherCaseAccessTests(unittest.TestCase):
     def setUp(self):
-        self.student_password = token_urlsafe(18)
-        self.teacher_password = token_urlsafe(18)
-        self.admin_password = token_urlsafe(18)
+        self.old_student_ai_access_mode = settings.STUDENT_AI_ACCESS_MODE
+        settings.STUDENT_AI_ACCESS_MODE = "teacher_authorized"
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         db = self.Session()
         try:
-            self.student = User(username="student_a", password_hash=get_password_hash(self.student_password), nickname="合成学生A", is_admin=0)
-            self.teacher = User(username="teacher_a", password_hash=get_password_hash(self.teacher_password), nickname="普通教师A", is_admin=1)
-            self.admin = User(username="admin_a", password_hash=get_password_hash(self.admin_password), nickname="管理员教师A", is_admin=2)
-            db.add_all([self.student, self.teacher, self.admin])
+            self.student = User(username="student_a", password_hash=get_password_hash("StudentPassword12"), nickname="合成学生A", is_admin=0)
+            self.teacher = User(username="teacher_a", password_hash=get_password_hash("TeacherPassword12"), nickname="普通教师A", is_admin=1)
+            self.admin = User(username="admin_a", password_hash=get_password_hash("AdminTeacherPassword12"), nickname="管理员教师A", is_admin=2)
+            self.unassigned_student = User(username="student_b", password_hash=get_password_hash("StudentPassword12"), nickname="未分配学生B", is_admin=0)
+            db.add_all([self.student, self.teacher, self.admin, self.unassigned_student])
             db.commit()
             for item in (self.student, self.teacher, self.admin):
                 db.refresh(item)
             self.student_id, self.teacher_id, self.admin_id = self.student.id, self.teacher.id, self.admin.id
+            self.unassigned_student_id = self.unassigned_student.id
             db.add(TeacherStudentAssignment(teacher_user_id=self.teacher.id, student_user_id=self.student.id, assigned_by_user_id=self.admin.id, active=1))
-            db.add(MoodRecord(user_id=self.student.id, mood_score=3, mood_label="难过", content="最近早上不太想去学校"))
-            db.add(ChatMessage(user_id=self.student.id, role="user", content="我和同学相处得有点累", emotion="难过"))
+            db.add(MoodRecord(user_id=self.student.id, mood_score=3, mood_label="难过", content="最近早上不太想去学校", created_at=china_now_naive()))
+            db.add(ChatMessage(user_id=self.student.id, role="user", content="我和同学相处得有点累", emotion="难过", created_at=china_now_naive()))
             db.commit()
         finally:
             db.close()
@@ -68,15 +73,61 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.teacher_client = TestClient(app)
         self.admin_client = TestClient(app)
         self.student_client = TestClient(app)
-        self.teacher_client.post("/api/user/login", json={"username": "teacher_a", "password": self.teacher_password})
-        self.admin_client.post("/api/user/login", json={"username": "admin_a", "password": self.admin_password})
-        self.student_client.post("/api/user/login", json={"username": "student_a", "password": self.student_password})
+        self.teacher_client.post("/api/user/login", json={"username": "teacher_a", "password": "TeacherPassword12"})
+        self.admin_client.post("/api/user/login", json={"username": "admin_a", "password": "AdminTeacherPassword12"})
+        self.student_client.post("/api/user/login", json={"username": "student_a", "password": "StudentPassword12"})
 
     def tearDown(self):
+        settings.STUDENT_AI_ACCESS_MODE = self.old_student_ai_access_mode
         self.teacher_client.close()
         self.admin_client.close()
         self.student_client.close()
         self.engine.dispose()
+
+    def test_teacher_manages_external_ai_authorization_with_scope_attestation_and_audit(self):
+        missing_attestation = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": False, "expires_days": 90},
+        )
+        self.assertEqual(missing_attestation.status_code, 400)
+
+        enabled = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 90},
+        )
+        self.assertEqual(enabled.status_code, 200)
+        self.assertTrue(enabled.json()["active"])
+        self.assertEqual(enabled.json()["basis"], "school_guardian_authority")
+        self.assertEqual(enabled.json()["statement_version"], "teacher-ai-authorization-v4")
+        listed = self.teacher_client.get("/api/teacher/student-list").json()["students"]
+        self.assertTrue(next(item for item in listed if item["id"] == self.student_id)["external_ai_authorization"]["active"])
+
+        self.assertEqual(self.teacher_client.post(
+            f"/api/teacher/students/{self.unassigned_student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 30},
+        ).status_code, 403)
+        admin_enabled = self.admin_client.post(
+            f"/api/teacher/students/{self.unassigned_student_id}/external-ai-authorization",
+            json={"active": True, "authority_confirmed": True, "expires_days": 30},
+        )
+        self.assertEqual(admin_enabled.status_code, 200)
+        self.assertTrue(admin_enabled.json()["active"])
+
+        revoked = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/external-ai-authorization",
+            json={"active": False, "expires_days": 30},
+        )
+        self.assertEqual(revoked.status_code, 200)
+        self.assertFalse(revoked.json()["active"])
+        self.assertEqual(revoked.json()["status"], "revoked")
+        db = self.Session()
+        try:
+            row = db.query(StudentExternalAiAuthorization).filter_by(student_user_id=self.student_id).one()
+            self.assertEqual(row.authorized_by_user_id, self.teacher_id)
+            self.assertEqual(db.query(SensitiveAccessLog).filter_by(action="enable_student_external_ai").count(), 2)
+            self.assertEqual(db.query(SensitiveAccessLog).filter_by(action="revoke_student_external_ai").count(), 1)
+        finally:
+            db.close()
 
     def test_teacher_requires_approval_before_original_text(self):
         denied = self.teacher_client.get(f"/api/teacher/students/{self.student_id}/case-context")
@@ -175,6 +226,33 @@ class TeacherCaseAccessTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_urgent_student_assessment_enters_minimum_safety_path(self):
+        db = self.Session()
+        try:
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-URGENT-TEST",
+                user_id=self.student_id,
+                answers_json="{}",
+                result_json='{"risk_label":"需要立即协助","emotion_summary":"学生主动安全回答需要立即支持","domains":[],"support_needs":[]}',
+                risk_level="urgent",
+                review_status="needs_professional_review",
+                expires_at=datetime.now() + timedelta(days=30),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        warning = self.teacher_client.get("/api/teacher/warning-list")
+        item = next(row for row in warning.json()["warnings"] if row["student_id"] == self.student_id)
+        self.assertTrue(item["urgent"])
+        self.assertIn("危机", item["reason"])
+        detail = self.teacher_client.get(f"/api/teacher/warning/{self.student_id}/detail")
+        self.assertTrue(detail.json()["urgent"])
+        direct = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
+        self.assertEqual(direct.status_code, 200)
+        self.assertEqual(direct.json()["risk"], "urgent")
+        self.assertTrue(any(item.startswith("assessment-") for item in direct.json()["observation"]["trigger_evidence_ids"]))
+
     def test_warning_followup_persists_until_a_new_student_record(self):
         initial = self.teacher_client.get("/api/teacher/warning-list")
         self.assertEqual(initial.status_code, 200)
@@ -212,6 +290,175 @@ class TeacherCaseAccessTests(unittest.TestCase):
         item = next(row for row in response.json()["students"] if row["id"] == self.student_id)
         self.assertNotIn("avg_mood_score", item)
 
+    def test_admin_roster_hides_only_inactive_ephemeral_accounts_and_counts_real_activity(self):
+        china_day_start = china_day_start_naive()
+        local_now = china_now_naive()
+        db = self.Session()
+        try:
+            hidden_guest = User(username="guest_empty", password_hash=get_password_hash("StudentPassword12"), nickname="新朋友", is_admin=0)
+            hidden_demo = User(username="demo_empty", password_hash=get_password_hash("StudentPassword12"), nickname="访客", is_admin=0)
+            active_guest = User(username="guest_active", password_hash=get_password_hash("StudentPassword12"), nickname="青禾", is_admin=0)
+            chat_guest = User(username="guest_chat_active", password_hash=get_password_hash("StudentPassword12"), nickname="听雨", is_admin=0)
+            assessment_guest = User(username="guest_assessment_active", password_hash=get_password_hash("StudentPassword12"), nickname="晨光", is_admin=0)
+            previous_day_guest = User(username="guest_previous_day", password_hash=get_password_hash("StudentPassword12"), nickname="晚风", is_admin=0)
+            expired_assessment_guest = User(username="guest_expired_assessment", password_hash=get_password_hash("StudentPassword12"), nickname="旧记录", is_admin=0)
+            db.add_all([
+                hidden_guest,
+                hidden_demo,
+                active_guest,
+                chat_guest,
+                assessment_guest,
+                previous_day_guest,
+                expired_assessment_guest,
+            ])
+            db.flush()
+            db.add(MoodRecord(user_id=active_guest.id, mood_score=6, mood_label="平静", content="今天完成了一次主动记录", created_at=local_now))
+            db.add(ChatMessage(
+                user_id=chat_guest.id,
+                role="user",
+                content="今天只通过倾诉产生记录",
+                created_at=local_now,
+            ))
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-ROSTER-ACTIVE",
+                user_id=assessment_guest.id,
+                answers_json="{}",
+                result_json="{}",
+                created_at=local_now,
+                expires_at=local_now + timedelta(days=1),
+            ))
+            db.add(MoodRecord(
+                user_id=previous_day_guest.id,
+                mood_score=6,
+                mood_label="平静",
+                content="昨天产生的主动记录",
+                created_at=china_day_start - timedelta(minutes=1),
+            ))
+            db.add(StudentWellbeingAssessment(
+                assessment_code="ASSESS-ROSTER-EXPIRED",
+                user_id=expired_assessment_guest.id,
+                answers_json="{}",
+                result_json="{}",
+                created_at=local_now,
+                expires_at=local_now - timedelta(minutes=1),
+            ))
+            db.commit()
+            hidden_ids = {hidden_guest.id, hidden_demo.id, expired_assessment_guest.id}
+            active_ids = {active_guest.id, chat_guest.id, assessment_guest.id, previous_day_guest.id}
+        finally:
+            db.close()
+
+        roster = self.admin_client.get("/api/teacher/student-list")
+        self.assertEqual(roster.status_code, 200)
+        listed_ids = {item["id"] for item in roster.json()["students"]}
+        self.assertTrue(hidden_ids.isdisjoint(listed_ids))
+        self.assertTrue(active_ids.issubset(listed_ids))
+        self.assertIn(self.unassigned_student_id, listed_ids)
+
+        accounts = self.admin_client.get("/api/teacher/accounts")
+        self.assertEqual(accounts.status_code, 200)
+        account_ids = {item["id"] for item in accounts.json()["accounts"]}
+        self.assertTrue(hidden_ids.isdisjoint(account_ids))
+        self.assertTrue(active_ids.issubset(account_ids))
+
+        overview = self.admin_client.get("/api/teacher/class-overview")
+        self.assertEqual(overview.status_code, 200)
+        payload = overview.json()
+        self.assertEqual(payload["total_students"], 6)
+        self.assertEqual(payload["today_active"], 4)
+
+    def test_china_day_boundary_is_independent_of_host_timezone(self):
+        for utc_reference, expected_start in (
+            (datetime(2026, 8, 30, 16, 30, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),  # 北京 00:30
+            (datetime(2026, 8, 30, 23, 59, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),  # 北京 07:59
+            (datetime(2026, 8, 31, 0, 1, tzinfo=timezone.utc), datetime(2026, 8, 31, 0, 0)),   # 北京 08:01
+            (datetime(2026, 8, 30, 15, 59, tzinfo=timezone.utc), datetime(2026, 8, 30, 0, 0)), # 北京前一日 23:59
+        ):
+            self.assertEqual(china_day_start_naive(utc_reference), expected_start)
+
+    def test_ephemeral_account_filter_uses_constant_query_count(self):
+        db = self.Session()
+        try:
+            password_hash = get_password_hash("StudentPassword12")
+            db.add_all([
+                User(
+                    username=f"guest_query_scale_{index}",
+                    password_hash=password_hash,
+                    nickname="新朋友",
+                    is_admin=0,
+                )
+                for index in range(100)
+            ])
+            db.add_all([
+                User(
+                    username=f"student_query_scale_{index}",
+                    password_hash=password_hash,
+                    nickname=f"学生{index}",
+                    is_admin=0,
+                )
+                for index in range(100)
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        statement_count = 0
+
+        def count_statement(*_args, **_kwargs):
+            nonlocal statement_count
+            statement_count += 1
+
+        event.listen(self.engine, "before_cursor_execute", count_statement)
+        try:
+            response = self.admin_client.get("/api/teacher/accounts")
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_statement)
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(statement_count, 10)
+
+        statement_count = 0
+        event.listen(self.engine, "before_cursor_execute", count_statement)
+        try:
+            overview = self.admin_client.get("/api/teacher/class-overview")
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_statement)
+        self.assertEqual(overview.status_code, 200)
+        self.assertLessEqual(statement_count, 20)
+
+        for endpoint in ("/api/teacher/student-list", "/api/teacher/warning-list"):
+            statement_count = 0
+            event.listen(self.engine, "before_cursor_execute", count_statement)
+            try:
+                scaled_response = self.admin_client.get(endpoint)
+            finally:
+                event.remove(self.engine, "before_cursor_execute", count_statement)
+            self.assertEqual(scaled_response.status_code, 200)
+            self.assertLessEqual(statement_count, 20, endpoint)
+
+    def test_regular_teacher_roster_keeps_assignment_scope_after_ephemeral_filtering(self):
+        db = self.Session()
+        try:
+            inactive = User(username="guest_assigned_empty", password_hash=get_password_hash("StudentPassword12"), nickname="新朋友", is_admin=0)
+            active = User(username="guest_assigned_chat", password_hash=get_password_hash("StudentPassword12"), nickname="听风", is_admin=0)
+            db.add_all([inactive, active])
+            db.flush()
+            db.add_all([
+                TeacherStudentAssignment(teacher_user_id=self.teacher_id, student_user_id=inactive.id, assigned_by_user_id=self.admin_id, active=1),
+                TeacherStudentAssignment(teacher_user_id=self.teacher_id, student_user_id=active.id, assigned_by_user_id=self.admin_id, active=1),
+                ChatMessage(user_id=active.id, role="user", content="由倾诉产生的有效记录"),
+            ])
+            db.commit()
+            inactive_id, active_id = inactive.id, active.id
+        finally:
+            db.close()
+
+        response = self.teacher_client.get("/api/teacher/student-list")
+        self.assertEqual(response.status_code, 200)
+        listed_ids = {item["id"] for item in response.json()["students"]}
+        self.assertNotIn(inactive_id, listed_ids)
+        self.assertIn(active_id, listed_ids)
+        self.assertNotIn(self.unassigned_student_id, listed_ids)
+
     def test_work_product_is_audited_traceable_and_requires_same_access(self):
         self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/work-product").status_code, 403)
         db = self.Session()
@@ -233,7 +480,8 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertIn("12356", payload["decision"])
         self.assertIn("110", payload["decision"])
         self.assertIn("120", payload["decision"])
-        self.assertEqual([step["status"] for step in payload["pipeline"]], ["completed"] * 4)
+        self.assertEqual([step["status"] for step in payload["pipeline"]], ["completed"] * 5)
+        self.assertEqual(payload["pipeline"][-1]["name"], "Agent交付验收")
         self.assertGreaterEqual(len(payload["observation"]["evidence_ids"]), 1)
         self.assertTrue(payload["observation"]["trigger_evidence_ids"])
         self.assertTrue(any(item["content"] == "继父每天打我，我害怕回去" for item in payload["records"]))
@@ -260,6 +508,143 @@ class TeacherCaseAccessTests(unittest.TestCase):
             self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="confirmed_work_product_task", actor_user_id=self.admin_id).count(), 1)
         finally:
             db.close()
+
+    def test_work_product_handoffs_only_verified_agent_delivery_before_approval_cutoff(self):
+        session = self.student_client.post("/api/chat/sessions", json={"force_new": True}).json()
+        sent = self.student_client.post("/api/chat/send", json={
+            "user_id": self.student_id,
+            "session_id": session["session_id"],
+            "message": "最近考试让我焦虑，也影响了上课",
+            "idempotency_key": "teacher_handoff_before_cutoff",
+        })
+        self.assertEqual(sent.status_code, 200, sent.text)
+        before_run_code = sent.json()["agent_run"]["run_code"]
+
+        submitted = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/access-requests",
+            json={"reason": "需要在审批截止范围内接力已验收的结构化支持交付", "scope": "recent_30_days"},
+        )
+        request_id = submitted.json()["request_id"]
+        approved = self.admin_client.post(
+            f"/api/teacher/access-requests/{request_id}/decision",
+            json={"decision": "approved", "note": "同意最小必要范围"},
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        db = self.Session()
+        try:
+            request_row = db.query(StudentCaseAccessRequest).filter_by(id=request_id).one()
+            before = db.query(StudentSupportRun).filter_by(run_code=before_run_code).one()
+            cutoff_utc = request_row.reviewed_at - timedelta(hours=8)
+            expected_completed_at = (before.completed_at + timedelta(hours=8)).isoformat()
+            needs_attention_deliverable = json.loads(before.deliverable_json)
+            needs_attention_deliverable["verification"]["status"] = "needs_attention"
+            needs_attention_deliverable["verification"]["checks"][0]["status"] = "failed"
+            db.add(StudentSupportRun(
+                run_code="SSR-NEEDS-ATTENTION",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-needs-attention",
+                request_fingerprint="synthetic-needs-attention",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="attention",
+                risk_level="urgent",
+                intent_summary="最小结构化安全接力",
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=json.dumps(needs_attention_deliverable, ensure_ascii=False),
+                emotion_basis_json="[]",
+                model_name="safety-override",
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc - timedelta(minutes=2),
+                completed_at=cutoff_utc - timedelta(minutes=1),
+                expires_at=datetime.utcnow() + timedelta(days=30),
+            ))
+            db.add(StudentSupportRun(
+                run_code="SSR-AFTER-CUTOFF-UTC",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-after-cutoff-utc",
+                request_fingerprint="synthetic-cutoff-check",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="completed",
+                risk_level=before.risk_level,
+                intent_summary=before.intent_summary,
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=before.deliverable_json,
+                emotion_basis_json="[]",
+                model_name=before.model_name,
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc + timedelta(minutes=1),
+                completed_at=cutoff_utc + timedelta(minutes=2),
+                expires_at=datetime.utcnow() + timedelta(days=30),
+            ))
+            db.add(StudentSupportRun(
+                run_code="SSR-EXPIRED-HANDOFF",
+                user_id=self.student_id,
+                session_id=before.session_id,
+                task_type=before.task_type,
+                trigger_source=before.trigger_source,
+                idempotency_key="teacher-handoff-expired",
+                request_fingerprint="synthetic-expiry-check",
+                input_message_id=before.input_message_id,
+                output_message_id=before.output_message_id,
+                status="completed",
+                risk_level=before.risk_level,
+                intent_summary=before.intent_summary,
+                context_message_count=before.context_message_count,
+                plan_json=before.plan_json,
+                tools_json=before.tools_json,
+                deliverable_json=before.deliverable_json,
+                emotion_basis_json="[]",
+                model_name=before.model_name,
+                prompt_version="student-support-orchestrator-v2",
+                degraded=0,
+                started_at=cutoff_utc - timedelta(minutes=4),
+                completed_at=cutoff_utc - timedelta(minutes=3),
+                expires_at=datetime.utcnow() - timedelta(seconds=1),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        product = self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/work-product",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(product.status_code, 200, product.text)
+        handoff = product.json()["agent_handoff"]
+        self.assertEqual(handoff["run_count"], 2)
+        self.assertEqual(handoff["verified_count"], 1)
+        self.assertEqual({item["run_code"] for item in handoff["latest"]}, {before_run_code, "SSR-NEEDS-ATTENTION"})
+        self.assertNotIn("SSR-AFTER-CUTOFF-UTC", str(handoff))
+        self.assertNotIn("SSR-EXPIRED-HANDOFF", str(handoff))
+        self.assertNotIn("最近考试让我焦虑", str(handoff))
+        self.assertEqual(
+            set(handoff["latest"][0]),
+            {"run_code", "completed_at", "risk_level", "status", "task_contract", "verification", "artifact"},
+        )
+        before_entry = next(item for item in handoff["latest"] if item["run_code"] == before_run_code)
+        attention_entry = next(item for item in handoff["latest"] if item["run_code"] == "SSR-NEEDS-ATTENTION")
+        self.assertEqual(before_entry["verification"]["status"], "verified")
+        self.assertEqual(before_entry["completed_at"], expected_completed_at)
+        self.assertEqual(attention_entry["verification"]["status"], "needs_attention")
+        self.assertEqual(attention_entry["risk_level"], "urgent")
+        self.assertTrue(any(item["status"] == "failed" for item in attention_entry["verification"]["checks"]))
+        self.assertEqual(product.json()["pipeline"][-1]["name"], "Agent交付验收")
+        self.assertEqual(product.json()["pipeline"][-1]["status"], "attention")
+        self.assertIn("1/2", product.json()["pipeline"][-1]["result"])
 
     def test_direct_work_product_uses_business_cutoff_across_utc_date_boundary(self):
         first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product")
@@ -314,6 +699,25 @@ class TeacherCaseAccessTests(unittest.TestCase):
         self.assertEqual(revised_payload["confirmed_task_indices"], [])
         self.assertTrue(revised_payload["observation"]["trigger_evidence_ids"])
         self.assertTrue(any(item["content"] == "哥哥拿刀威胁我，我现在害怕回去" for item in revised_payload["records"]))
+
+    def test_direct_snapshot_is_superseded_when_any_new_student_record_arrives(self):
+        first = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product").json()
+        sleep(0.05)
+        db = self.Session()
+        try:
+            db.add(MoodRecord(
+                user_id=self.student_id,
+                mood_score=4,
+                mood_label="焦虑",
+                content="今天课间有些紧张",
+                created_at=datetime.now(),
+            ))
+            db.commit()
+        finally:
+            db.close()
+        revised = self.admin_client.get(f"/api/teacher/students/{self.student_id}/work-product").json()
+        self.assertNotEqual(revised["case_id"], first["case_id"])
+        self.assertTrue(any(item["content"] == "今天课间有些紧张" for item in revised["records"]))
 
     def test_approved_teacher_gets_redacted_urgent_override_without_new_original(self):
         submitted = self.teacher_client.post(
@@ -390,7 +794,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
         try:
             logged_in = student_client.post(
                 "/api/user/login",
-                json={"username": "student_a", "password": self.student_password},
+                json={"username": "student_a", "password": "StudentPassword12"},
             )
             self.assertEqual(logged_in.status_code, 200)
             self.assertEqual(student_client.get("/api/user/me").status_code, 200)
@@ -441,7 +845,7 @@ class TeacherCaseAccessTests(unittest.TestCase):
         try:
             logged_in = student_client.post(
                 "/api/user/login",
-                json={"username": "student_a", "password": self.student_password},
+                json={"username": "student_a", "password": "StudentPassword12"},
             )
             self.assertEqual(logged_in.status_code, 200)
             for message in ("我想死", "我想结束生命", "我准备烧炭", "不是我想这样，但我不想活了", "爸爸打我，我不敢回家", "继父每天打我，我害怕回去", "哥哥拿刀威胁我", "爸爸用皮带抽我，我很害怕", "叔叔逼我和他发生关系", "哥哥把我关在屋里不让我出去", "家里有人用烟头烫我", "家里有人把我锁在厕所不让我出去", "家里有人性侵我"):
@@ -460,10 +864,231 @@ class TeacherCaseAccessTests(unittest.TestCase):
                 json={"user_id": self.student_id, "message": "小组活动让我担心说错话"},
             )
             self.assertEqual(routine.status_code, 200)
-            self.assertEqual(routine.json()["conversation_signal"], "continue")
+            self.assertEqual(routine.json()["conversation_signal"], "urgent")
             self.assertNotIn("support", routine.json())
         finally:
             student_client.close()
+
+    def test_admin_generates_reviews_signs_and_downloads_final_report(self):
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["status"], "draft")
+        self.assertEqual(report["report_version"], "teacher-review-report-v2")
+        self.assertEqual(len(report["agent_review"]["workflow"]), 7)
+        self.assertFalse(report["data_scope"]["original_text_external_transfer"])
+        self.assertIn("不是医学诊断", report["boundary"])
+        self.assertTrue(report["review_checklist"])
+        self.assertIn(report["evidence_audit"]["status"], {"partial", "review_ready"})
+        self.assertGreater(report["evidence_audit"]["claim_count"], 0)
+        self.assertEqual(report["evidence_audit"]["record_count"], len(report["evidence_audit"]["ledger"]))
+        self.assertTrue(all("excerpt" not in item and "content" not in item for item in report["evidence_audit"]["ledger"]))
+        self.assertIn("不是心理风险概率", report["evidence_audit"]["boundary"])
+        self.assertTrue(all(item["status"] in {"record_linked", "guidance_linked", "declared_gap", "unlinked"} for item in report["evidence_audit"]["claims"]))
+
+        blocked = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": False, "note": "已线下核对"},
+        )
+        self.assertEqual(blocked.status_code, 400)
+        gap_not_acknowledged = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": True, "note": "已线下核对并明确责任人"},
+        )
+        self.assertEqual(gap_not_acknowledged.status_code, 400)
+        signed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": True, "evidence_gap_acknowledged": True, "note": "已线下核对并明确责任人，后续补充支持意愿"},
+        )
+        self.assertEqual(signed.status_code, 200, signed.text)
+        self.assertEqual(signed.json()["status"], "reviewed")
+        terminal = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": "尝试修改已签署报告"},
+        )
+        self.assertEqual(terminal.status_code, 409)
+        reused = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(reused.json()["report_id"], report["report_id"])
+
+        pdf = self.admin_client.get(f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}.pdf")
+        self.assertEqual(pdf.status_code, 200, pdf.text)
+        self.assertEqual(pdf.headers["content-type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        db = self.Session()
+        try:
+            self.assertEqual(db.query(TeacherReviewReport).filter_by(report_id=report["report_id"]).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="review_teacher_report", actor_user_id=self.admin_id, result="denied_checklist").count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="review_teacher_report", actor_user_id=self.admin_id, result="denied_gap_ack").count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="generate_teacher_review_report", actor_user_id=self.admin_id).count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="download_teacher_review_report", actor_user_id=self.admin_id).count(), 1)
+        finally:
+            db.close()
+
+    def test_regular_teacher_report_requires_approved_request_scope(self):
+        denied = self.teacher_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(denied.status_code, 403)
+        submitted = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/access-requests",
+            json={"reason": "需要结合授权记录形成可审签的支持报告", "scope": "recent_30_days"},
+        )
+        request_id = submitted.json()["request_id"]
+        approved = self.admin_client.post(
+            f"/api/teacher/access-requests/{request_id}/decision",
+            json={"decision": "approved", "note": "同意最小必要范围"},
+        )
+        self.assertEqual(approved.status_code, 200)
+        generated = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report_id = generated.json()["report_id"]
+        self.assertEqual(self.teacher_client.get(f"/api/teacher/students/{self.student_id}/review-reports/latest").json()["report_id"], report_id)
+        self.assertEqual(self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/review-reports/latest",
+            params={"request_id": request_id + 9999},
+        ).status_code, 403)
+        self.assertEqual(self.teacher_client.get(
+            f"/api/teacher/students/{self.student_id}/review-reports/latest",
+            params={"request_id": request_id},
+        ).json()["report_id"], report_id)
+        revision_without_note = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": ""},
+        )
+        self.assertEqual(revision_without_note.status_code, 400)
+        revision = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "revision_requested", "checklist_confirmed": False, "note": "需要补充学生愿意接受的支持方式"},
+        )
+        self.assertEqual(revision.status_code, 200)
+        blocked_sign = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+            params={"request_id": request_id},
+            json={"decision": "reviewed", "checklist_confirmed": True, "note": "直接签署"},
+        )
+        self.assertEqual(blocked_sign.status_code, 409)
+        revised = self.teacher_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports",
+            params={"request_id": request_id},
+        )
+        self.assertEqual(revised.status_code, 200)
+        self.assertEqual(revised.json()["revision_number"], 2)
+        self.assertEqual(revised.json()["parent_report_id"], report_id)
+
+    def test_report_model_only_receives_deidentified_structured_fields(self):
+        model_payload = '{"summary_focus":"functioning","opening_style":"open_choice"}'
+        mocked = AsyncMock(return_value=model_payload)
+        with patch("api.teacher.student_external_ai_allowed", return_value=True), patch("teacher_review_engine.is_spark_available", return_value=True), patch("teacher_review_engine.ask_spark", mocked):
+            generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["generation"]["source"], "xunfei_constrained")
+        self.assertTrue(report["generation"]["external_transfer"])
+        self.assertIn("建议教师先核对", report["executive_summary"])
+        self.assertIn("可以选择暂时不回答", report["support_plan"]["conversation_opening"])
+        prompt = str(mocked.await_args.args[0])
+        self.assertNotIn("最近早上不太想去学校", prompt)
+        self.assertNotIn("我和同学相处得有点累", prompt)
+        self.assertIn("source_counts", prompt)
+
+    def test_failed_external_report_attempt_is_audited_and_dangerous_words_degrade(self):
+        unsafe_payload = '{"summary_focus":"达到重度抑郁","opening_style":"保证绝对保密"}'
+        mocked = AsyncMock(return_value=unsafe_payload)
+        with patch("api.teacher.student_external_ai_allowed", return_value=True), patch("teacher_review_engine.is_spark_available", return_value=True), patch("teacher_review_engine.ask_spark", mocked):
+            generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        generation = generated.json()["generation"]
+        self.assertTrue(generation["external_transfer_attempted"])
+        self.assertFalse(generation["external_transfer_succeeded"])
+        self.assertEqual(generation["external_transfer_failure"], "invalid_or_unsafe_output")
+        self.assertTrue(generation["transferred_fields"])
+        self.assertNotIn("绝对保密", generated.json()["support_plan"]["conversation_opening"])
+        db = self.Session()
+        try:
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="external_ai_transfer_attempt", actor_user_id=self.admin_id, result="failed_safe_degrade").count(), 1)
+        finally:
+            db.close()
+
+    def test_urgent_report_stops_ordinary_plan_and_uses_safety_specific_evidence(self):
+        db = self.Session()
+        try:
+            db.add(ChatMessage(user_id=self.student_id, role="user", content="我想死，不想再继续了", emotion="需要立即协助", created_at=datetime.now()))
+            db.commit()
+        finally:
+            db.close()
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["overall_decision"]["risk_level"], "urgent")
+        self.assertTrue(report["safety_review"]["ordinary_plan_stopped"])
+        self.assertGreaterEqual(len(report["safety_review"]["immediate_actions"]), 3)
+        self.assertEqual(report["support_plan"]["tasks"], [])
+        self.assertEqual(report["support_plan"]["questions"], [])
+        self.assertEqual(report["support_plan"]["conversation_opening"], "")
+        self.assertEqual({item["code"] for item in report["evidence_sources"]}, {"NICE-NG225", "WHO-SHS-2021"})
+
+    def test_insufficient_evidence_report_cannot_be_signed(self):
+        db = self.Session()
+        try:
+            db.query(MoodRecord).filter(MoodRecord.user_id == self.student_id).delete()
+            db.query(ChatMessage).filter(ChatMessage.user_id == self.student_id).delete()
+            db.commit()
+        finally:
+            db.close()
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report = generated.json()
+        self.assertEqual(report["evidence_audit"]["status"], "insufficient")
+        signed = self.admin_client.post(
+            f"/api/teacher/students/{self.student_id}/review-reports/{report['report_id']}/decision",
+            json={"decision": "reviewed", "checklist_confirmed": True, "evidence_gap_acknowledged": True, "note": "已确认当前没有足够证据"},
+        )
+        self.assertEqual(signed.status_code, 409)
+        db = self.Session()
+        try:
+            self.assertEqual(db.query(TeacherReviewReport).filter_by(report_id=report["report_id"], status="draft").count(), 1)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="review_teacher_report", actor_user_id=self.admin_id, result="denied_evidence_gate").count(), 1)
+        finally:
+            db.close()
+
+    def test_report_decision_uses_compare_and_swap_for_terminal_state(self):
+        generated = self.admin_client.post(f"/api/teacher/students/{self.student_id}/review-reports")
+        self.assertEqual(generated.status_code, 200, generated.text)
+        report_id = generated.json()["report_id"]
+        with patch("sqlalchemy.orm.Query.update", return_value=0):
+            raced = self.admin_client.post(
+                f"/api/teacher/students/{self.student_id}/review-reports/{report_id}/decision",
+                json={"decision": "revision_requested", "checklist_confirmed": False, "note": "并发审核操作测试"},
+            )
+        self.assertEqual(raced.status_code, 409, raced.text)
+        db = self.Session()
+        try:
+            self.assertEqual(db.query(TeacherReviewReport).filter_by(report_id=report_id, status="draft").count(), 1)
+            self.assertEqual(db.query(TeacherReviewReportDecision).filter_by(report_id=report_id).count(), 0)
+            self.assertGreaterEqual(db.query(SensitiveAccessLog).filter_by(action="review_teacher_report", actor_user_id=self.admin_id, result="denied_concurrent_terminal").count(), 1)
+        finally:
+            db.close()
+
+    def test_model_narrative_rejects_diagnosis_names_and_qualitative_probability(self):
+        unsafe_summaries = [
+            "这些结构化信息符合抑郁障碍表现，建议教师据此作出判断并安排后续。",
+            "这些结构化信息高度提示自闭症，建议教师据此作出判断并安排后续。",
+            "这些结构化信息显示学生有六成会持续恶化，应当由教师立刻据此判断。",
+            "这些结构化信息显示学生十有八九会持续恶化，应当由教师立刻据此判断。",
+            "这些结构化信息达到重度抑郁，老师应据此安排支持。",
+            "这些结构化信息高度符合孤独谱系障碍，老师应据此安排支持。",
+            "这些结构化信息超过一半的可能会持续恶化，老师应据此安排支持。",
+        ]
+        for summary in unsafe_summaries:
+            with self.subTest(summary=summary):
+                candidate = NarrativeOutput(
+                    executive_summary=summary,
+                    conversation_opening="我想先听听你愿意分享的部分，也可以暂时不回答。",
+                )
+                self.assertFalse(_safe_model_narrative(candidate))
 
 
 if __name__ == "__main__":

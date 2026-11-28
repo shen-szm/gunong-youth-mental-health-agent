@@ -1,8 +1,8 @@
 <template>
-  <div class="trend-page">
-    <!-- 顶部导航 -->
+  <div class="trend-page game-page" :data-part="part">
+    <GameBackdrop :part="part" variant="page" />
     <div class="page-header">
-      <button class="back-btn" @click="router.back()">
+      <button class="back-btn" @click="router.push('/')" aria-label="返回首页">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div class="header-title">
@@ -12,85 +12,104 @@
       <div style="width:36px"></div>
     </div>
 
-    <!-- 时间选择标签 -->
     <div class="tab-bar">
       <button v-for="t in tabs" :key="t.key" :class="{active: activeTab===t.key}" @click="activeTab=t.key">
         {{ t.label }}
       </button>
     </div>
 
-    <!-- 统计卡片 -->
+    <div class="trend-pet-note game-card">
+      <img :src="petAvatar" alt="咕团" />
+      <div>
+        <strong>咕团陪你回看</strong>
+        <p>{{ petLine }}</p>
+      </div>
+      <router-link to="/">回首页</router-link>
+    </div>
+
+    <StudentWellbeingAssessment />
+
     <div class="stats-row">
       <div class="stat-card main-stat">
-        <div class="main-score" :style="{color: scoreColor}">{{ stats.avg_score || '--' }}</div>
-        <div class="main-label">平均情绪分</div>
-        <div class="main-hint" :style="{color: scoreColor}">{{ scoreHint }}</div>
-        <!-- 情绪分圆形进度 -->
-        <svg class="score-ring" viewBox="0 0 80 80">
-          <circle cx="40" cy="40" r="34" fill="none" stroke="#F0ECE8" stroke-width="6"/>
-          <circle cx="40" cy="40" r="34" fill="none" :stroke="scoreColor" stroke-width="6"
-            stroke-linecap="round" stroke-dasharray="213.6"
-            :stroke-dashoffset="213.6 - 213.6 * ((stats.avg_score || 0) / 10)"
-            transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s ease"/>
-        </svg>
+        <div class="main-score">{{ topMoodEmoji }}</div>
+        <div class="main-label">较常记录的情绪</div>
+        <div class="main-hint">只描述主动留下的记录</div>
       </div>
       <div class="side-stats">
         <div class="stat-card side-card">
-          <div class="side-val">{{ stats.count || 0 }}</div>
+          <div class="side-val">{{ showCount }}</div>
           <div class="side-label">记录次数</div>
         </div>
         <div class="stat-card side-card">
-          <div class="side-val">{{ topMoodEmoji }}</div>
-          <div class="side-label">主要情绪</div>
+          <div class="side-val">{{ showDays }}</div>
+          <div class="side-label">有记录的天数</div>
         </div>
       </div>
     </div>
 
-    <!-- 折线图 / 情绪趋势 -->
-    <div class="card chart-card" v-if="stats.trend?.length">
-      <div class="card-title">📈 情绪走势</div>
-      <div class="line-chart-wrap">
-        <svg class="line-chart" viewBox="0 0 300 100" preserveAspectRatio="none">
-          <!-- 网格线 -->
-          <line v-for="y in [20,50,80]" :key="y" x1="0" :y1="y" x2="300" :y2="y" stroke="#F0ECE8" stroke-width="1"/>
-          <!-- 渐变填充 -->
-          <defs>
-            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" :stop-color="scoreColor" stop-opacity="0.25"/>
-              <stop offset="100%" :stop-color="scoreColor" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          <polygon v-if="polyPoints" :points="polyPoints + ` ${lastX},95 ${firstX},95`" :fill="'url(#lineGrad)'"/>
-          <!-- 折线 -->
-          <polyline v-if="linePoints" :points="linePoints" fill="none" :stroke="scoreColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-          <!-- 数据点 -->
-          <circle v-for="(p, i) in chartPoints" :key="i" :cx="p.x" :cy="p.y" r="3.5" fill="white" :stroke="scoreColor" stroke-width="2"/>
-        </svg>
-        <!-- X轴日期 -->
-        <div class="x-labels">
-          <span v-for="(d, i) in xLabels" :key="i">{{ d }}</span>
+    <!-- 情绪日历 -->
+    <div class="card calendar-card">
+      <div class="card-title">情绪日历</div>
+      <div class="calendar-hint">最近 {{ calendarSpan }} 天里留下的记录</div>
+      <div class="calendar-grid">
+        <div v-for="(day, index) in calendarDays" :key="day.date" class="cal-cell" :class="{ 'has-mood': !!day.mood }" :style="{ animationDelay: (day.mood ? Math.min(index, 14) * 40 : 0) + 'ms' }">
+          <span class="cal-day">{{ day.label }}</span>
+          <span class="cal-mood" aria-hidden="true">{{ day.mood ? getEmoji(day.mood) : '' }}</span>
         </div>
+      </div>
+    </div>
+
+    <!-- 回顾报告：跟随筛选，切换时会重新生成 -->
+    <div class="card report-card">
+      <div class="card-title">{{ reportRangeLabel }}</div>
+      <p v-if="activeTab === 999" class="report-window-hint">选择“全部”时，回顾仍固定取最近 30 天。</p>
+      <div v-if="reportLoading" class="insight-loading">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <template v-else-if="report">
+        <p class="report-sources">
+          基于 {{ report.sources?.self_records || 0 }} 条主动记录 · {{ report.sources?.conversation_signals || 0 }} 条对话线索<template v-if="report.sources?.conversation_summary"> · 含最近 1 份倾诉小结</template>
+        </p>
+        <p class="insight-text">{{ report.overview }}</p>
+        <p class="report-focus"><strong>可以试着关注</strong>{{ report.support_focus }}</p>
+        <ol class="report-steps">
+          <li v-for="step in report.next_steps" :key="step">{{ step }}</li>
+        </ol>
+        <p class="report-boundary">{{ report.boundary }}</p>
+        <p class="report-boundary">以上是对已记录内容的描述性整理，不是心理测评。</p>
+      </template>
+      <button class="refresh-btn" @click="loadReport" :disabled="reportLoading">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right:4px"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        重新整理
+      </button>
+    </div>
+
+    <!-- 主动记录时间线 -->
+    <div class="card chart-card" v-if="stats.trend?.length">
+      <div class="card-title">近期主动记录</div>
+      <div class="record-timeline">
+        <article v-for="day in stats.trend" :key="day.date"><time>{{ day.date }}</time><div><span v-for="label in day.labels" :key="label">{{ label }}</span></div><small>{{ day.count }}条</small></article>
       </div>
     </div>
 
     <!-- 情绪分布 -->
     <div class="card" v-if="stats.distribution && Object.keys(stats.distribution).length">
-      <div class="card-title">🎯 情绪分布</div>
+      <div class="card-title">情绪分布</div>
       <div class="dist-list">
-        <div v-for="(count, label) in sortedDist" :key="label" class="dist-row">
+        <div v-for="(count, label, index) in sortedDist" :key="label" class="dist-row">
           <span class="dist-emoji">{{ getEmoji(label) }}</span>
           <span class="dist-label">{{ label }}</span>
           <div class="dist-track">
-            <div class="dist-fill" :style="{width: getDistWidth(count)+'%', background: getMoodColor(label)}"></div>
+            <div class="dist-fill" :style="{width: getDistWidth(count)+'%', background: getMoodColor(label), animationDelay: index * 70 + 'ms'}"></div>
           </div>
           <span class="dist-pct">{{ getDistWidth(count) }}%</span>
         </div>
       </div>
     </div>
 
-    <!-- AI 洞察 -->
+    <!-- 情绪小结 -->
     <div class="card insight-card">
-      <div class="card-title">🤖 AI情绪洞察</div>
+      <div class="card-title">近7天情绪小结</div>
       <div class="insight-content">
         <div v-if="insightLoading" class="insight-loading">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -99,15 +118,15 @@
       </div>
       <button class="refresh-btn" @click="loadInsight" :disabled="insightLoading">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right:4px"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        重新分析
+        重新生成
       </button>
     </div>
 
     <!-- 空状态 -->
     <div class="empty-state" v-if="!stats.trend?.length && !Object.keys(stats.distribution||{}).length">
       <div class="empty-icon">🌿</div>
-      <p>还没有情绪记录</p>
-      <p class="empty-hint">去倾诉一下，这里会自动记录你的情绪变化</p>
+      <p>{{ emptyTitle }}</p>
+      <p class="empty-hint">记录心情后，这里会显示你的情绪变化；倾诉线索会进入回顾报告。</p>
       <button class="go-chat-btn" @click="router.push('/chat')">去倾诉 →</button>
     </div>
   </div>
@@ -117,32 +136,41 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { getMoodStats, getMoodInsight } from '../api/mood'
+import { getMoodStats, getMoodInsight, getEmotionReport } from '../api/mood'
+import { useTimeOfDay } from '../utils/timeOfDay'
+import { petImageForStatus, readPetCompanion } from '../utils/petCompanion'
+import StudentWellbeingAssessment from '../components/StudentWellbeingAssessment.vue'
+import GameBackdrop from '../components/student/GameBackdrop.vue'
+import { useCountUp } from '../utils/useCountUp'
 
 const router = useRouter()
 const userStore = useUserStore()
+const part = useTimeOfDay()
+const petState = computed(() => readPetCompanion(userStore.userId))
+const petAvatar = computed(() => petImageForStatus(part.value === 'night' && petState.value.status !== 'happy' ? 'sleeping' : petState.value.status))
+const petLine = computed(() => {
+  const count = stats.value.count || 0
+  if (!count) return '今天还没有记录也没关系。想说话的时候，回首页找我。'
+  const label = topMood.value && topMood.value !== '--' ? `出现最多的是「${topMood.value}」。` : ''
+  return `这里记下了 ${count} 次心情。${label}看一看就好，不急着给自己下结论。`
+})
 const activeTab = ref(7)
 const tabs = [{ key: 7, label: '近7天' }, { key: 30, label: '近30天' }, { key: 999, label: '全部' }]
 const stats = ref({})
+// 统计数字的计数动画展示值
+const showCount = useCountUp(computed(() => stats.value.count || 0))
+const showDays = useCountUp(computed(() => stats.value.recorded_days || 0))
 const insight = ref('正在分析你的情绪数据...')
 const insightLoading = ref(false)
-
-const scoreColor = computed(() => {
-  const s = stats.value.avg_score || 5
-  if (s >= 7) return '#6DB58B'
-  if (s >= 5) return '#7FB3A6'
-  if (s >= 3) return '#E8C468'
-  return '#D4776A'
-})
-
-const scoreHint = computed(() => {
-  const s = stats.value.avg_score || 0
-  if (s >= 8) return '状态很好 ☺'
-  if (s >= 6) return '整体不错'
-  if (s >= 4) return '需要关注'
-  if (s > 0) return '建议多倾诉'
-  return '--'
-})
+const report = ref(null)
+const reportLoading = ref(false)
+const reportDays = computed(() => activeTab.value === 7 ? 7 : 30)
+const reportRangeLabel = computed(() => reportDays.value === 7 ? '近 7 天回顾' : '近 30 天回顾')
+const emptyTitle = computed(() => (
+  activeTab.value === 7 ? '近 7 天还没有情绪记录'
+    : activeTab.value === 30 ? '近 30 天还没有情绪记录'
+      : '还没有情绪记录'
+))
 
 const topMood = computed(() => {
   const dist = stats.value.distribution || {}
@@ -150,48 +178,29 @@ const topMood = computed(() => {
   return Object.entries(dist).sort((a, b) => b[1] - a[1])[0][0]
 })
 
-const topMoodEmoji = computed(() => {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡' }
-  return map[topMood.value] || '--'
-})
+const MOOD_EMOJI = {
+  '愤怒': '😠', '厌恶': '🤢', '恐惧': '😨', '开心': '😊', '中性': '😐', '悲伤': '😢', '惊讶': '😲',
+  '平静': '😌', '焦虑': '😰', '难过': '😢',
+}
+const MOOD_COLOR = {
+  '愤怒': '#D4776A', '厌恶': '#B8903E', '恐惧': '#8B7BA6', '开心': '#8FCBA6',
+  '中性': '#A8A29A', '悲伤': '#6F82A6', '惊讶': '#D9B46A',
+  '平静': '#8FCBA6', '焦虑': '#D9B46A', '难过': '#6F82A6',
+}
+
+const topMoodEmoji = computed(() => MOOD_EMOJI[topMood.value] || '--')
 
 const sortedDist = computed(() => {
   const dist = stats.value.distribution || {}
   return Object.fromEntries(Object.entries(dist).sort((a, b) => b[1] - a[1]))
 })
 
-// 折线图计算
-const chartPoints = computed(() => {
-  const trend = stats.value.trend || []
-  if (!trend.length) return []
-  const n = trend.length
-  return trend.map((d, i) => ({
-    x: n === 1 ? 150 : 15 + (i / (n - 1)) * 270,
-    y: 95 - (d.avg / 10) * 80
-  }))
-})
-
-const linePoints = computed(() => chartPoints.value.map(p => `${p.x},${p.y}`).join(' '))
-const polyPoints = computed(() => linePoints.value)
-const firstX = computed(() => chartPoints.value[0]?.x)
-const lastX = computed(() => chartPoints.value[chartPoints.value.length - 1]?.x)
-
-const xLabels = computed(() => {
-  const trend = stats.value.trend || []
-  if (!trend.length) return []
-  if (trend.length <= 5) return trend.map(d => d.date.slice(5))
-  const step = Math.ceil(trend.length / 5)
-  return trend.filter((_, i) => i % step === 0 || i === trend.length - 1).map(d => d.date.slice(5))
-})
-
 function getEmoji(label) {
-  const map = { '开心': '😊', '平静': '😌', '焦虑': '😰', '难过': '😢', '愤怒': '😡' }
-  return map[label] || '🙂'
+  return MOOD_EMOJI[label] || '🙂'
 }
 
 function getMoodColor(label) {
-  const c = { '开心': '#6DB58B', '平静': '#7FB3A6', '焦虑': '#E8C468', '难过': '#8EAFC4', '愤怒': '#D4776A' }
-  return c[label] || '#C8BEB4'
+  return MOOD_COLOR[label] || '#C8BEB4'
 }
 
 function getDistWidth(count) {
@@ -199,10 +208,30 @@ function getDistWidth(count) {
   return total ? Math.round(count / total * 100) : 0
 }
 
+// ─── 情绪日历 ───
+const calendarSpan = computed(() => activeTab.value === 7 ? 7 : 30)
+const calendarDays = computed(() => {
+  const byDate = {}
+  for (const day of stats.value.trend || []) {
+    if (day.labels?.length) byDate[day.date] = day.labels[0]
+  }
+  const days = []
+  const now = new Date()
+  for (let i = calendarSpan.value - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i)
+    const key = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    days.push({ label: d.getDate(), date: key, mood: byDate[key] || '' })
+  }
+  return days
+})
+
+let dataRequestId = 0
 async function loadData() {
+  const requestId = ++dataRequestId
   try {
     const r = await getMoodStats(Number(userStore.userId), activeTab.value)
-    stats.value = r.data
+    if (requestId === dataRequestId) stats.value = r.data
   } catch {}
 }
 
@@ -215,133 +244,298 @@ async function loadInsight() {
   insightLoading.value = false
 }
 
-onMounted(() => { loadData(); loadInsight() })
-watch(activeTab, loadData)
+let reportRequestId = 0
+async function loadReport() {
+  const requestId = ++reportRequestId
+  reportLoading.value = true
+  try {
+    const res = await getEmotionReport(reportDays.value)
+    if (requestId === reportRequestId) report.value = res.data
+  } catch {
+    if (requestId === reportRequestId) {
+      report.value = {
+        overview: '报告暂时没有生成成功，现有记录没有丢失。',
+        sources: {}, next_steps: ['稍后重试，或先继续倾诉和主动记录'],
+        support_focus: '先保留你的原始感受，不根据本次失败做任何判断。',
+        boundary: '这不是心理测评或医学结论。',
+      }
+    }
+  } finally {
+    if (requestId === reportRequestId) reportLoading.value = false
+  }
+}
+
+onMounted(() => { loadData(); loadInsight(); loadReport() })
+watch(activeTab, () => { loadData(); loadReport() })
 </script>
 
 <style scoped>
 .trend-page {
   padding: 0 0 40px;
-  background: rgba(15,15,20,0.55); min-height: 100vh;
+  background: transparent;
+  color: var(--m-ink);
+  min-height: 100vh;
+  position: relative;
   font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
 }
+.trend-page > :not(.game-backdrop) { position: relative; z-index: 1; }
+
+/* 咕团陪看 */
+.trend-pet-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 16px;
+  padding: 12px 14px;
+}
+.trend-pet-note img { width: 44px; height: 44px; object-fit: contain; flex: none; }
+.trend-pet-note div { flex: 1; min-width: 0; }
+.trend-pet-note strong { display: block; font-size: 12.5px; color: var(--game-wood); }
+.trend-pet-note p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--game-ink-2); }
+.trend-pet-note a {
+  flex: none;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--game-line);
+  background: var(--game-gold-soft);
+  color: var(--game-wood);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform var(--m-dur-fast) var(--m-ease), background var(--m-dur-fast) var(--m-ease);
+}
+.trend-pet-note a:hover { transform: translateY(-1px); background: var(--game-surface); }
+.trend-pet-note a:active { transform: scale(.95); }
 
 /* 顶部 */
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; background: rgba(30,30,35,0.6);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 14px 16px; background: var(--m-surface);
+  border-bottom: 1px solid var(--m-line);
   position: sticky; top: 0; z-index: 10;
 }
 .back-btn {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.08); color: #B5ADA6;
-  transition: background 0.2s;
+  background: var(--m-bg); color: var(--m-ink-2);
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
-.back-btn:hover { background: rgba(255,255,255,0.14); }
-.header-title h2 { margin: 0; font-size: 17px; color: #E8E2D8; text-align: center; }
-.header-title p { margin: 0; font-size: 11px; color: #8A847E; text-align: center; }
+.back-btn:hover { background: var(--m-accent-soft); }
+.back-btn:active { transform: scale(.92); }
+.header-title h2 { margin: 0; font-size: 17px; color: var(--m-ink); text-align: center; }
+.header-title p { margin: 0; font-size: 11px; color: var(--m-ink-3); text-align: center; }
 
 /* 标签 */
-.tab-bar {
-  display: flex; gap: 8px; padding: 14px 16px 6px;
-}
+.tab-bar { display: flex; gap: 8px; padding: 14px 16px 6px; }
 .tab-bar button {
   padding: 6px 18px; border-radius: 14px;
-  background: rgba(255,255,255,0.08); color: #9A948E; font-size: 13px;
-  border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s;
+  background: var(--m-surface); color: var(--m-ink-2); font-size: 13px;
+  border: 1px solid var(--m-line); transition: all var(--m-dur-fast) var(--m-ease);
 }
-.tab-bar button.active { background: #8EA89A; color: white; border-color: #8EA89A; }
+.tab-bar button.active { background: var(--m-accent); color: var(--game-on-accent); border-color: var(--m-accent); }
+.tab-bar button:not(.active):hover { border-color: var(--m-accent); color: var(--m-accent-strong); }
+.tab-bar button:active { transform: scale(.96); }
 
 /* 统计卡片 */
 .stats-row { display: flex; gap: 10px; padding: 10px 16px; }
-.stat-card { background: rgba(40,40,48,0.7); border-radius: 16px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); }
+
+/* v5.1.0-alpha.41 入场错峰（backwards：终帧不残留 transform，不干扰 hover） */
+.tab-bar, .stats-row, .trend-page > .card, .empty-state {
+  animation: m-rise var(--m-enter-dur) var(--m-ease) backwards;
+}
+.tab-bar { animation-delay: 40ms; }
+.stats-row { animation-delay: 80ms; }
+.trend-page > .card, .empty-state { animation-delay: 140ms; }
+.stat-card {
+  background: var(--m-surface);
+  border-radius: var(--m-radius-lg);
+  border: 1px solid var(--m-line);
+  box-shadow: var(--m-shadow);
+}
 
 .main-stat {
-  flex: 1; padding: 16px; position: relative;
+  flex: 1; padding: 16px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 110px;
 }
-.score-ring {
-  position: absolute; width: 80px; height: 80px; opacity: 0.5;
-}
-.main-score { font-size: 32px; font-weight: 700; position: relative; z-index: 1; }
-.main-label { font-size: 11px; color: #8A847E; margin-top: 2px; position: relative; z-index: 1; }
-.main-hint { font-size: 12px; margin-top: 4px; font-weight: 500; position: relative; z-index: 1; }
+.main-score { font-size: 32px; font-weight: 700; }
+.main-label { font-size: 11px; color: var(--m-ink-2); margin-top: 2px; }
+.main-hint { color: var(--m-ink-3); font-size: 12px; margin-top: 4px; font-weight: 500; }
 
 .side-stats { display: flex; flex-direction: column; gap: 10px; flex: 0 0 90px; }
 .side-card { padding: 12px; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.side-val { font-size: 22px; font-weight: 700; color: #8EA89A; }
-.side-label { font-size: 11px; color: #8A847E; margin-top: 3px; }
+.side-val { font-size: 22px; font-weight: 700; color: var(--m-accent-strong); }
+.side-label { font-size: 11px; color: var(--m-ink-2); margin-top: 3px; }
 
 /* 通用卡片 */
-.card { background: rgba(40,40,48,0.7); border-radius: 16px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); margin: 10px 16px; padding: 16px; }
-.card-title { font-size: 14px; font-weight: 600; color: #E8E2D8; margin-bottom: 14px; }
-
-/* 折线图 */
-.chart-card {}
-.line-chart-wrap { position: relative; }
-.line-chart { width: 100%; height: 100px; }
-.x-labels {
-  display: flex; justify-content: space-between;
-  font-size: 10px; color: #8A847E; margin-top: 4px; padding: 0 10px;
+.card {
+  background: var(--m-surface);
+  border-radius: var(--m-radius-lg);
+  border: 1px solid var(--m-line);
+  box-shadow: var(--m-shadow);
+  margin: 10px 16px;
+  padding: 16px;
 }
+.card-title { font-size: 14px; font-weight: 600; color: var(--m-ink); margin-bottom: 14px; }
+
+/* 情绪日历 */
+.calendar-hint { font-size: 12px; color: var(--m-ink-3); margin: -8px 0 10px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 7px 0; border-radius: var(--m-radius-sm);
+  background: var(--m-bg); color: var(--m-ink-3); font-size: 11px;
+}
+.cal-cell.has-mood { background: var(--m-accent-soft); color: var(--m-ink-2); }
+.cal-mood { font-size: 14px; line-height: 1.2; min-height: 17px; }
+
+/* 时间线 */
+.record-timeline { display: grid; gap: 9px; }
+.record-timeline article { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--m-line); }
+.record-timeline time, .record-timeline small { color: var(--m-ink-3); font-size: 12px; }
+.record-timeline article div { display: flex; flex-wrap: wrap; gap: 6px; }
+.record-timeline article div span { padding: 5px 9px; border-radius: 999px; background: var(--m-accent-soft); color: var(--m-accent-strong); font-size: 12px; font-weight: 700; }
 
 /* 情绪分布 */
 .dist-list { display: flex; flex-direction: column; gap: 10px; }
 .dist-row { display: flex; align-items: center; gap: 8px; }
 .dist-emoji { font-size: 17px; width: 24px; text-align: center; }
-.dist-label { width: 36px; font-size: 13px; color: #C8C0B6; flex-shrink: 0; }
-.dist-track { flex: 1; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.dist-label { width: 36px; font-size: 13px; color: var(--m-ink-2); flex-shrink: 0; }
+.dist-track { flex: 1; height: 8px; background: var(--m-bg); border-radius: 4px; overflow: hidden; }
 .dist-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
-.dist-pct { width: 36px; font-size: 11px; color: #8A847E; text-align: right; }
+.dist-pct { width: 36px; font-size: 11px; color: var(--m-ink-3); text-align: right; }
 
-/* AI 洞察 */
-.insight-card {}
+/* 报告 / 洞察 */
 .insight-content { min-height: 50px; }
 .insight-loading { display: flex; gap: 6px; padding: 8px 0; }
 .insight-loading .dot {
-  width: 9px; height: 9px; border-radius: 50%; background: #8EA89A;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--m-accent);
   animation: bounce 1.2s infinite both;
 }
 .insight-loading .dot:nth-child(2) { animation-delay: 0.2s; }
 .insight-loading .dot:nth-child(3) { animation-delay: 0.4s; }
 @keyframes bounce { 0%,80%,100%{transform:translateY(0);opacity:0.4} 40%{transform:translateY(-5px);opacity:1} }
-.insight-text { font-size: 14px; line-height: 1.7; color: #B8B0A6; }
+.insight-text { font-size: 14px; line-height: 1.7; color: var(--m-ink-2); }
+.report-window-hint { font-size: 12px; color: var(--m-ink-3); margin: -8px 0 10px; }
+.report-sources { font-size: 12px; color: var(--m-ink-3); margin-bottom: 8px; }
+.report-focus { margin-top: 10px; font-size: 13.5px; line-height: 1.7; color: var(--m-ink-2); }
+.report-focus strong { display: block; font-size: 12px; color: var(--m-accent-strong); margin-bottom: 2px; }
+.report-steps { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.report-steps li { font-size: 13px; line-height: 1.7; color: var(--m-ink-2); }
+.report-boundary { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--m-ink-3); }
 .refresh-btn {
-  margin-top: 10px; padding: 6px 14px; border-radius: 10px;
-  background: rgba(255,255,255,0.08); color: #8A847E; font-size: 12px;
+  margin-top: 12px; padding: 6px 14px; border-radius: 10px;
+  background: var(--m-bg); color: var(--m-ink-2); font-size: 12px;
   display: inline-flex; align-items: center;
-  transition: background 0.2s;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
-.refresh-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
+.refresh-btn:hover:not(:disabled) { background: var(--m-accent-soft); color: var(--m-accent-strong); }
+.refresh-btn:active:not(:disabled) { transform: scale(.96); }
 .refresh-btn:disabled { opacity: 0.4; }
 
 /* 空状态 */
 .empty-state { text-align: center; padding: 48px 24px; }
 .empty-icon { font-size: 48px; margin-bottom: 12px; }
-.empty-state p { font-size: 15px; color: #B8B0A6; margin: 0; }
-.empty-hint { font-size: 13px; color: #8A847E; margin-top: 8px !important; }
+.empty-state p { font-size: 15px; color: var(--m-ink-2); margin: 0; }
+.empty-hint { font-size: 13px; color: var(--m-ink-3); margin-top: 8px !important; }
 .go-chat-btn {
   margin-top: 20px; padding: 10px 28px;
-  background: #8EA89A; color: white; border-radius: 20px; font-size: 14px;
-  transition: background 0.2s;
+  background: var(--m-accent); color: var(--game-on-accent); border-radius: 20px; font-size: 14px;
+  transition: background var(--m-dur-fast) var(--m-ease),
+              transform var(--m-dur-fast) var(--m-ease);
 }
-.go-chat-btn:hover { background: #7A9A8C; }
+.go-chat-btn:hover { background: var(--m-accent-strong); }
+.go-chat-btn:active { transform: scale(.96); }
 
-/* ═══════════ 电脑端适配 ═══════════ */
+/* ═══════════ 电脑端适配：1080 双栏 ═══════════ */
 @media (min-width: 768px) {
   .trend-page {
-    display: flex; flex-direction: column; align-items: center;
+    width: min(1080px, calc(100% - 48px));
+    margin: 0 auto;
+    padding-bottom: 100px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+    align-items: start;
   }
-  .page-header, .tab-bar, .stats-row, .card, .empty-state {
-    width: 560px;
-    margin-left: auto; margin-right: auto;
+  .page-header, .tab-bar, .trend-pet-note, .wellbeing-card, .stats-row, .empty-state {
+    grid-column: 1 / -1;
   }
+  .trend-pet-note { margin: 0; }
   .stats-row { padding: 10px 0; }
-  .card { margin: 10px auto; }
-  .side-stats { flex: 0 0 110px; }
+  .card { margin: 0; }
+  .side-stats { flex: 0 0 260px; flex-direction: row; }
+  .side-card { min-width: 0; }
+  .calendar-grid { grid-template-columns: repeat(10, 1fr); }
+}
+
+/* 像素皮肤 3.0 · 回顾页 */
+.page-header { border-bottom: 2px solid var(--px-line); }
+.back-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  background: var(--game-surface-soft);
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.back-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.back-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.header-title h2 { font-family: var(--px-font); font-size: 18px; letter-spacing: .02em; }
+.tab-bar button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  font-family: var(--px-font);
+  font-size: 13px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.tab-bar button.active { border-color: var(--px-gold); box-shadow: 1px 1px 0 var(--px-shadow); transform: translate(2px, 2px); }
+.tab-bar button:not(.active):hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.stat-card,
+.card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+/* 统计卡：像素式 hover 抬起，与「我的」页统计条一致 */
+.stat-card { transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end); }
+.stat-card:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.main-score,
+.side-val { font-family: var(--px-font); }
+.card-title { display: flex; align-items: center; gap: 8px; font-family: var(--px-font); font-size: 15px; }
+.card-title::before { content: ''; width: 5px; height: 5px; flex: none; background: var(--px-gold); }
+.cal-cell { border: 1px solid var(--px-line); border-radius: 3px; }
+.record-timeline article div span { border: 2px solid var(--px-line); border-radius: 4px; }
+.dist-track,
+.dist-fill { border-radius: 0; }
+/* 活力反馈：分布条从左向右生长、有记录的日历格轻微弹入（逐行错峰） */
+.dist-fill { transform-origin: left center; animation: trend-grow 720ms var(--m-ease) backwards; }
+.cal-cell.has-mood { animation: trend-pop 320ms var(--m-ease) backwards; }
+@keyframes trend-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes trend-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+.refresh-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.refresh-btn:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.refresh-btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.go-chat-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.back-btn:focus-visible,
+.tab-bar button:focus-visible,
+.refresh-btn:focus-visible,
+.go-chat-btn:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

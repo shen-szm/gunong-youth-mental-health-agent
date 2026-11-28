@@ -1,39 +1,65 @@
 <template>
-  <div class="app-container" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'login-full': route.path === '/teacher-login', 'guardian-full': route.path.startsWith('/guardian') }">
-    <router-view class="page-content" />
+  <div class="app-container" :data-part="part" :class="{ 'admin-full': route.path === '/admin', 'room-full': route.path === '/', 'chat-full': route.path === '/chat', 'trend-full': route.path === '/trend', 'profile-full': route.path === '/profile', 'login-full': route.path === '/teacher-login' || route.path === '/login', 'guardian-full': route.path.startsWith('/guardian') }">
+    <Transition name="page" mode="out-in">
+      <div :key="route.path" class="page-wrap">
+        <router-view class="page-content" />
+      </div>
+    </Transition>
     <div class="build-badge" :title="buildTitle">v{{ appVersion }}</div>
-    <!-- 房间主页和管理后台不显示底部导航 -->
-    <nav class="bottom-nav" v-if="route.path !== '/admin' && route.path !== '/' && route.path !== '/teacher-login' && !route.path.startsWith('/guardian')">
-      <router-link to="/" :class="{ active: route.path === '/' }" @click="router.push('/')">
-        <span class="nav-icon">🏠</span>
+    <!-- 首页是学生端主入口，自带完整导航；子页共用游戏化 dock。 -->
+    <nav class="bottom-nav" aria-label="主导航" v-if="showBottomNav">
+      <router-link to="/" class="nav-item" :class="{ active: false }">
+        <span class="nav-icon" aria-hidden="true"><House :size="20" :stroke-width="1.8" /></span>
         <span class="nav-label">首页</span>
       </router-link>
-      <router-link to="/chat" :class="{ active: route.path === '/chat' }" @click="router.push('/chat')">
-        <span class="nav-icon">💬</span>
+      <router-link to="/chat" class="nav-item" :class="{ active: route.path === '/chat' }">
+        <span class="nav-icon" aria-hidden="true"><MessageCircle :size="20" :stroke-width="1.8" /></span>
         <span class="nav-label">倾诉</span>
       </router-link>
-      <router-link to="/trend" :class="{ active: route.path === '/trend' }" @click="router.push('/trend')">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">趋势</span>
+      <router-link to="/trend" class="nav-item" :class="{ active: route.path === '/trend' }">
+        <span class="nav-icon" aria-hidden="true"><ChartLine :size="20" :stroke-width="1.8" /></span>
+        <span class="nav-label">回顾</span>
       </router-link>
-      <router-link to="/profile" :class="{ active: route.path === '/profile' }" @click="router.push('/profile')">
-        <span class="nav-icon">👤</span>
+      <router-link to="/profile" class="nav-item" :class="{ active: route.path === '/profile' }">
+        <span class="nav-icon" aria-hidden="true"><UserRound :size="20" :stroke-width="1.8" /></span>
         <span class="nav-label">我的</span>
       </router-link>
+      <button type="button" class="nav-item nav-sound" :class="{ active: soundOn }" :aria-pressed="soundOn" :aria-label="soundOn ? '关闭背景音乐' : '开启背景音乐'" @click="onToggleSound">
+        <span class="nav-icon" aria-hidden="true"><Volume2 v-if="soundOn" :size="20" :stroke-width="1.8" /><VolumeX v-else :size="20" :stroke-width="1.8" /></span>
+        <span class="nav-label">声音</span>
+      </button>
     </nav>
+    <LoginPromptModal />
   </div>
 </template>
 
 <script setup>
-import { useRoute, useRouter } from "vue-router";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { House, MessageCircle, ChartLine, UserRound, Volume2, VolumeX } from "@lucide/vue";
+import { isBgmOn, stopBgm, subscribeBgm, toggleBgm } from "./utils/bgm";
+import { useTimeOfDay } from "./utils/timeOfDay";
+import LoginPromptModal from "./components/LoginPromptModal.vue";
 
 const route = useRoute();
-const router = useRouter();
+const part = useTimeOfDay();
+const showBottomNav = computed(() => route.path !== '/teacher-login' && route.path !== '/login' && ['/chat', '/trend', '/profile'].includes(route.path));
+watch(() => route.path, path => {
+  if (path === '/admin' || path === '/teacher-login' || path === '/login' || path.startsWith('/guardian')) stopBgm();
+});
+const soundOn = ref(isBgmOn());
+let unsubscribeBgm = () => {};
+onMounted(() => {
+  unsubscribeBgm = subscribeBgm(value => { soundOn.value = value; });
+});
+onUnmounted(() => unsubscribeBgm());
+async function onToggleSound() {
+  soundOn.value = await toggleBgm();
+}
 const appVersion = import.meta.env.VITE_APP_VERSION || __APP_PACKAGE_VERSION__ || "local";
-const buildTime = import.meta.env.VITE_BUILD_TIME || "dev";
-const buildTitle = `咕哝 build ${appVersion} / ${buildTime}`;
-
-console.info('[咕哝] build', { version: appVersion, time: buildTime });
+const buildTime = import.meta.env.VITE_BUILD_TIME || "";
+const buildTitle = `咕哝 ${appVersion}`;
+console.info('[咕哝] build', { version: appVersion, buildTime });
 </script>
 
 <style scoped>
@@ -68,7 +94,11 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
 /* 管理后台使用全宽 */
 .admin-full {
   max-width: 100% !important;
+  padding-bottom: 0;
   box-shadow: none !important;
+}
+.admin-full .page-content {
+  padding: 0;
 }
 .login-full {
   max-width: 100% !important;
@@ -79,7 +109,36 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   max-width: 100% !important;
   padding-bottom: 0;
   box-shadow: none !important;
-  background: #f3f6f4;
+  background: #F7F3E8;
+}
+/* 学生子页：全宽容器，页面自身居中内容；底栏与内容同宽 */
+.trend-full,
+.profile-full {
+  max-width: 100% !important;
+  box-shadow: none !important;
+}
+/* 学生子页容器跟随昼夜底色，避免内容下方露出浅色底 */
+.chat-full[data-part],
+.trend-full[data-part],
+.profile-full[data-part] {
+  background: #f5ecdc;
+}
+.chat-full[data-part="evening"],
+.trend-full[data-part="evening"],
+.profile-full[data-part="evening"] {
+  background: #3a2c24;
+}
+.chat-full[data-part="night"],
+.trend-full[data-part="night"],
+.profile-full[data-part="night"] {
+  background: #241c17;
+}
+.trend-full .page-content,
+.profile-full .page-content {
+  padding: 0;
+}
+.chat-full .page-content {
+  padding: 0;
 }
 .guardian-full .page-content {
   padding: 0;
@@ -92,10 +151,10 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   padding: 0;
 }
 .app-container.room-full {
-  height: 100dvh;
+  height: auto;
   min-height: 100dvh;
   padding-bottom: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .page-content {
   padding: 16px;
@@ -116,42 +175,71 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   width: 100%;
   max-width: 100%;
   display: flex;
-  justify-content: space-around;
-  align-items: center;
-  height: 60px;
-  background: var(--card);
-  border-top: 1px solid var(--border);
+  align-items: stretch;
+  gap: 4px;
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding: 4px 8px env(safe-area-inset-bottom);
+  background: rgba(30, 23, 18, .96);
+  border-top: 1px solid rgba(227, 194, 125, .16);
   z-index: 100;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 -10px 26px rgba(18, 12, 8, .28);
 }
-@media (min-width: 768px) {
-  .bottom-nav {
-    max-width: 480px;
-  }
-  .room-full .bottom-nav,
-  .chat-full .bottom-nav {
-    max-width: 100%;
-    left: 0;
-    transform: none;
-  }
-}
-.bottom-nav a {
+.bottom-nav .nav-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-decoration: none;
-  color: var(--text-secondary);
-  font-size: 12px;
+  justify-content: center;
+  gap: 2px;
   flex: 1;
-  padding: 6px 0;
-  transition: color 0.2s;
-}
-.bottom-nav a.active {
-  color: var(--primary);
+  min-width: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(241, 230, 210, .58);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--m-dur) var(--m-ease), background var(--m-dur) var(--m-ease);
 }
 .nav-icon {
-  font-size: 22px;
-  margin-bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 26px;
+  border-radius: 999px;
+  transition: background var(--m-dur) var(--m-ease), transform var(--m-dur) var(--m-ease);
+}
+.bottom-nav .nav-item.active { color: #f0d29a; font-weight: 600; }
+.bottom-nav .nav-item.active .nav-icon { background: rgba(227, 194, 125, .16); }
+.bottom-nav .nav-item:active .nav-icon { transform: scale(.92); }
+@media (min-width: 768px) {
+  .bottom-nav {
+    bottom: 16px;
+    width: min(520px, calc(100% - 48px));
+    max-width: 520px;
+    height: 56px;
+    padding: 5px;
+    border: 1px solid rgba(227, 194, 125, .2);
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(18, 12, 8, .38), inset 0 1px 0 rgba(255, 240, 210, .08);
+  }
+  .chat-full .bottom-nav {
+    width: min(760px, calc(100% - 24px));
+    max-width: 760px;
+  }
+  .bottom-nav .nav-item {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 11.5px;
+    letter-spacing: .02em;
+  }
+  .bottom-nav .nav-item:hover { background: rgba(227, 194, 125, .08); color: rgba(241, 230, 210, .82); }
+  .bottom-nav .nav-item.active { background: rgba(227, 194, 125, .13); color: #f0d29a; }
+  .nav-icon { width: auto; height: auto; }
+  .bottom-nav .nav-item.active .nav-icon { background: transparent; }
 }
 .build-badge {
   position: fixed;
@@ -171,15 +259,81 @@ console.info('[咕哝] build', { version: appVersion, time: buildTime });
   bottom: 8px;
 }
 @media (max-width: 760px) {
+  /* 窄屏底栏可见时，版本角标抬到导航上方，避免压住“我的” */
+  .build-badge {
+    right: 8px;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+  }
   .room-full .build-badge {
     right: 8px;
     bottom: calc(96px + env(safe-area-inset-bottom));
   }
+}
+.login-full .build-badge {
+  display: none;
 }
 .guardian-full .build-badge {
   display: none;
 }
 .admin-full .build-badge {
   display: none;
+}
+/* 学生端把版本号收进房间页脚，避免角标压住底栏和内容 */
+.room-full .build-badge,
+.chat-full .build-badge,
+.trend-full .build-badge,
+.profile-full .build-badge {
+  display: none;
+}
+
+/* v5.1.0-alpha.41 页面切换淡出淡入。
+   Transition 的直接子节点是带 :key="route.path" 的包裹层 —— 只有 key 变化时
+   out-in 才会真正排序；router-view 自身 vnode 类型不变，直接包裹时不生效。 */
+.page-enter-active { transition: opacity 220ms var(--m-ease-soft), transform 220ms var(--m-ease-soft); }
+.page-leave-active { transition: opacity 140ms ease; }
+.page-enter-from { opacity: 0; transform: translateY(8px) scale(.988); }
+.page-leave-to { opacity: 0; }
+
+/* 像素皮肤 3.0 · 学生底栏 */
+.bottom-nav {
+  border-top: 2px solid rgba(227, 194, 125, .24);
+  box-shadow: 0 -4px 0 rgba(18, 12, 8, .18);
+}
+.bottom-nav .nav-item {
+  border-radius: 4px;
+  transition: color 160ms steps(2, end), background 160ms steps(2, end), transform 160ms steps(2, end);
+}
+.bottom-nav .nav-item:hover { transform: translate(-1px, -1px); }
+.bottom-nav .nav-item:active { transform: translate(2px, 2px); }
+/* 活跃项：底部细色条 + 图标轻微放大，与教师端侧栏活跃态同一套反馈 */
+.bottom-nav .nav-item.active { box-shadow: inset 0 -2px 0 rgba(240, 210, 154, .85); }
+.bottom-nav .nav-item.active .nav-icon { transform: scale(1.12); }
+.bottom-nav .nav-item.active:active .nav-icon { transform: scale(1); }
+.nav-icon {
+  width: 38px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(241, 230, 210, .06);
+}
+.bottom-nav .nav-item.active { color: #f0d29a; }
+.bottom-nav .nav-label {
+  font-family: var(--px-font);
+  font-size: 12px;
+  letter-spacing: .02em;
+  line-height: 1.2;
+}
+@media (min-width: 768px) {
+  .bottom-nav {
+    border: 2px solid rgba(227, 194, 125, .22);
+    border-radius: 6px;
+    padding: 4px;
+  }
+  .nav-icon { width: 24px; height: 24px; background: transparent; }
+  .bottom-nav .nav-item { border-radius: 4px; }
+  .bottom-nav .nav-item.active .nav-icon { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 </style>

@@ -7,7 +7,7 @@ const chatApi = fs.readFileSync(new URL('../../backend/api/chat.py', import.meta
 
 test('student support drawer appears only after confirmed conversation completion', () => {
   assert.match(room, /student-support-drawer/)
-  assert.match(room, /我听到的是——/)
+  assert.match(room, /我听到的是/)
   assert.match(room, /结束本次倾诉/)
   assert.match(room, /showEndConfirmation/)
   assert.match(room, /completeConversation/)

@@ -30,4 +30,8 @@ export function submitGuardianFollowUp(id, payload) {
   return instance.post(`/follow-ups/${id}/responses`, payload)
 }
 
+export function simulateGuardianFollowUp(id) {
+  return instance.post(`/follow-ups/${id}/simulate-due`)
+}
+
 export default instance

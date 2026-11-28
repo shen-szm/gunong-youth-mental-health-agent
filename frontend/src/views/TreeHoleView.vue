@@ -9,8 +9,8 @@
     </div>
 
     <div class="treehole-intro">
-      <p>🌿 这里用于分享去标识化的感受</p>
-      <p>请不要填写姓名、学校、联系方式或精确地址</p>
+      <p>🌿 这里是安全的匿名空间</p>
+      <p>没有人知道你是谁，但有人懂你的感受</p>
       <!-- 每日一句温暖 -->
       <div class="daily-warmth" v-if="dailyQuote">
         <span class="dw-icon">💡</span>
@@ -92,7 +92,14 @@
           <button @click="companionActive = false">← 返回树洞</button>
           <span>{{ companionName }}</span>
         </div>
-        <div class="cc-messages" ref="chatMessages">
+        <p class="cc-boundary">这是 AI 支持工具，不是真人，也不能替代可信成年人或专业人员。</p>
+        <section v-if="companionUrgent" ref="companionUrgentPanel" class="cc-urgent" role="alert" tabindex="-1">
+          <strong>普通陪伴已停止，请先连接真人支持</strong>
+          <p>{{ companionUrgentMessage }}</p>
+          <div><a href="tel:12356">拨打 12356</a><a href="tel:110">拨打 110</a><a href="tel:120">拨打 120</a></div>
+          <button type="button" @click="returnToSafetyChat">打开安全倾诉入口</button>
+        </section>
+        <div class="cc-messages" ref="chatMessages" role="log" aria-live="polite" :aria-busy="companionTyping">
           <div v-for="(msg, i) in companionMsgs" :key="i" class="cc-msg" :class="msg.role">
             <div class="ccm-bubble">{{ msg.content }}</div>
           </div>
@@ -100,8 +107,8 @@
             <div class="ccm-bubble typing">正在输入...</div>
           </div>
         </div>
-        <div class="cc-input">
-          <input v-model="companionInput" placeholder="说点什么..." @keyup.enter="sendCompanionMsg" />
+        <div v-if="!companionUrgent" class="cc-input">
+          <input v-model="companionInput" aria-label="输入陪伴对话内容" placeholder="说点什么..." @keyup.enter="sendCompanionMsg" />
           <button @click="sendCompanionMsg" :disabled="!companionInput.trim() || companionTyping">发送</button>
         </div>
       </div>
@@ -149,7 +156,8 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { treeholeApi } from '../api/treehole'
-import { sendMessage } from '../api/chat'
+import { getCompanionSafetyStatus, handoffCompanionToChat, sendCompanionMessage } from '../api/companion'
+import { isOfflineCompanionUrgent } from '../utils/companionSafety'
 import axios from 'axios'
 
 const API = import.meta.env.VITE_API_BASE || ''
@@ -157,7 +165,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const props = defineProps({ inline: { type: Boolean, default: false } })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'open-chat'])
 
 const posts = ref([])
 const newContent = ref('')
@@ -195,6 +203,10 @@ const companionId = ref('')
 const companionMsgs = ref([])
 const companionInput = ref('')
 const companionTyping = ref(false)
+const companionUrgent = ref(false)
+const companionUrgentMessage = ref('')
+const companionUrgentPanel = ref(null)
+const companionSafetyFragments = ref([])
 const chatMessages = ref(null)
 
 const moodOptions = [
@@ -351,123 +363,123 @@ const COMPANION_PROFILES = {
   xiaoqing: {
     id: 'xiaoqing',
     avatar: '🌸',
-    name: '温柔倾听模式（AI）',
-    shortName: '倾听 AI',
-    desc: '这是温柔倾听 AI 模式，不是真人或心理医生。它帮助你描述感受、整理当下需要，不提供现实照护或绝对承诺。',
-    greeting: '你好，我是温柔倾听 AI 模式，不是真人或心理医生。你可以从此刻最想说的一件事开始；请不要发送姓名、学校、电话等身份信息。',
+    name: '温柔学姐「小晴」',
+    shortName: '小晴',
+    desc: '你是一个温柔体贴的学姐，名字叫「小晴」。你说话轻柔、善解人意，会用"学弟"或"学妹"称呼对方。你喜欢用温暖的比喻安慰人...',
+    greeting: '学弟/学妹你好呀，欢迎来到这里。我刚刚在窗边晒着太阳看书，看到你来了真是开心呢。要不要一起坐下来聊聊天？今天的阳光很温柔，就像你一样让人感到温暖呢。',
     replies: {
       default: [
-        '慢慢说，AI 倾听模式会帮助你整理。',
+        '慢慢说，学姐在听呢。',
         '不管发生什么，你都不是一个人哦。',
         '有时候情绪就像天气，阴天总会过去的。',
-        '听起来这并不容易，我们可以先看清当下最需要什么。',
+        '学姐知道你不容易，但请相信，一切都会好起来的。',
         '来，深呼吸，让心慢慢静下来。',
       ],
       sad: [
-        '我注意到你提到了难过。可以说说发生了什么吗？',
-        '流泪并不等于软弱。如果愿意，可以用一两个词描述此刻的感受。',
+        '学弟/学妹，看到你难过，学姐的心也揪起来了。来，深呼吸一下，告诉学姐发生了什么好吗？',
+        '眼泪不是软弱的表现，它是你心里的小雨，下完了就会天晴的。学姐在这里陪着你。',
         '每个人的心里都有一片柔软的草地，偶尔被踩痛了也没关系，阳光还是会照进来的。',
-        '难过时可以先短暂休息，并考虑联系一位你信任的成年人。',
+        '难过的时候，允许自己像小猫一样蜷起来休息一会儿，学姐给你守着。',
         '你知道吗？你现在经历的难过，未来都会变成你温柔的力量。',
       ],
       happy: [
-        '听到你开心真好。如果愿意，可以把这件小事记下来，留作以后回看。',
-        '如果愿意，可以记下这件开心的小事。',
-        '听到这件事让你高兴，真好。',
-        '可以想想是什么让这一刻变得特别。',
+        '哇，听到你开心学姐也忍不住想笑呢！来，跟学姐分享分享，让快乐翻倍~',
+        '这就是青春该有的样子呀！学弟/学妹，记住这种闪闪发亮的感觉。',
+        '看到你高兴，学姐觉得今天的阳光都更暖了一点呢。',
+        '快乐是会传染的，你一笑，学姐这边也晴了！',
         '真好呀，愿你的每一天都有这样的小确幸。',
       ],
       anxious: [
         '焦虑就像心里住了一只乱飞的小鸟，我们先试着让它慢慢安静下来，好吗？',
-        '压力太大时，允许自己停下来短暂休息。',
-        '可以先做三次缓慢呼吸；如果不舒服就停止。',
+        '学弟/学妹，压力太大的时候，允许自己停下来歇一歇，不是放弃，是为了走得更远。',
+        '很多时候我们担心的未来，其实都不会发生。来，跟学姐一起深呼吸三下...',
         '你已经在努力了，这本身就值得骄傲。剩下的，交给时间吧。',
         '焦虑的时候，试着把注意力放在当下——你能听到的声音、能闻到的味道。',
       ],
       tired: [
-        '累了可以先休息，并留意疲惫是否持续影响生活。',
+        '累了就好好休息吧，学姐给你盖一张想象中的小毯子，暖暖地睡一觉。',
         '身体在提醒你要爱自己了。今晚早点休息，明天又是新的一天。',
         '偶尔什么都不想做也没关系，躺平也是一种充电方式呢。',
-        '你不需要一直表现得坚强，也可以向可信成年人求助。',
-        '如果持续睡不好，请告诉可信成年人并考虑专业支持。',
+        '你不需要一直坚强，在学姐这里，你可以卸下所有防备。',
+        '睡个好觉吧，梦里学姐给你准备了甜甜的糖果。',
       ],
       love: [
-        '如果愿意，可以说说这段关系带给你的感受。',
+        '哎呀，是不是心里住进了一只小鹿呀？来，悄悄告诉学姐，是什么样的人让你心动了？',
         '喜欢一个人的感觉，就像春天第一朵花开，既害羞又美好。不管结果如何，这份心意本身就很珍贵。',
-        '关系中的感受值得被看见，同时也要留意彼此尊重和边界。',
+        '学弟/学妹，爱情最美好的部分不是结果，而是那颗愿意为一个人跳动的心。',
         '暗恋也好，明恋也罢，这都是青春里最温柔的篇章。',
         '如果喜欢一个人让你变得更好，那他就是对的人。',
       ],
       hello: [
-        '你好，今天过得怎么样？',
-        '你好，想从哪件事开始说起？',
-        '欢迎使用温柔倾听 AI 模式。',
-        '你好，可以按自己的节奏表达。',
+        '你好呀学弟/学妹！今天过得怎么样？',
+        '嗨~ 学姐一直在呢，想聊点什么？',
+        '欢迎欢迎！学姐刚泡了一杯热茶，一起聊聊天吧。',
+        '来啦？快坐下，学姐给你留了好位置。',
       ],
     }
   },
   aze: {
     id: 'aze',
     avatar: '☀️',
-    name: '行动陪伴模式（AI）',
-    shortName: '行动 AI',
-    desc: '这是行动陪伴 AI 模式，不是真人或心理医生。它帮助你把困扰拆成低负担的小步骤，不代替现实支持。',
-    greeting: '你好，我是行动陪伴 AI 模式，不是真人或心理医生。你可以说说眼前最想处理的一件小事，我们一起拆成一个可执行步骤。',
+    name: '邻家哥哥「阿泽」',
+    shortName: '阿泽',
+    desc: '你是一个阳光开朗的邻家大哥哥，名字叫「阿泽」。你说话豪爽但细心，经常用"嘿"、"没事的"开头。你擅长用行动建议鼓励人...',
+    greeting: '嘿！来啦？今天怎么样，有没有遇到什么好玩的事儿？别站着，过来坐，哥哥给你倒杯水。不管开心还是不开心，跟哥说说。',
     replies: {
       default: [
-        '我们可以先找一个现在能做的小步骤。',
-        '可以先缓慢呼吸，再描述具体情况。',
-        '先稳住节奏，不必一次解决所有事情。',
-        '可以继续说，AI 会帮你整理重点。',
-        '如果事情超出你能独自处理的范围，请联系可信成年人。',
+        '没事的，有哥在呢。',
+        '来，深呼吸，跟哥说说具体情况。',
+        '兄弟/妹子，稳住，我们能赢。',
+        '哥听着呢，继续说。',
+        '放心，天塌下来有哥顶着。',
       ],
       sad: [
-        '遇到低谷并不少见，但你的具体感受仍值得认真对待。',
-        '想哭也可以；等你准备好时，我们再看看下一步。',
-        '如果难受持续或加重，请联系可信成年人，不要独自承担。',
-        '难受时可以先照顾喝水、进食和休息等基本需要。',
-        '可以允许情绪存在，再决定一个很小的下一步。',
+        '嘿，没事的。谁还没个低谷的时候？哥也有过，挺过来了就一切都好。来，跟我说说。',
+        '哭吧，哭完就好了。哥给你递张纸巾，哭完了咱们想办法解决。',
+        '心里难受就跟哥说，别一个人扛着。兄弟/妹子，你不是一个人在战斗。',
+        '难受了？走，哥带你去吃好吃的，没有什么是一顿火锅解决不了的。',
+        '跌倒了就爬起来，哥扶你。痛痛快快哭一场，然后继续往前走。',
       ],
       happy: [
-        '这份进展来之不易，可以为自己做一个小小庆祝。',
-        '看到你有进展，真好。',
-        '可以记录是什么帮助了你，以后或许还能复用。',
-        '高兴可以有很多表达方式，选择让你舒服的就好。',
-        '这份进展值得被记录下来。',
+        '哈哈哈哈可以啊！哥就知道你可以的！今晚加鸡腿！',
+        '看到你得瑟的样子哥就放心了！继续保持这劲儿！',
+        '可以可以，这种状态就对了！走，哥请你喝奶茶庆祝一下！',
+        '高兴就得大声笑！哥也跟着乐！',
+        '这就是正能量！哥给你点个大大的赞！',
       ],
       anxious: [
-        '可以把担心分成“现在能做的”和“暂时无法控制的”。',
-        '压力大时可以选择适量活动，但不必期待一次就解决全部困扰。',
+        '嘿，焦虑个啥？兵来将挡水来土掩，哥帮你分析分析。',
+        '压力太大了？走，哥带你去运动运动，出一身汗就什么都好了。',
         '别想太多，很多时候事情没你想的那么糟。先把眼前的事做好，其他的交给时间。',
-        '焦虑不等于想太多；可以先识别触发它的具体情境。',
-        '可以描述最担心的部分，我们再找一个小步骤。',
+        '哥告诉你，很多焦虑都是自己想出来的。干就完了！',
+        '担心什么就跟哥说，哥帮你一起想办法。两个人扛总比一个人强。',
       ],
       tired: [
-        '累了可以先休息，再选择一个低负担的恢复方式。',
-        '可以先照顾睡眠、进食和休息等基本需要。',
-        '如果最近经常熬夜，可以尝试把睡前时间提前一点。',
-        '别硬撑；如果疲惫明显影响生活，请告诉可信成年人。',
-        '疲惫不一定代表失败，可以先照顾基本需要。',
+        '累了就歇着，谁规定一定要拼命的？来，哥给你推荐个放松的方式。',
+        '身体是自己的，该睡就睡，该吃就吃。听哥的，先好好休息。',
+        '是不是最近熬夜太多了？听哥的，今晚11点前睡觉，明天哥保证你精神百倍。',
+        '别硬撑了，去睡吧。哥帮你看着，没人打扰你。',
+        '累说明你在上坡，坚持住，哥陪你。',
       ],
       love: [
-        '如果愿意，可以说说这段关系让你困惑的地方。',
-        '表达感受前可以先考虑安全、边界和自己能承受的结果。',
-        '关系中真诚很重要，彼此同意、尊重和边界也同样重要。',
-        '是否表达由你决定，不需要因为 AI 建议而冒险。',
-        '健康的关系通常包含相互尊重，也允许双方保留自己的生活。',
+        '哦豁？有情况？来来来，跟哥说说，哥帮你参谋参谋。',
+        '喜欢就去追啊！最坏的结果也就是被拒绝，至少不会后悔。',
+        '感情这事儿哥懂，真诚最重要。你对人家好，人家肯定能感受到的。',
+        '暗恋太苦了，哥支持你勇敢一次！大不了哥请你吃顿好的安慰你。',
+        '记住哥的话，好的感情是两个人一起变好，不是一个人拖着另一个人。',
       ],
       hello: [
         '嘿！在呢在呢，今天怎么样？',
-        '你好，有什么想聊的吗？',
-        '欢迎使用行动陪伴 AI 模式。',
-        '你好，可以从最想处理的一件事开始。',
+        '哟，来啦！有什么想跟哥聊的？',
+        '欢迎欢迎！哥刚运动完，正好想找人聊聊天。',
+        '来啦老弟/老妹！快进来坐。',
       ],
     }
   },
   gunong: {
     id: 'gunong',
     avatar: '🌿',
-    name: '咕哝 AI',
+    name: '咕哝',
     shortName: '咕哝',
     desc: '你是AI情绪支持工具「咕哝」，不是心理医生或真人。你会温和倾听、帮助用户描述感受，并提供低风险的日常调节建议；不诊断、不治疗。',
     greeting: '你好，我是咕哝AI情绪支持工具。你可以在这里整理感受；我不是心理医生，也不能承诺绝对保密。若你可能伤害自己或无法保证安全，请马上联系可信成年人并拨打12356、110或120。今天想从哪件事说起？',
@@ -483,7 +495,7 @@ const COMPANION_PROFILES = {
         '我注意到你现在的情绪比较低落。心理学上有一种方法叫"情绪命名"——试着用更具体的词描述你的感受，比如"失落"、"孤独"或"无助"。这能帮助你更好地理解自己。你愿意试试吗？',
         '悲伤是一种信号，它在告诉我们某些需求没有被满足。你能告诉我，最近有什么事情让你感到特别难过吗？',
         '当痛苦来临时，允许自己感受它是一种自我关怀。同时，你也可以尝试"5-4-3-2-1" grounding 技巧：说出周围5样能看到的东西、4样能听到的、3样能触摸到的、2样能闻到的、1样能尝到的。这能帮你回到当下。',
-        '如果你愿意，可以用几个词写下此刻的感受；写不出来也没关系。',
+        '研究表明，将情绪写下来能显著降低压力水平。你愿意试着把此刻的感受写下来吗？哪怕只是几个词。',
         '你现在不需要马上好起来。允许自己慢慢来， healing 是一个过程，不是一个开关。',
       ],
       happy: [
@@ -491,13 +503,13 @@ const COMPANION_PROFILES = {
         '这种正向体验是一个很好的资源。在心理学中，我们称这为"积极情绪存款"。当未来遇到困难时，你可以回想这一刻来给自己力量。',
         '真好！积极情绪不仅能让你当下感到愉悦，还能拓展你的思维视野。趁现在感觉好，要不要考虑做一件你一直想做但还没开始的事？',
         '你现在的快乐状态是一个很好的"锚点"。建议你记录下此刻的感受和原因，未来情绪低落时可以回来看看。',
-        '如果感觉合适，你也可以把这件开心的小事分享给信任的人。',
+        '快乐会扩散。你有没有想过把这份好心情分享给身边的人？研究表明，分享快乐能让幸福感翻倍。',
       ],
       anxious: [
         '焦虑通常源于对未来的不确定感。一个有效的应对方法是"担忧时间"（Worry Time）技巧：每天设定15分钟专门用来担忧，其他时间当焦虑出现时，告诉自己"我会留到担忧时间再想"。这能帮助你重获掌控感。',
         '你现在的焦虑是可以理解的。让我们做一个简单的呼吸练习：吸气4秒，屏息4秒，呼气6秒。重复3次。你愿意和我一起试试吗？',
-        '当脑中反复出现“我应该做得更好”时，可以试着换成“我希望做好，也允许自己一步一步来”。',
-        '可以把担心分成“现在能做的”和“暂时不能控制的”，先选择一个很小、可完成的动作。',
+        '压力往往来自于"应该"思维——"我应该做得更好"。试着把这种想法替换成"我希望做得更好，但我已经尽力了"。这种自我同情的态度能显著降低焦虑水平。',
+        '认知行为疗法中有一个技巧叫"可能性评估"：把你担心的事情写下来，然后客观评估它发生的概率（0-100%），以及即使发生了你能做什么。你会发现，很多担忧被高估了。',
         '焦虑时，我们的身体往往处于"战斗或逃跑"模式。试着把手放在胸口，对自己说："我现在是安全的，我足够好，我值得被善待。"',
       ],
       tired: [
@@ -505,18 +517,18 @@ const COMPANION_PROFILES = {
         '睡眠问题常常和心理压力有关。你可以试试"渐进式肌肉放松法"：从脚趾开始，先紧绷肌肉5秒，然后放松10秒，逐步向上移动到全身。',
         '疲劳是身体在发出休息的信号。自我关怀不是奢侈品，而是必需品。今晚能不能给自己一个小小的"关机仪式"，比如泡个热水澡或听一段轻音乐？',
         '当你感到"什么都不想做"时，试着把"应该做"换成"选择做"。哪怕只选择做一件极小的事，比如喝一杯水，也是在照顾自己的信号。',
-        '身心疲惫时可以短暂休息；如果疲惫持续或明显影响生活，请告诉可信成年人并寻求专业帮助。',
+        '身心疲惫时，"什么都不做"也是一种治疗。允许自己暂停，不是放弃，而是为了更好地出发。',
       ],
       love: [
         '感情中的困惑是很常见的。我想请你做一个"价值观澄清"练习：写出你在亲密关系中最看重的3个品质。这能帮助你更清楚地了解自己的需求。',
         '喜欢一个人时的忐忑不安，其实是大脑中的多巴胺系统在运作。这种感受虽然让人焦虑，但也是人类最美好体验的一部分。你现在的感受是什么？',
-        '在关系中，尊重彼此边界和保持自己的生活都很重要。你觉得这段关系让你感到安全和被尊重吗？',
+        '在关系中，最重要的是保持自我。心理学家鲍尔比说，安全的依恋关系让你既能靠近他人，又能保持独立。你觉得在这段感情中，你还能做自己吗？',
         '恋爱中的情绪波动是正常的。试着区分"事实"和"感受"：对方没回消息是事实，"ta不爱我了"是你的解读。事实本身往往没有那么可怕。',
         '无论这段感情的结果如何，你都在学习如何爱与被爱。这种能力会伴随你一生，是最宝贵的心理财富之一。',
       ],
       hello: [
         '你好，我是咕哝。今天你想探讨什么话题？',
-        '你好，我是 AI 情绪支持工具。请不要发送可识别身份的信息；如果你无法保证当下安全，请立即联系可信成年人并拨打12356、110或120。',
+        '你好，我在这里。请放心，我们的对话是安全和私密的。',
         '欢迎。能告诉我，是什么让你今天来到这里吗？',
         '你好，感谢你的信任。我们可以从任何你想聊的话题开始。',
       ],
@@ -548,41 +560,44 @@ const POSITIVE_BOTTLES = [
   { mood: '被治愈了', content: '在图书馆坐了一整天，虽然累但很充实。回家的路上买了最爱的奶茶，奖励自己。' },
 ]
 
-const DEFAULT_COMPANIONS = Object.values(COMPANION_PROFILES).map(p => ({
+const DEFAULT_COMPANIONS = [COMPANION_PROFILES.gunong].map(p => ({
   id: p.id, avatar: p.avatar, name: p.name, desc: p.desc
 }))
 
-async function loadCompanions() {
-  try {
-    const res = await axios.get(`${API}/api/companion/list`)
-    companions.value = res.data?.companions || []
-  } catch (e) {
-    companions.value = DEFAULT_COMPANIONS
-  }
+function loadCompanions() {
+  companions.value = DEFAULT_COMPANIONS
 }
 
 async function startCompanion(c) {
   showCompanions.value = false
   companionId.value = c.id
   companionName.value = c.name
-  companionMsgs.value = []
+  if (!companionUrgent.value) companionMsgs.value = []
   companionActive.value = true
+
+  try {
+    const status = await getCompanionSafetyStatus()
+    if (status.data?.urgent) {
+      companionUrgent.value = true
+      companionUrgentMessage.value = status.data.message
+      companionMsgs.value = [{ role: 'assistant', content: status.data.message }]
+      await nextTick()
+      companionUrgentPanel.value?.focus()
+      return
+    }
+  } catch {}
 
   const profile = COMPANION_PROFILES[c.id]
   const greeting = profile?.greeting || `你好呀！我是${c.name}，有什么想和我聊的吗？`
 
-  try {
-    const res = await axios.post(`${API}/api/companion/start`, null, {
-      params: { user_id: Number(userStore.userId), character_id: c.id }
-    })
-    if (res.data?.greeting) {
-      companionMsgs.value.push({ role: 'assistant', content: res.data.greeting })
-    } else {
-      companionMsgs.value.push({ role: 'assistant', content: greeting })
-    }
-  } catch (e) {
-    companionMsgs.value.push({ role: 'assistant', content: greeting })
+  if (!companionUrgent.value) companionMsgs.value.push({ role: 'assistant', content: greeting })
+}
+
+function safeCompanionFailureReply(isUrgent) {
+  if (isUrgent) {
+    return '这些话可能表示你现在无法保证安全。请先不要独处，马上联系可信成年人并拨打12356；如果已采取行动或危险迫近，请立即拨打110或120。'
   }
+  return '安全检查暂时没有完成，所以这里不会继续分析这句话。你可以稍后重试，或回到房间使用正式倾诉入口。'
 }
 
 async function sendCompanionMsg() {
@@ -590,6 +605,7 @@ async function sendCompanionMsg() {
 
   const content = companionInput.value
   companionMsgs.value.push({ role: 'user', content })
+  companionSafetyFragments.value = [...companionSafetyFragments.value, content].slice(-3)
   companionInput.value = ''
   companionTyping.value = true
 
@@ -599,16 +615,45 @@ async function sendCompanionMsg() {
   }
 
   try {
-    const res = await sendMessage(Number(userStore.userId), content)
-    companionMsgs.value.push({ role: 'assistant', content: res.data?.reply || '安全支持服务暂时没有返回内容，请稍后重试。' })
+    const res = await sendCompanionMessage(content)
+    if (!res.data?.reply) throw new Error('invalid companion response')
+    companionMsgs.value.push({ role: 'assistant', content: res.data.reply })
+    if (res.data.risk_level === 'urgent') {
+      companionUrgent.value = true
+      companionUrgentMessage.value = res.data.reply
+      await nextTick()
+      companionUrgentPanel.value?.focus()
+    }
   } catch (e) {
-    companionMsgs.value.push({ role: 'assistant', content: '暂时无法连接安全支持服务。若你可能伤害自己或他人，或无法保证当下安全，请立即联系身边可信成年人，并拨打12356、110或120；否则请稍后重试。' })
+    const offlineUrgent = companionSafetyFragments.value.some(isOfflineCompanionUrgent)
+      || isOfflineCompanionUrgent(companionSafetyFragments.value.slice(-2).join(''))
+      || isOfflineCompanionUrgent(companionSafetyFragments.value.join(''))
+    const fallback = safeCompanionFailureReply(offlineUrgent)
+    companionMsgs.value.push({ role: 'assistant', content: fallback })
+    if (offlineUrgent) {
+      companionUrgent.value = true
+      companionUrgentMessage.value = fallback
+      await nextTick()
+      companionUrgentPanel.value?.focus()
+    }
   }
 
   companionTyping.value = false
   await nextTick()
   if (chatMessages.value) {
     chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+  }
+}
+
+async function returnToSafetyChat() {
+  try {
+    await handoffCompanionToChat()
+    companionActive.value = false
+    emit('open-chat')
+  } catch {
+    companionUrgentMessage.value = `${companionUrgentMessage.value} 安全倾诉入口暂时未连接，请先拨打12356；危险迫近时拨打110或120。`.trim()
+    await nextTick()
+    companionUrgentPanel.value?.focus()
   }
 }
 
@@ -648,8 +693,8 @@ function openDriftBottle() {
   padding: 16px 20px; padding-top: max(16px, env(safe-area-inset-top));
   background: white; border-bottom: 1px solid #eee;
 }
-.treehole-header h1 { font-size: 18px; font-weight: 600; color: #3D6B5E; margin: 0; }
-.back-btn { background: none; border: none; font-size: 20px; color: #5B8C7E; cursor: pointer; }
+.treehole-header h1 { font-size: 18px; font-weight: 600; color: #3D8660; margin: 0; }
+.back-btn { background: none; border: none; font-size: 20px; color: #55A87C; cursor: pointer; }
 
 .treehole-intro { padding: 20px; text-align: center; }
 .treehole-intro p { margin: 4px 0; font-size: 13px; color: #7A8B7E; }
@@ -659,11 +704,11 @@ function openDriftBottle() {
 .daily-warmth {
   display: flex; align-items: center; justify-content: center;
   gap: 6px; margin-top: 10px; padding: 8px 14px;
-  background: rgba(91,140,126,0.08); border-radius: 20px;
+  background: rgba(61,134,96,0.08); border-radius: 20px;
   max-width: 90%; margin-left: auto; margin-right: auto;
 }
 .dw-icon { font-size: 14px; }
-.dw-text { font-size: 12px; color: #5B8C7E; font-style: italic; }
+.dw-text { font-size: 12px; color: #55A87C; font-style: italic; }
 
 /* 入口行 */
 .entry-row { display: flex; gap: 10px; margin: 0 16px 16px; }
@@ -679,9 +724,9 @@ function openDriftBottle() {
 .companion-entry:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 .ce-left { display: flex; align-items: center; gap: 12px; }
 .ce-emoji { font-size: 28px; }
-.ce-title { font-size: 14px; font-weight: 600; color: #3D6B5E; }
+.ce-title { font-size: 14px; font-weight: 600; color: #3D8660; }
 .ce-desc { font-size: 12px; color: #888; margin-top: 2px; }
-.ce-arrow { font-size: 18px; color: #5B8C7E; }
+.ce-arrow { font-size: 18px; color: #55A87C; }
 
 /* 陪伴选择弹窗 */
 .companion-modal {
@@ -693,7 +738,7 @@ function openDriftBottle() {
   padding: 20px; max-height: 70vh;
 }
 .cp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.cp-header h3 { font-size: 16px; color: #3D6B5E; margin: 0; }
+.cp-header h3 { font-size: 16px; color: #3D8660; margin: 0; }
 .cp-close { background: none; border: none; font-size: 18px; color: #999; cursor: pointer; }
 .cp-item {
   display: flex; align-items: center; gap: 14px; padding: 14px;
@@ -704,17 +749,17 @@ function openDriftBottle() {
 .cpi-info { flex: 1; }
 .cpi-name { font-size: 15px; font-weight: 600; color: #333; }
 .cpi-desc { font-size: 12px; color: #888; margin-top: 4px; }
-.cpi-go { color: #5B8C7E; font-size: 16px; }
+.cpi-go { color: #55A87C; font-size: 16px; }
 
 /* 漂流瓶弹窗 */
 .drift-panel { text-align: center; }
 .drift-content { padding: 20px 10px; }
-.drift-mood { font-size: 13px; color: #5B8C7E; margin-bottom: 12px; }
+.drift-mood { font-size: 13px; color: #55A87C; margin-bottom: 12px; }
 .drift-text { font-size: 16px; color: #333; line-height: 1.8; font-style: italic; margin: 0 0 16px; }
 .drift-hint { font-size: 11px; color: #bbb; }
 .drift-again {
   width: 100%; padding: 12px; border-radius: 12px; border: none;
-  background: #5B8C7E; color: white; font-size: 14px; cursor: pointer;
+  background: #55A87C; color: white; font-size: 14px; cursor: pointer;
   margin-top: 8px;
 }
 
@@ -728,8 +773,14 @@ function openDriftBottle() {
   background: white; border-bottom: 1px solid #eee;
   display: flex; align-items: center; gap: 16px;
 }
-.cc-header button { background: none; border: none; font-size: 14px; color: #5B8C7E; cursor: pointer; }
-.cc-header span { font-size: 16px; font-weight: 600; color: #3D6B5E; }
+.cc-header button { background: none; border: none; font-size: 14px; color: #55A87C; cursor: pointer; }
+.cc-header span { font-size: 16px; font-weight: 600; color: #3D8660; }
+.cc-boundary { margin: 0; padding: 10px 16px; background: #eef7f3; color: #36594f; font-size: 13px; line-height: 1.5; }
+.cc-urgent { margin: 12px 16px 0; padding: 14px; border: 2px solid #9f493f; border-radius: 12px; background: #fff2ef; color: #652b25; }
+.cc-urgent:focus { outline: 3px solid #f4c66a; outline-offset: 2px; }
+.cc-urgent p { margin: 8px 0; line-height: 1.6; }
+.cc-urgent div { display: flex; flex-wrap: wrap; gap: 8px; }
+.cc-urgent a, .cc-urgent button { min-height: 44px; padding: 10px 14px; border: 1px solid #8b3b34; border-radius: 9px; background: #fff; color: #6a2923; font-weight: 700; text-decoration: none; }
 
 .cc-messages { flex: 1; overflow-y: auto; padding: 16px; }
 .cc-msg { margin-bottom: 12px; display: flex; }
@@ -739,7 +790,7 @@ function openDriftBottle() {
   max-width: 75%; padding: 12px 16px; border-radius: 16px;
   font-size: 14px; line-height: 1.6;
 }
-.cc-msg.user .ccm-bubble { background: #5B8C7E; color: white; border-bottom-right-radius: 4px; }
+.cc-msg.user .ccm-bubble { background: #55A87C; color: white; border-bottom-right-radius: 4px; }
 .cc-msg.assistant .ccm-bubble { background: white; color: #333; border-bottom-left-radius: 4px; }
 .ccm-bubble.typing { color: #999; font-style: italic; }
 
@@ -751,10 +802,10 @@ function openDriftBottle() {
   flex: 1; padding: 10px 14px; border-radius: 20px;
   border: 1px solid #e0e0e0; font-size: 14px; outline: none;
 }
-.cc-input input:focus { border-color: #5B8C7E; }
+.cc-input input:focus { border-color: #55A87C; }
 .cc-input button {
   padding: 10px 18px; border-radius: 20px; border: none;
-  background: #5B8C7E; color: white; font-size: 14px; cursor: pointer;
+  background: #55A87C; color: white; font-size: 14px; cursor: pointer;
 }
 .cc-input button:disabled { background: #ccc; }
 
@@ -764,24 +815,24 @@ function openDriftBottle() {
 /* 自定义滚动条 - 滑块效果 */
 .mood-selector::-webkit-scrollbar { height: 4px; }
 .mood-selector::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 2px; }
-.mood-selector::-webkit-scrollbar-thumb { background: #5B8C7E; border-radius: 2px; }
+.mood-selector::-webkit-scrollbar-thumb { background: #55A87C; border-radius: 2px; }
 .mood-selector::-webkit-scrollbar-thumb:hover { background: #4a7a6e; }
 .mood-btn {
   padding: 8px 14px; border-radius: 20px; border: 1px solid #e8e8e8;
   background: #f8f8f8; font-size: 13px; cursor: pointer; transition: all 0.2s;
   white-space: nowrap; flex-shrink: 0; user-select: none; -webkit-user-select: none;
 }
-.mood-btn.active { background: #5B8C7E; color: white; border-color: #5B8C7E; }
+.mood-btn.active { background: #55A87C; color: white; border-color: #55A87C; }
 
 .input-row { display: flex; gap: 8px; }
 .input-row input {
   flex: 1; padding: 10px 14px; border-radius: 20px;
   border: 1px solid #e0e0e0; font-size: 14px; outline: none;
 }
-.input-row input:focus { border-color: #5B8C7E; }
+.input-row input:focus { border-color: #55A87C; }
 .post-btn {
   padding: 10px 18px; border-radius: 20px; border: none;
-  background: #5B8C7E; color: white; font-size: 14px; font-weight: 500;
+  background: #55A87C; color: white; font-size: 14px; font-weight: 500;
   cursor: pointer; transition: all 0.2s;
 }
 .post-btn:disabled { background: #ccc; }
@@ -803,12 +854,12 @@ function openDriftBottle() {
 .thc-footer { display: flex; justify-content: space-between; align-items: center; }
 .thc-actions { display: flex; align-items: center; gap: 6px; }
 .thc-resonance {
-  background: none; border: none; font-size: 12px; color: #5B8C7E;
+  background: none; border: none; font-size: 12px; color: #55A87C;
   cursor: pointer; padding: 4px 10px; border-radius: 12px; transition: all 0.2s;
 }
-.thc-resonance:hover { background: rgba(91,140,126,0.1); }
+.thc-resonance:hover { background: rgba(61,134,96,0.1); }
 .thc-delete {
-  background: none; border: none; font-size: 12px; color: #D4766A;
+  background: none; border: none; font-size: 12px; color: #CF9AA1;
   cursor: pointer; padding: 4px 10px; border-radius: 12px; transition: all 0.2s;
 }
 .thc-delete:hover { background: rgba(212,118,106,0.1); }
@@ -821,26 +872,26 @@ function openDriftBottle() {
 /* inline 弹窗模式 - 适配深色背景 */
 .treehole-page.inline-mode { background: transparent; padding: 0; min-height: auto; }
 .treehole-page.inline-mode .treehole-intro p { color: rgba(232,226,216,0.6); }
-.treehole-page.inline-mode .daily-warmth { background: rgba(127,179,166,0.1); }
-.treehole-page.inline-mode .dw-text { color: #7FB3A6; }
+.treehole-page.inline-mode .daily-warmth { background: rgba(102,187,141,0.1); }
+.treehole-page.inline-mode .dw-text { color: #8FCBA6; }
 .treehole-page.inline-mode .stats { color: rgba(232,226,216,0.4); }
 .treehole-page.inline-mode .companion-entry { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
 .treehole-page.inline-mode .companion-entry.bottle { background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); }
-.treehole-page.inline-mode .ce-title { color: #7FB3A6; }
+.treehole-page.inline-mode .ce-title { color: #8FCBA6; }
 .treehole-page.inline-mode .ce-desc { color: rgba(232,226,216,0.5); }
 .treehole-page.inline-mode .post-area { background: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .mood-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: rgba(232,226,216,0.7); }
-.treehole-page.inline-mode .mood-btn.active { background: #5B8C7E; color: white; border-color: #5B8C7E; }
+.treehole-page.inline-mode .mood-btn.active { background: #55A87C; color: white; border-color: #55A87C; }
 /* inline 深色滚动条 */
 .treehole-page.inline-mode .mood-selector::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb { background: #7FB3A6; }
-.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb:hover { background: #5B8C7E; }
+.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb { background: #8FCBA6; }
+.treehole-page.inline-mode .mood-selector::-webkit-scrollbar-thumb:hover { background: #55A87C; }
 .treehole-page.inline-mode .input-row input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #E8E2D8; }
 .treehole-page.inline-mode .input-row input::placeholder { color: rgba(232,226,216,0.35); }
 .treehole-page.inline-mode .treehole-card { background: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .thc-content { color: rgba(232,226,216,0.85); }
 .treehole-page.inline-mode .thc-time { color: rgba(232,226,216,0.35); }
-.treehole-page.inline-mode .thc-resonance { color: #7FB3A6; }
+.treehole-page.inline-mode .thc-resonance { color: #8FCBA6; }
 .treehole-page.inline-mode .thc-delete { color: #D4968A; }
 .treehole-page.inline-mode .empty-hint { color: rgba(232,226,216,0.35); }
 
@@ -855,22 +906,108 @@ function openDriftBottle() {
 .treehole-page.inline-mode .cp-item:hover { background: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .cpi-name { color: #E8E2D8; }
 .treehole-page.inline-mode .cpi-desc { color: rgba(232,226,216,0.45); }
-.treehole-page.inline-mode .cpi-go { color: #7FB3A6; }
-.treehole-page.inline-mode .drift-mood { color: #7FB3A6; }
+.treehole-page.inline-mode .cpi-go { color: #8FCBA6; }
+.treehole-page.inline-mode .drift-mood { color: #8FCBA6; }
 .treehole-page.inline-mode .drift-text { color: #E8E2D8; }
 .treehole-page.inline-mode .drift-hint { color: rgba(232,226,216,0.35); }
 
 /* inline 陪伴对话深色适配 */
 .treehole-page.inline-mode .companion-chat { background: rgba(20,20,25,0.98); }
 .treehole-page.inline-mode .cc-header { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }
-.treehole-page.inline-mode .cc-header button { color: #7FB3A6; }
+.treehole-page.inline-mode .cc-header button { color: #8FCBA6; }
 .treehole-page.inline-mode .cc-header span { color: #E8E2D8; }
+.treehole-page.inline-mode .cc-boundary { background: rgba(61,134,96,0.18); color: #d9eee7; }
+.treehole-page.inline-mode .cc-urgent { background: rgba(120,45,40,0.3); border-color: #e4a099; color: #ffe5df; }
 .treehole-page.inline-mode .ccm-bubble { background: rgba(255,255,255,0.08); color: #E8E2D8; }
-.treehole-page.inline-mode .cc-msg.user .ccm-bubble { background: #5B8C7E; }
+.treehole-page.inline-mode .cc-msg.user .ccm-bubble { background: #55A87C; }
 .treehole-page.inline-mode .cc-input { background: rgba(35,35,42,0.98); border-color: rgba(255,255,255,0.06); }
 .treehole-page.inline-mode .cc-input input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #E8E2D8; }
 .treehole-page.inline-mode .cc-input input::placeholder { color: rgba(232,226,216,0.35); }
 
 .inline-title { text-align: center; margin-bottom: 16px; }
 .inline-title h2 { margin: 0; font-size: 18px; color: #E8E2D8; }
+
+/* 像素皮肤 3.0 · 树洞（inline 深色） */
+.treehole-page.inline-mode {
+  --px-line: rgba(240, 216, 170, .24);
+  --px-gold: #e8cf9a;
+  --px-shadow: rgba(0, 0, 0, .55);
+}
+.treehole-page .inline-title h2 { font-family: var(--px-font); }
+.treehole-page .daily-warmth { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .companion-entry {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end), background 160ms steps(2, end);
+}
+.treehole-page .companion-entry:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.treehole-page .companion-entry:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.treehole-page .ce-title { font-family: var(--px-font); font-size: 14px; }
+.treehole-page .post-area {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+}
+.treehole-page .mood-btn { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .mood-btn.active { border-color: var(--px-gold); }
+.treehole-page .input-row input { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .post-btn {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .post-btn:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-shadow); }
+.treehole-page .post-btn:not(:disabled):active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--px-shadow); }
+.treehole-page .treehole-card {
+  border: 2px solid var(--px-line);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--px-shadow);
+  transition: transform 160ms steps(2, end), box-shadow 160ms steps(2, end);
+}
+.treehole-page .treehole-card:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--px-shadow); }
+.treehole-page .thc-resonance,
+.treehole-page .thc-delete { border-radius: 4px; }
+.treehole-page .companion-panel {
+  border: 2px solid var(--px-line);
+  border-radius: 6px 6px 0 0;
+  box-shadow: -4px 4px 0 var(--px-shadow);
+}
+.treehole-page .cp-header h3 { font-family: var(--px-font); }
+.treehole-page .cp-close { border-radius: 4px; }
+.treehole-page .cp-item { border-radius: 4px; }
+.treehole-page .drift-again {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .cc-header { border-bottom: 2px solid var(--px-line); }
+.treehole-page .cc-header span { font-family: var(--px-font); }
+.treehole-page .ccm-bubble { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .cc-msg.user .ccm-bubble,
+.treehole-page .cc-msg.assistant .ccm-bubble { border-radius: 4px; }
+.treehole-page .cc-input { border-top: 2px solid var(--px-line); }
+.treehole-page .cc-input input { border: 2px solid var(--px-line); border-radius: 4px; }
+.treehole-page .cc-input button {
+  border: 2px solid var(--px-line);
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 var(--px-shadow);
+}
+.treehole-page .cc-urgent { border-radius: 4px; }
+.treehole-page .cc-urgent a,
+.treehole-page .cc-urgent button { border-radius: 4px; }
+.treehole-page .companion-entry:focus-visible,
+.treehole-page .mood-btn:focus-visible,
+.treehole-page .input-row input:focus-visible,
+.treehole-page .post-btn:focus-visible,
+.treehole-page .treehole-card:focus-visible,
+.treehole-page .thc-resonance:focus-visible,
+.treehole-page .thc-delete:focus-visible,
+.treehole-page .cp-close:focus-visible,
+.treehole-page .cp-item:focus-visible,
+.treehole-page .drift-again:focus-visible,
+.treehole-page .cc-input button:focus-visible {
+  outline: 3px dashed var(--px-gold);
+  outline-offset: 3px;
+}
 </style>
